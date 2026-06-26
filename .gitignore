@@ -1,0 +1,67 @@
+# .gitignore for the "barbar app" project
+# ---------------------------------------------------
+# General OS / editor / IDE files
+.DS_Store
+Thumbs.db
+# macOS specific
+*.xcworkspace
+*.xcuserdata
+DerivedData/
+# Xcode / iOS build artefacts
+*.xcuserstate
+# Android Studio / IntelliJ
+.idea/
+*.iml
+# VS Code
+.vscode/
+# ---------------------------------------------------
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub/
+build/
+# iOS generated files (Flutter)
+ios/Flutter/.last_build_id
+ios/Flutter/Generated.xcconfig
+ios/Flutter/AppFrameworkInfo.plist
+# Android generated files (Flutter)
+android/.gradle
+android/app/build/
+# Flutter specific
+.flutter-plugins
+.flutter-plugins-dependencies
+# Pub cache
+.pub-cache/
+# Misc generated files
+.flutter-plugins-dependencies
+# ---------------------------------------------------
+# Backend (generic)
+# Node.js / npm
+node_modules/
+npm-debug.log*
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+env/
+venv/
+ENV/
+*.egg-info/
+# Go
+bin/
+# Go modules cache (if vendored)
+vendor/
+# Secrets / environment files
+.env
+.env.*
+# Logs & temp files
+*.log
+*.tmp
+*.temp
+# ---------------------------------------------------
+# Other files you may want to ignore
+# Keep secrets out of VCS
+secret.key
+# Local configuration files
+local.properties
+# End of .gitignore

@@ -1,0 +1,217 @@
+definitions:
+  delivery_partner.RegisterDeliveryPartnerRequest:
+    properties:
+      latitude:
+        type: number
+      license_number:
+        type: string
+      longitude:
+        type: number
+      vehicle_type:
+        type: string
+    required:
+    - license_number
+    - vehicle_type
+    type: object
+  delivery_partner.UpdateAvailabilityRequest:
+    properties:
+      status:
+        enum:
+        - available
+        - busy
+        - offline
+        type: string
+    required:
+    - status
+    type: object
+  delivery_partner.UpdateLocationRequest:
+    properties:
+      latitude:
+        type: number
+      longitude:
+        type: number
+    required:
+    - latitude
+    - longitude
+    type: object
+  models.DeliveryPartner:
+    properties:
+      availability_status:
+        description: available, busy, offline
+        type: string
+      created_at:
+        type: string
+      current_latitude:
+        type: number
+      current_longitude:
+        type: number
+      deleted_at:
+        type: string
+      id:
+        type: string
+      license_number:
+        type: string
+      rating:
+        type: number
+      updated_at:
+        type: string
+      user_id:
+        type: string
+      vehicle_type:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /delivery-partners/availability:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Availability payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/delivery_partner.UpdateAvailabilityRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Availability updated
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update Delivery Partner Availability
+      tags:
+      - DeliveryPartner
+  /delivery-partners/location:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Location payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/delivery_partner.UpdateLocationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Location updated
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update Delivery Partner Location
+      tags:
+      - DeliveryPartner
+  /delivery-partners/nearby:
+    get:
+      parameters:
+      - description: Latitude
+        in: query
+        name: lat
+        type: string
+      - description: Longitude
+        in: query
+        name: lng
+        type: string
+      - description: Radius in km
+        in: query
+        name: radius
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of partners
+          schema:
+            items:
+              $ref: '#/definitions/models.DeliveryPartner'
+            type: array
+        "500":
+          description: Internal Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List Nearby Delivery Partners
+      tags:
+      - DeliveryPartner
+  /delivery-partners/profile:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get Delivery Partner Profile
+      tags:
+      - DeliveryPartner
+  /delivery-partners/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Register payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/delivery_partner.RegisterDeliveryPartnerRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Register Delivery Partner
+      tags:
+      - DeliveryPartner
+swagger: "2.0"

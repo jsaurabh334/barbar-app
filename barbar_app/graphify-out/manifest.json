@@ -1,0 +1,614 @@
+{
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/RunnerTests/RunnerTests.swift": {
+    "mtime": 1780510770.4619644,
+    "hash": "97d3a20fd20a063c192e886d1822b4a8"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Runner/MainFlutterWindow.swift": {
+    "mtime": 1734387103.0,
+    "hash": "4a747b1f256d62a2bbb79bd976891eb5"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Runner/AppDelegate.swift": {
+    "mtime": 1734387103.0,
+    "hash": "2a7411ae3e7c6715525b94b6f8d2e80b"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Flutter/GeneratedPluginRegistrant.swift": {
+    "mtime": 1780562241.4440181,
+    "hash": "6c583894102ec12e005d686f4a233b5b"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Pods/Target Support Files/flutter_secure_storage_macos/flutter_secure_storage_macos-dummy.m": {
+    "mtime": 1780559716.3230128,
+    "hash": "ca154cbea01f6a0e7fbe48bb2ab278bb"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Pods/Target Support Files/flutter_secure_storage_macos/flutter_secure_storage_macos-umbrella.h": {
+    "mtime": 1780559716.3186662,
+    "hash": "27be1731fa49fa64dc47cc791be74b92"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Pods/Target Support Files/Pods-Runner/Pods-Runner-umbrella.h": {
+    "mtime": 1780559716.3598902,
+    "hash": "814a4c2d3024597e419f66f6f048d39e"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Pods/Target Support Files/Pods-Runner/Pods-Runner-dummy.m": {
+    "mtime": 1780559716.368121,
+    "hash": "d3f88e6bc5bffb456bd31d3ae36c9256"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Pods/Target Support Files/shared_preferences_foundation/shared_preferences_foundation-dummy.m": {
+    "mtime": 1780559716.3542774,
+    "hash": "7673a87a2ff137ab1024361310c89863"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Pods/Target Support Files/shared_preferences_foundation/shared_preferences_foundation-umbrella.h": {
+    "mtime": 1780559716.351959,
+    "hash": "353082decddc13f39a8f7023b84e363e"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Pods/Target Support Files/Pods-RunnerTests/Pods-RunnerTests-dummy.m": {
+    "mtime": 1780559716.3749022,
+    "hash": "097dfaf08332f413805fcca47157791c"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Pods/Target Support Files/Pods-RunnerTests/Pods-RunnerTests-umbrella.h": {
+    "mtime": 1780559716.3736763,
+    "hash": "c23802aedf43339011f9ddde1d7d0c49"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Pods/Target Support Files/geolocator_apple/geolocator_apple-dummy.m": {
+    "mtime": 1780559716.3387191,
+    "hash": "08aaa202b9f2a5b8528f622f7a34ac37"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Pods/Target Support Files/path_provider_foundation/path_provider_foundation-dummy.m": {
+    "mtime": 1780559716.3473098,
+    "hash": "51228058372a8904ac705f59db3910bc"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Pods/Target Support Files/path_provider_foundation/path_provider_foundation-umbrella.h": {
+    "mtime": 1780559716.3446631,
+    "hash": "70e1882bf6203a2be59264c874001b12"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/test/widget_test.dart": {
+    "mtime": 1780510960.0740666,
+    "hash": "853d036e262a854f70d31b62f6595fd7"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/RunnerTests/RunnerTests.swift": {
+    "mtime": 1780510770.5081327,
+    "hash": "a225a382d14d7b16b6f602a5c1d49331"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Runner-Bridging-Header.h": {
+    "mtime": 1734387103.0,
+    "hash": "e07862ac930ed4d8479185d52c6cc66d"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/GeneratedPluginRegistrant.h": {
+    "mtime": 1780562241.437218,
+    "hash": "decb9041b5e91a07e66f4664e5dac408"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/AppDelegate.swift": {
+    "mtime": 1734387103.0,
+    "hash": "303ca46dbd58544be7b816861d70a27c"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/GeneratedPluginRegistrant.m": {
+    "mtime": 1780562241.4381354,
+    "hash": "cca0664bed64f839d1b3e0faf55cd463"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/linux/runner/main.cc": {
+    "mtime": 1734387103.0,
+    "hash": "0643b8609698e96b3abd63c210361a87"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/linux/runner/my_application.h": {
+    "mtime": 1734387103.0,
+    "hash": "7bd839b67ebee22174be9f4da4521b6f"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/linux/runner/my_application.cc": {
+    "mtime": 1780510770.5205905,
+    "hash": "f336650f98bb17a32bbf30199cd7ec3d"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/linux/flutter/generated_plugin_registrant.cc": {
+    "mtime": 1780562241.4422004,
+    "hash": "e51606128f6c2595af1393720bb05539"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/linux/flutter/generated_plugin_registrant.h": {
+    "mtime": 1780562241.4415267,
+    "hash": "d295462c9da9f7fef22dc86c34492318"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/android/gradlew": {
+    "mtime": 1780510770.5592668,
+    "hash": "7f1cd7eb3f75a1dc85cd37753972a6e2"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/android/build.gradle": {
+    "mtime": 1780510770.5068574,
+    "hash": "8fea88f0221dc81c23b0e4c55c169ccc"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/android/settings.gradle": {
+    "mtime": 1780557873.9665604,
+    "hash": "d9f0c4d60911fe11888e18967607ff1f"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/android/app/build.gradle": {
+    "mtime": 1780510770.5050666,
+    "hash": "d427ffa1ed443e8b62521fca120d529c"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java": {
+    "mtime": 1780562241.4359813,
+    "hash": "f00cc80606c97265eb8444eb99d98e5e"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/android/app/src/main/kotlin/com/barbar/app/barbar_app/MainActivity.kt": {
+    "mtime": 1780510770.5063574,
+    "hash": "df91a0773c2ea9a44c115d8cd4ec623b"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/main.dart": {
+    "mtime": 1780562237.5683541,
+    "hash": "eb4848e0f4fe9b8a4759166c10be7398"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/core/constants/constants.dart": {
+    "mtime": 1780519500.7387598,
+    "hash": "a1fa8cd3f49760daf0642b51b6ac0c12"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/core/network/api_client.dart": {
+    "mtime": 1780514188.6966546,
+    "hash": "46b36d3c7e2c3b30b940709d400fc755"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/core/network/websocket_client.dart": {
+    "mtime": 1780510949.4037442,
+    "hash": "0d7a38063b0ac94f2b6c22a517f5fdac"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/core/theme/app_theme.dart": {
+    "mtime": 1780512342.6988864,
+    "hash": "a46b55257de7b5e17b57982ec4e4b908"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/core/services/location_service.dart": {
+    "mtime": 1780512318.644793,
+    "hash": "9c35df01f7cbec661f0117bde38178ca"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/core/services/upload_service.dart": {
+    "mtime": 1780511553.3139024,
+    "hash": "91e73d86b1d8c2009fe8958d7b21d6b8"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/core/services/payment_service.dart": {
+    "mtime": 1780512338.2847111,
+    "hash": "6d7f842caecf99e3bfa8f6df1a64c075"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/core/services/notification_service.dart": {
+    "mtime": 1780512325.5281756,
+    "hash": "4d6bcf8d8a46ffe2513ead53886d6064"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/core/services/cache_service.dart": {
+    "mtime": 1780511571.7524273,
+    "hash": "962d57d44d03ce0dab26da4b5ad5ac3a"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/datasources/local/auth_local_datasource.dart": {
+    "mtime": 1780560104.772388,
+    "hash": "efd52657b6e4976f17e1a2089497f2dc"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/datasources/remote/directory_remote_datasource.dart": {
+    "mtime": 1780562229.9814079,
+    "hash": "5f25dece98fef7ab922c9ad9410178c1"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/datasources/remote/wallet_remote_datasource.dart": {
+    "mtime": 1780562231.1749084,
+    "hash": "9871aade074a13d9de563449f6a69ae2"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/datasources/remote/booking_remote_datasource.dart": {
+    "mtime": 1780562229.472858,
+    "hash": "e6e2c26a16cb00ac9871b0f94c08a253"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/datasources/remote/address_remote_datasource.dart": {
+    "mtime": 1780562229.1231985,
+    "hash": "67118537a6791c124c08bb81bb335efa"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/datasources/remote/marketplace_remote_datasource.dart": {
+    "mtime": 1780562230.5662105,
+    "hash": "dc445eb105aec69ace0cd0cb78c0b7c6"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/datasources/remote/auth_remote_datasource.dart": {
+    "mtime": 1780510991.527411,
+    "hash": "1650741e7cf62413aed5104164b017f9"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/repositories/booking_repository_impl.dart": {
+    "mtime": 1780562096.610664,
+    "hash": "9e5a18957d2e94592a5db154fbf1097f"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/repositories/directory_repository_impl.dart": {
+    "mtime": 1780562100.295971,
+    "hash": "0b78703d0ef6711f17326f842fb21511"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/repositories/auth_repository_impl.dart": {
+    "mtime": 1780559687.094129,
+    "hash": "cc0e5027b71f189b30928ac419ac9a49"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/repositories/wallet_repository_impl.dart": {
+    "mtime": 1780562109.5708425,
+    "hash": "3d73db9f14155230bf15bf42efad8b49"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/repositories/marketplace_repository_impl.dart": {
+    "mtime": 1780562106.3415856,
+    "hash": "1a7ee2810f9483253a9e5ead9736b9f2"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/repositories/address_repository_impl.dart": {
+    "mtime": 1780562111.2509248,
+    "hash": "980f636ab8236158958122e2438e2552"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/models/product_model.dart": {
+    "mtime": 1780511196.0275438,
+    "hash": "954b3138e4ca20a75d29ee7e1f60c5f7"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/models/barber_model.dart": {
+    "mtime": 1780562171.7894447,
+    "hash": "ff387a0dd9a4fce3e2afbec24f107ad5"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/models/booking_model.dart": {
+    "mtime": 1780511189.5811086,
+    "hash": "49e148a4d0ac4f9efbaad761bd807c31"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/models/service_model.dart": {
+    "mtime": 1780511184.4676366,
+    "hash": "bd6de8c0015417c629d364687f255513"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/models/user_model.dart": {
+    "mtime": 1780510862.1327448,
+    "hash": "fe1ca31f0f4d1098d3d121aef7e6d38d"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/models/order_model.dart": {
+    "mtime": 1780511201.2863376,
+    "hash": "51e6dd82fbcaa3845ed76c6c813780bb"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/data/models/transaction_model.dart": {
+    "mtime": 1780511205.9714966,
+    "hash": "d27d527a996ea509db9fb21b75aa9ce5"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/domain/repositories/address_repository.dart": {
+    "mtime": 1780562062.4591203,
+    "hash": "112cc5dd401f68534bd40cb1ed91153b"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/domain/repositories/marketplace_repository.dart": {
+    "mtime": 1780562060.4376051,
+    "hash": "51bf7d3b8a1acdd3b8de2f6de5e19327"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/domain/repositories/directory_repository.dart": {
+    "mtime": 1780562059.6169643,
+    "hash": "77bfcca34f42bd890d207c860fe079ae"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/domain/repositories/auth_repository.dart": {
+    "mtime": 1780510870.6203756,
+    "hash": "c8faf9b09e1a1b731c098ecb54981bd1"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/domain/repositories/wallet_repository.dart": {
+    "mtime": 1780562231.5739052,
+    "hash": "b645a7c35c4be01defe71dfe0f37fcfc"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/domain/repositories/booking_repository.dart": {
+    "mtime": 1780562058.9452689,
+    "hash": "6bb1d27a59d0273c8f4134e1450e8690"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/screens/queue_tracker_screen.dart": {
+    "mtime": 1780512229.105214,
+    "hash": "7600a609599d838d7d9993a837fd9c83"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/screens/map_discovery_screen.dart": {
+    "mtime": 1780512270.3856874,
+    "hash": "5f56247bc1de6af1b00f84147ca59d62"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/screens/vendor_dashboard_screen.dart": {
+    "mtime": 1780512282.9821558,
+    "hash": "2aa94e5f179a48b1821b81ad469d0333"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/screens/barber_detail_screen.dart": {
+    "mtime": 1780512257.5579264,
+    "hash": "0b1f55ce6f40342837d20e5b40ff913c"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/screens/customer_dashboard_shell.dart": {
+    "mtime": 1780512264.2938561,
+    "hash": "44b2b59374f20261c47bae35851537bd"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/screens/admin_console_screen.dart": {
+    "mtime": 1780516671.1441581,
+    "hash": "916fdf3aed22e4d75d761805d47e8ddd"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/screens/address_screen.dart": {
+    "mtime": 1780512353.162853,
+    "hash": "5a38b5bed0a8e5879bf04e5c473da630"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/screens/shop_screen.dart": {
+    "mtime": 1780512275.5890133,
+    "hash": "583d725bd0a1c7eec1d755e309b4de89"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/screens/delivery_dashboard_screen.dart": {
+    "mtime": 1780516801.2949724,
+    "hash": "7618d95ce480be5f78b1e2dff9a1e59a"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/screens/wallet_screen.dart": {
+    "mtime": 1780512297.7467635,
+    "hash": "a2dabef5d2e8916ed2a3b42a1a38df7a"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/screens/barber_dashboard_screen.dart": {
+    "mtime": 1780512250.229093,
+    "hash": "667e394f93746c620a36c1b2f6b115e3"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/screens/home_screen.dart": {
+    "mtime": 1780512212.3142476,
+    "hash": "072e1d5a5d14e55a6a45150199802d78"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/screens/auth_screen.dart": {
+    "mtime": 1780559862.7346826,
+    "hash": "4ccd113c4d1b5a7af6d41931a1fee04c"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/widgets/glass_card.dart": {
+    "mtime": 1780512302.2630801,
+    "hash": "76dc58832dc8f97df6fb3e04cd8bbe4b"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/bloc/auth/auth_event.dart": {
+    "mtime": 1780510878.498317,
+    "hash": "69f375d7515e6ccee8ff5726c14cc038"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/bloc/auth/auth_bloc.dart": {
+    "mtime": 1780510887.074647,
+    "hash": "4006061561f6f9a3f98a2144f8c19942"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/bloc/auth/auth_state.dart": {
+    "mtime": 1780510883.008886,
+    "hash": "5622071ca95102e76eddc23a7174163e"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/bloc/booking/booking_bloc.dart": {
+    "mtime": 1780562154.5168107,
+    "hash": "5360629a611bb684760af6affff98ce9"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/bloc/booking/booking_event.dart": {
+    "mtime": 1780511214.584796,
+    "hash": "2144b3428db93bdc8cf9124f2414281a"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/bloc/booking/booking_state.dart": {
+    "mtime": 1780511219.3149872,
+    "hash": "abff3250d47e190008bc0473801ff557"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/bloc/marketplace/marketplace_bloc.dart": {
+    "mtime": 1780562175.0096211,
+    "hash": "101a0495ecf436d60f073a0e63f1fb1a"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/bloc/marketplace/marketplace_state.dart": {
+    "mtime": 1780511235.3660371,
+    "hash": "7220265c417cf162b884b9987d96f000"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/bloc/marketplace/marketplace_event.dart": {
+    "mtime": 1780511230.9493372,
+    "hash": "641c98bda479e40c1a4b1a55b0c9de06"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/bloc/directory/directory_event.dart": {
+    "mtime": 1780510905.172072,
+    "hash": "9af107ed25f23c24fda660e7c69e3f30"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/bloc/directory/directory_bloc.dart": {
+    "mtime": 1780562156.735864,
+    "hash": "bc439da10a8a4b592c79f2262c1e97c2"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/bloc/directory/directory_state.dart": {
+    "mtime": 1780510908.7954938,
+    "hash": "8010fb96caa5c6fc0e2dbed6886dad7c"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/bloc/wallet/wallet_bloc.dart": {
+    "mtime": 1780562199.3289344,
+    "hash": "4eaa52fd6331a26c807abca2883e33b7"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/bloc/wallet/wallet_event.dart": {
+    "mtime": 1780511247.8967378,
+    "hash": "d8ffc0253ebab06377a611a54a359891"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/lib/presentation/bloc/wallet/wallet_state.dart": {
+    "mtime": 1780511252.9613163,
+    "hash": "74ff58316750ca63b2f7f53cc30ad36a"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/windows/runner/flutter_window.cpp": {
+    "mtime": 1734387103.0,
+    "hash": "9b92b95a9eecce25e3e9d356688d0cb6"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/windows/runner/utils.h": {
+    "mtime": 1734387103.0,
+    "hash": "c741fb9cddbf3a62f4688b6cca39ddcc"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/windows/runner/utils.cpp": {
+    "mtime": 1734387103.0,
+    "hash": "9b5697b276c8ad67a02ec12ad2c09851"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/windows/runner/win32_window.h": {
+    "mtime": 1734387103.0,
+    "hash": "5a4cf051798d7e6931ee0405a4523c8f"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/windows/runner/win32_window.cpp": {
+    "mtime": 1734387103.0,
+    "hash": "928e86a2be27eca688669dce6c9177d9"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/windows/runner/resource.h": {
+    "mtime": 1734387103.0,
+    "hash": "c8f809a4f8d3f2f625e358fd90f72fee"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/windows/runner/main.cpp": {
+    "mtime": 1780510770.416801,
+    "hash": "4921b28bd173dca6666b314c979707d5"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/windows/runner/flutter_window.h": {
+    "mtime": 1734387103.0,
+    "hash": "79bea736711adda00c49419a39a4a0b4"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/windows/flutter/generated_plugin_registrant.cc": {
+    "mtime": 1780562241.4459386,
+    "hash": "203479f2f483c741cc728798720cc373"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/windows/flutter/generated_plugin_registrant.h": {
+    "mtime": 1780562241.4454489,
+    "hash": "0ea33875f9f8e118f9c2ded03e2e2835"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/README.md": {
+    "mtime": 1780510770.399054,
+    "hash": "9499a8117e4123c93cebb8c95f55d135"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/pubspec.yaml": {
+    "mtime": 1780511492.0345361,
+    "hash": "ff8854c5e283f80d638fd9cef69aafbe"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/analysis_options.yaml": {
+    "mtime": 1780510770.51382,
+    "hash": "66d03d7647c8e438164feaf5b922d44a"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/web/index.html": {
+    "mtime": 1780510770.4537766,
+    "hash": "4193efe1b597bc1bcd9ded49cd895243"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md": {
+    "mtime": 1734387103.0,
+    "hash": "e175e436acacf76c814d83532d0b662c"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/linux/CMakeLists.txt": {
+    "mtime": 1780510770.5236485,
+    "hash": "fc87e1d623741fb7a18869541854fc5c"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/linux/runner/CMakeLists.txt": {
+    "mtime": 1734387103.0,
+    "hash": "6d75431dc21756981b53a7494c836311"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/linux/flutter/CMakeLists.txt": {
+    "mtime": 1734387103.0,
+    "hash": "46690fb8ffaf7d227d8bc4713f31140d"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/windows/CMakeLists.txt": {
+    "mtime": 1780510770.4210653,
+    "hash": "e3d038d9c71bd77fb90054a9b48438e4"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/windows/runner/CMakeLists.txt": {
+    "mtime": 1734387103.0,
+    "hash": "e99a99b5cc82a168fc557eb23b8d5a96"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/windows/flutter/CMakeLists.txt": {
+    "mtime": 1734387103.0,
+    "hash": "0c500410e3259a9a053797dc1c28070e"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_16.png": {
+    "mtime": 1780159966.738468,
+    "hash": "8bf511604bc6ed0a6aeb380c5113fdcf"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_1024.png": {
+    "mtime": 1780159966.742264,
+    "hash": "c9becc9105f8cabce934d20c7bfb6aac"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_256.png": {
+    "mtime": 1780159966.7398632,
+    "hash": "dfe2c93d1536ae02f085cc63faa3430e"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_64.png": {
+    "mtime": 1780159966.7372692,
+    "hash": "04e7b6ef05346c70b663ca1d97de3ad5"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_512.png": {
+    "mtime": 1780159966.7377517,
+    "hash": "0ad44039155424738917502c69667699"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_128.png": {
+    "mtime": 1780159966.7406042,
+    "hash": "3ded30823804caaa5ccc944067c54a36"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_32.png": {
+    "mtime": 1780159966.7368016,
+    "hash": "8e0ae58e362a6636bdfccbc04da2c58c"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/web/favicon.png": {
+    "mtime": 1734387103.0,
+    "hash": "5dcef449791fa27946b3d35ad8803796"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/web/icons/Icon-192.png": {
+    "mtime": 1734387103.0,
+    "hash": "ac9a721a12bbc803b44f645561ecb1e1"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/web/icons/Icon-maskable-192.png": {
+    "mtime": 1780159966.7438023,
+    "hash": "c457ef57daa1d16f64b27b786ec2ea3c"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/web/icons/Icon-maskable-512.png": {
+    "mtime": 1780159966.7430713,
+    "hash": "301a7604d45b3e739efc881eb04896ea"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/web/icons/Icon-512.png": {
+    "mtime": 1734387103.0,
+    "hash": "96e752610906ba2a93c65f8abe1645f1"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage@2x.png": {
+    "mtime": 1780159966.735798,
+    "hash": "978c1bee49d7ad5fc1a4d81099b13e18"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage@3x.png": {
+    "mtime": 1780159966.7346554,
+    "hash": "978c1bee49d7ad5fc1a4d81099b13e18"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage.png": {
+    "mtime": 1780159966.7337427,
+    "hash": "978c1bee49d7ad5fc1a4d81099b13e18"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@2x.png": {
+    "mtime": 1780159966.7290754,
+    "hash": "643842917530acf4c5159ae851b0baf2"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@1x.png": {
+    "mtime": 1780159966.7270813,
+    "hash": "be8887071dd7ec39cb754d236aa9584f"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@1x.png": {
+    "mtime": 1780159966.726694,
+    "hash": "2247a840b6ee72b8a069208af170e5b1"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@1x.png": {
+    "mtime": 1780159966.7286942,
+    "hash": "a2f8558fb1d42514111fbbb19fb67314"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png": {
+    "mtime": 1780159966.730186,
+    "hash": "c785f8932297af4acd5f5ccb7630f01c"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-83.5x83.5@2x.png": {
+    "mtime": 1780159966.732968,
+    "hash": "665cb5e3c5729da6d639d26eff47a503"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@3x.png": {
+    "mtime": 1780159966.73185,
+    "hash": "1b3b1538136316263c7092951e923e9d"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@2x.png": {
+    "mtime": 1780159966.7278285,
+    "hash": "2247a840b6ee72b8a069208af170e5b1"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@3x.png": {
+    "mtime": 1780159966.7282615,
+    "hash": "2b1452c4c1bda6177b4fbbb832df217f"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@2x.png": {
+    "mtime": 1780159966.7298312,
+    "hash": "8245359312aea1b0d2412f79a07b0ca5"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@3x.png": {
+    "mtime": 1780159966.7274745,
+    "hash": "e419d22a37bc40ba185aca1acb6d4ac6"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@2x.png": {
+    "mtime": 1780159966.7323964,
+    "hash": "5b3c0902200ce596e9848f22e1f0fe0e"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@1x.png": {
+    "mtime": 1780159966.7305307,
+    "hash": "36c0d7a7132bdde18898ffdfcfcdc4d2"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@3x.png": {
+    "mtime": 1780159966.7308936,
+    "hash": "5b3c0902200ce596e9848f22e1f0fe0e"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@2x.png": {
+    "mtime": 1780159966.7295108,
+    "hash": "043119ef4faa026ff82bd03f241e5338"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/android/app/src/main/res/mipmap-mdpi/ic_launcher.png": {
+    "mtime": 1734387103.0,
+    "hash": "6270344430679711b81476e29878caa7"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/android/app/src/main/res/mipmap-hdpi/ic_launcher.png": {
+    "mtime": 1734387103.0,
+    "hash": "13e9c72ec37fac220397aa819fa1ef2d"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png": {
+    "mtime": 1734387103.0,
+    "hash": "57838d52c318faff743130c3fcfae0c6"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png": {
+    "mtime": 1734387103.0,
+    "hash": "afe1b655b9f32da22f9a4301bb8e6ba8"
+  },
+  "/Users/saurabhjain/Desktop/barbar app/barbar_app/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png": {
+    "mtime": 1734387103.0,
+    "hash": "a0a8db5985280b3679d99a820ae2db79"
+  }
+}

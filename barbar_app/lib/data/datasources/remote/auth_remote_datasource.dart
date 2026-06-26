@@ -1,0 +1,75 @@
+import 'package:dio/dio.dart';
+import '../../../core/network/api_client.dart';
+
+class AuthRemoteDataSource {
+  final ApiClient _apiClient;
+
+  AuthRemoteDataSource(this._apiClient);
+
+  Future<Map<String, dynamic>> register({
+    required String fullName,
+    required String phone,
+    required String password,
+    required String role,
+    String? email,
+  }) async {
+    try {
+      final response = await _apiClient.dio.post(
+        '/auth/register',
+        data: {
+          'full_name': fullName,
+          'phone': phone,
+          'password': password,
+          'role': role,
+          if (email != null && email.isNotEmpty) 'email': email,
+        },
+      );
+      
+      if (response.statusCode == 201 && response.data['success'] == true) {
+        return response.data['data'] as Map<String, dynamic>;
+      }
+      throw Exception(response.data['error'] ?? 'Registration failed');
+    } on DioException catch (e) {
+      throw Exception(e.response?.data['error'] ?? 'Connection error');
+    }
+  }
+
+  Future<bool> sendOtp(String phone) async {
+    try {
+      final response = await _apiClient.dio.post(
+        '/auth/otp/send',
+        data: {'phone': phone},
+      );
+      return response.statusCode == 200 && response.data['success'] == true;
+    } on DioException catch (e) {
+      throw Exception(e.response?.data['error'] ?? 'Failed to send OTP');
+    }
+  }
+
+  Future<Map<String, dynamic>> verifyOtp({
+    required String phone,
+    required String otp,
+  }) async {
+    try {
+      final response = await _apiClient.dio.post(
+        '/auth/otp/verify',
+        data: {'phone': phone, 'otp': otp},
+      );
+
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        return response.data['data'] as Map<String, dynamic>;
+      }
+      throw Exception(response.data['error'] ?? 'OTP verification failed');
+    } on DioException catch (e) {
+      throw Exception(e.response?.data['error'] ?? 'Verification error');
+    }
+  }
+
+  Future<void> logout() async {
+    try {
+      await _apiClient.dio.post('/auth/logout');
+    } catch (_) {
+      // Allow local logout even if remote fails
+    }
+  }
+}
