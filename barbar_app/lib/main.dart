@@ -12,6 +12,7 @@ import 'data/datasources/remote/marketplace_remote_datasource.dart';
 import 'data/datasources/remote/wallet_remote_datasource.dart';
 import 'data/repositories/auth_repository_impl.dart';
 import 'data/repositories/booking_repository_impl.dart';
+import 'domain/repositories/booking_repository.dart';
 import 'data/repositories/directory_repository_impl.dart';
 import 'data/repositories/marketplace_repository_impl.dart';
 import 'data/repositories/wallet_repository_impl.dart';
@@ -87,55 +88,62 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiBlocProvider(
+    return MultiRepositoryProvider(
       providers: [
-        BlocProvider<AuthBloc>(
-          create: (context) => AuthBloc(authRepository)..add(AppStarted()),
-        ),
-        BlocProvider<DirectoryBloc>(
-          create: (context) => DirectoryBloc(directoryRepository),
-        ),
-        BlocProvider<BookingBloc>(
-          create: (context) => BookingBloc(bookingRepository),
-        ),
-        BlocProvider<MarketplaceBloc>(
-          create: (context) => MarketplaceBloc(marketplaceRepository),
-        ),
-        BlocProvider<WalletBloc>(
-          create: (context) => WalletBloc(walletRepository),
+        RepositoryProvider<BookingRepository>(
+          create: (context) => bookingRepository,
         ),
       ],
-      child: MaterialApp(
-        title: 'Barbar App',
-        theme: AppTheme.darkTheme,
-        debugShowCheckedModeBanner: false,
-        home: BlocBuilder<AuthBloc, AuthState>(
-          builder: (context, state) {
-            if (state is AuthInitial || state is AuthLoading) {
-              return const Scaffold(
-                body: Center(
-                  child: CircularProgressIndicator(
-                    color: AppColors.primary,
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider<AuthBloc>(
+            create: (context) => AuthBloc(authRepository)..add(AppStarted()),
+          ),
+          BlocProvider<DirectoryBloc>(
+            create: (context) => DirectoryBloc(directoryRepository),
+          ),
+          BlocProvider<BookingBloc>(
+            create: (context) => BookingBloc(bookingRepository),
+          ),
+          BlocProvider<MarketplaceBloc>(
+            create: (context) => MarketplaceBloc(marketplaceRepository),
+          ),
+          BlocProvider<WalletBloc>(
+            create: (context) => WalletBloc(walletRepository),
+          ),
+        ],
+        child: MaterialApp(
+          title: 'Barbar App',
+          theme: AppTheme.darkTheme,
+          debugShowCheckedModeBanner: false,
+          home: BlocBuilder<AuthBloc, AuthState>(
+            builder: (context, state) {
+              if (state is AuthInitial || state is AuthLoading) {
+                return const Scaffold(
+                  body: Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.primary,
+                    ),
                   ),
-                ),
-              );
-            } else if (state is AuthAuthenticated) {
-              final role = state.user.role.toLowerCase();
-              if (role == 'barber') {
-                return BarberDashboardScreen(webSocketClient: webSocketClient);
-              } else if (role == 'vendor') {
-                return const VendorDashboardScreen();
-              } else if (role == 'delivery' || role == 'delivery_partner') {
-                return const DeliveryDashboardScreen();
-              } else if (role == 'admin' || role == 'super_admin') {
-                return const AdminConsoleScreen();
+                );
+              } else if (state is AuthAuthenticated) {
+                final role = state.user.role.toLowerCase();
+                if (role == 'barber') {
+                  return BarberDashboardScreen(webSocketClient: webSocketClient);
+                } else if (role == 'vendor') {
+                  return const VendorDashboardScreen();
+                } else if (role == 'delivery' || role == 'delivery_partner') {
+                  return const DeliveryDashboardScreen();
+                } else if (role == 'admin' || role == 'super_admin') {
+                  return const AdminConsoleScreen();
+                } else {
+                  return CustomerDashboardShell(webSocketClient: webSocketClient);
+                }
               } else {
-                return CustomerDashboardShell(webSocketClient: webSocketClient);
+                return const AuthScreen();
               }
-            } else {
-              return const AuthScreen();
-            }
-          },
+            },
+          ),
         ),
       ),
     );

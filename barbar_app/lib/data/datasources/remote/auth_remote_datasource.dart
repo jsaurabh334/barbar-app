@@ -25,7 +25,7 @@ class AuthRemoteDataSource {
         },
       );
       
-      if (response.statusCode == 201 && response.data['success'] == true) {
+      if (response.statusCode == 201 && response.data['status'] == 'created') {
         return response.data['data'] as Map<String, dynamic>;
       }
       throw Exception(response.data['error'] ?? 'Registration failed');
@@ -40,7 +40,7 @@ class AuthRemoteDataSource {
         '/auth/otp/send',
         data: {'phone': phone},
       );
-      return response.statusCode == 200 && response.data['success'] == true;
+      return response.statusCode == 200 && response.data['status'] == 'success';
     } on DioException catch (e) {
       throw Exception(e.response?.data['error'] ?? 'Failed to send OTP');
     }
@@ -56,7 +56,7 @@ class AuthRemoteDataSource {
         data: {'phone': phone, 'otp': otp},
       );
 
-      if (response.statusCode == 200 && response.data['success'] == true) {
+      if (response.statusCode == 200 && response.data['status'] == 'success') {
         return response.data['data'] as Map<String, dynamic>;
       }
       throw Exception(response.data['error'] ?? 'OTP verification failed');

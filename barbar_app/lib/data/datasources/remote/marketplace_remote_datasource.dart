@@ -9,7 +9,7 @@ class MarketplaceRemoteDataSource {
 
   Future<List<ProductModel>> getProducts() async {
     final response = await _apiClient.dio.get('/public/products');
-    if (response.statusCode == 200 && response.data['success'] == true) {
+    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
       final List<dynamic> data = response.data['data'];
       return data.map((e) => ProductModel.fromJson(e as Map<String, dynamic>)).toList();
     }
@@ -29,7 +29,7 @@ class MarketplaceRemoteDataSource {
         if (couponCode != null) 'coupon_code': couponCode,
       },
     );
-    if ((response.statusCode == 200 || response.statusCode == 201) && response.data['success'] == true) {
+    if ((response.statusCode == 200 || response.statusCode == 201) && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
       return response.data['data'] as Map<String, dynamic>;
     }
     throw Exception(response.data['error'] ?? 'Order placement failed');
@@ -37,7 +37,7 @@ class MarketplaceRemoteDataSource {
 
   Future<List<OrderModel>> getOrders() async {
     final response = await _apiClient.dio.get('/orders');
-    if (response.statusCode == 200 && response.data['success'] == true) {
+    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
       final List<dynamic> data = response.data['data'];
       return data.map((e) => OrderModel.fromJson(e as Map<String, dynamic>)).toList();
     }
@@ -49,7 +49,7 @@ class MarketplaceRemoteDataSource {
       '/orders/$orderId/status',
       data: {'status': status},
     );
-    if (response.statusCode != 200 || response.data['success'] != true) {
+    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
       throw Exception(response.data['error'] ?? 'Failed to update order status');
     }
   }

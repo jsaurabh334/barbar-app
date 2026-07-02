@@ -12,7 +12,9 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     on<CheckQueuePosition>(_onCheckQueuePosition);
     on<UpdateBookingStatus>(_onUpdateBookingStatus);
     on<StreamQueuePositionUpdate>(_onStreamQueuePositionUpdate);
+    on<FetchBarberBookings>(_onFetchBarberBookings);
     on<FetchAllBookings>(_onFetchAllBookings);
+    on<PayBooking>(_onPayBooking);
   }
 
   Future<void> _onFetchServices(FetchServices event, Emitter<BookingState> emit) async {
@@ -57,7 +59,7 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     emit(BookingLoading());
     try {
       await _bookingRepository.updateBookingStatus(event.bookingId, event.status);
-      final bookings = await _bookingRepository.getAllBookings();
+      final bookings = await _bookingRepository.getBarberBookings();
       emit(BookingsLoaded(bookings));
     } catch (e) {
       emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
@@ -75,6 +77,27 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
   Future<void> _onFetchAllBookings(FetchAllBookings event, Emitter<BookingState> emit) async {
     emit(BookingLoading());
     try {
+      final bookings = await _bookingRepository.getAllBookings();
+      emit(BookingsLoaded(bookings));
+    } catch (e) {
+      emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onFetchBarberBookings(FetchBarberBookings event, Emitter<BookingState> emit) async {
+    emit(BookingLoading());
+    try {
+      final bookings = await _bookingRepository.getBarberBookings();
+      emit(BookingsLoaded(bookings));
+    } catch (e) {
+      emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onPayBooking(PayBooking event, Emitter<BookingState> emit) async {
+    emit(BookingLoading());
+    try {
+      await _bookingRepository.payBooking(event.bookingId, event.method, event.status, event.reference);
       final bookings = await _bookingRepository.getAllBookings();
       emit(BookingsLoaded(bookings));
     } catch (e) {

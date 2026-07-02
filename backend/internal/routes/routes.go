@@ -71,7 +71,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 	authH := authHandler.NewAuthHandler(db, jwtManager)
 	barberH := barberHandler.NewBarberHandler(db)
 	notifSvc := notifService.NewNotificationService(db, hub)
-	bookingH := bookingHandler.NewBookingHandler(db, notifSvc)
+	bookingH := bookingHandler.NewBookingHandler(db, notifSvc, hub)
 	vendorH := vendorHandler.NewVendorHandler(db)
 	deliveryPartnerH := deliveryPartnerHandler.NewDeliveryPartnerHandler(db)
 	productH := productHandler.NewProductHandler(db)
@@ -188,6 +188,8 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			bookingRoutes.GET("/:id", bookingH.Get)
 			bookingRoutes.POST("/:id/cancel", bookingH.Cancel)
 			bookingRoutes.GET("/:id/receipt", invoiceH.GetBookingReceipt)
+			bookingRoutes.GET("/:id/invoice", invoiceH.GetBookingInvoiceJSON)
+			bookingRoutes.POST("/:id/payment", bookingH.PayBooking)
 		}
 
 		// ==================== Barber routes ====================
@@ -204,6 +206,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			barberRoutes.PUT("/bookings/:id/services", bookingH.ModifyServices)
 			barberRoutes.GET("/queue", bookingH.GetQueue)
 			barberRoutes.GET("/queue/:booking_id", bookingH.GetMyQueuePosition)
+			barberRoutes.PUT("/queue/reorder", bookingH.ReorderQueue)
 
 			// Services management
 			barberRoutes.GET("/services", barberH.ListServices)

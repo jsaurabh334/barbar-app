@@ -7,18 +7,28 @@ import (
 	"github.com/barbar-app/backend/internal/models"
 	notifService "github.com/barbar-app/backend/internal/services/notification"
 	"github.com/barbar-app/backend/internal/utils"
+	"github.com/barbar-app/backend/internal/websocket"
+	"github.com/barbar-app/backend/internal/services/queue"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type BookingHandler struct {
-	db      *gorm.DB
+	db       *gorm.DB
 	notifSvc *notifService.NotificationService
+	hub      *websocket.Hub
 }
 
-func NewBookingHandler(db *gorm.DB, notifSvc *notifService.NotificationService) *BookingHandler {
-	return &BookingHandler{db: db, notifSvc: notifSvc}
+func NewBookingHandler(db *gorm.DB, notifSvc *notifService.NotificationService, hub *websocket.Hub) *BookingHandler {
+	return &BookingHandler{db: db, notifSvc: notifSvc, hub: hub}
+}
+
+func (h *BookingHandler) refreshQueue(barberID uuid.UUID) {
+	qSvc := queue.NewQueueService(h.db, h.hub)
+	qSvc.RecalculatePositions(barberID)
+	qSvc.RecalculateWaitTimes(barberID)
+	qSvc.BroadcastQueueUpdate(barberID)
 }
 
 func (h *BookingHandler) sendBookingNotifications(booking *models.Booking) {
@@ -132,6 +142,37 @@ func (h *BookingHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// Validate working hours
+	tStr := req.ScheduledStart.Format("15:04")
+	if barber.StartTime != "" && barber.EndTime != "" {
+		if tStr < barber.StartTime || tStr >= barber.EndTime {
+			utils.BadRequestResponse(c, "Booking time must be within working hours ("+barber.StartTime+" - "+barber.EndTime+")")
+			return
+		}
+	}
+
+	// Validate break hours
+	if barber.BreakStartTime != "" && barber.BreakEndTime != "" {
+		if tStr >= barber.BreakStartTime && tStr < barber.BreakEndTime {
+			utils.BadRequestResponse(c, "Booking time cannot be during break hours ("+barber.BreakStartTime+" - "+barber.BreakEndTime+")")
+			return
+		}
+	}
+
+	// Validate queue capacity
+	if barber.CurrentQueueLength >= barber.MaxQueueSize {
+		utils.BadRequestResponse(c, "Queue is full")
+		return
+	}
+
+	// Validate duplicate booking by same customer
+	var customerDuplicate int64
+	h.db.Model(&models.Booking{}).Where("customer_id = ? AND scheduled_start = ? AND status IN ?", customerID, req.ScheduledStart, []models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress}).Count(&customerDuplicate)
+	if customerDuplicate > 0 {
+		utils.BadRequestResponse(c, "You already have a booking at this time")
+		return
+	}
+
 	// Validate services and calculate totals
 	var services []models.BarberService
 	if err := h.db.Where("id IN ? AND barber_id = ? AND is_active = ?", req.ServiceIDs, req.BarberID, true).Find(&services).Error; err != nil {
@@ -152,18 +193,41 @@ func (h *BookingHandler) Create(c *gin.Context) {
 	}
 
 	// Calculate estimated wait time based on current queue
-	var queueAhead int64
-	h.db.Model(&models.Booking{}).
-		Where("barber_id = ? AND status IN ? AND (scheduled_start < ? OR (scheduled_start = ? AND created_at < ?))",
-			req.BarberID,
-			[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
-			req.ScheduledStart, req.ScheduledStart, time.Now()).
-		Count(&queueAhead)
+	var aheadBookings []models.Booking
+	h.db.Where("barber_id = ? AND status IN ? AND (scheduled_start < ? OR (scheduled_start = ? AND created_at < ?))",
+		req.BarberID,
+		[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
+		req.ScheduledStart, req.ScheduledStart, time.Now()).
+		Order("queue_position ASC, scheduled_start ASC").
+		Find(&aheadBookings)
 
-	estimatedWait := int(queueAhead) * (barber.SlotDuration + barber.BufferBetweenSlots)
+	estimatedWait := 0
+	for _, ab := range aheadBookings {
+		duration := ab.TotalDuration
+		if duration <= 0 {
+			duration = barber.SlotDuration
+		}
+		
+		if ab.Status == models.BookingStatusInProgress {
+			start := ab.CreatedAt
+			if ab.ActualStart != nil {
+				start = *ab.ActualStart
+			} else if !ab.ScheduledStart.IsZero() {
+				start = ab.ScheduledStart
+			}
+			elapsed := int(time.Since(start).Minutes())
+			remaining := duration - elapsed
+			if remaining < 0 {
+				remaining = 0
+			}
+			estimatedWait += remaining + barber.BufferBetweenSlots
+		} else {
+			estimatedWait += duration + barber.BufferBetweenSlots
+		}
+	}
 
 	// Calculate queue position
-	queuePosition := int(queueAhead) + 1
+	queuePosition := len(aheadBookings) + 1
 
 	// Apply coupon if provided
 	var discountAmount float64
@@ -199,6 +263,23 @@ func (h *BookingHandler) Create(c *gin.Context) {
 	}
 
 	tx := h.db.Begin()
+
+	// Row lock slot double booking check
+	var doubleBookingCount int64
+	tx.Set("gorm:query_option", "FOR UPDATE").
+		Model(&models.Booking{}).
+		Where("barber_id = ? AND scheduled_start = ? AND status IN ?",
+			req.BarberID,
+			req.ScheduledStart,
+			[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
+		).
+		Count(&doubleBookingCount)
+
+	if doubleBookingCount > 0 {
+		tx.Rollback()
+		utils.BadRequestResponse(c, "Slot already booked")
+		return
+	}
 
 	booking := models.Booking{
 		BarberID:         req.BarberID,
@@ -265,6 +346,8 @@ func (h *BookingHandler) Create(c *gin.Context) {
 
 	tx.Commit()
 
+	h.refreshQueue(booking.BarberID)
+
 	// Reload with relations
 	h.db.Preload("Services").Preload("Barber").Preload("Customer").First(&booking, booking.ID)
 
@@ -316,8 +399,8 @@ func (h *BookingHandler) Cancel(c *gin.Context) {
 		}
 	}
 
-	if booking.Status == models.BookingStatusCompleted || booking.Status == models.BookingStatusCancelled {
-		utils.BadRequestResponse(c, "Booking cannot be cancelled")
+	if booking.Status != models.BookingStatusPending && booking.Status != models.BookingStatusConfirmed {
+		utils.BadRequestResponse(c, "Booking cannot be cancelled from status: "+string(booking.Status))
 		return
 	}
 
@@ -345,6 +428,9 @@ func (h *BookingHandler) Cancel(c *gin.Context) {
 
 	// Reduce queue count
 	h.db.Model(&models.Barber{}).Where("id = ?", booking.BarberID).Update("current_queue_length", gorm.Expr("GREATEST(current_queue_length - 1, 0)"))
+
+	// Recalculate queue positions, wait times and broadcast WebSocket updates
+	h.refreshQueue(booking.BarberID)
 
 	// Refund if paid
 	if booking.PaymentStatus == "paid" || booking.PaymentStatus == "success" {
@@ -382,18 +468,43 @@ func (h *BookingHandler) UpdateStatus(c *gin.Context) {
 	}
 
 	fromStatus := booking.Status
-	booking.Status = models.BookingStatus(req.Status)
+	toStatus := models.BookingStatus(req.Status)
+
+	// Validate status transition
+	allowed := false
+	switch fromStatus {
+	case models.BookingStatusPending:
+		if toStatus == models.BookingStatusConfirmed || toStatus == models.BookingStatusCancelled {
+			allowed = true
+		}
+	case models.BookingStatusConfirmed:
+		if toStatus == models.BookingStatusInProgress || toStatus == models.BookingStatusCancelled || toStatus == models.BookingStatusNoShow {
+			allowed = true
+		}
+	case models.BookingStatusInProgress:
+		if toStatus == models.BookingStatusCompleted {
+			allowed = true
+		}
+	}
+
+	if !allowed {
+		utils.BadRequestResponse(c, "Invalid booking status transition from "+string(fromStatus)+" to "+string(toStatus))
+		return
+	}
+
+	booking.Status = toStatus
 	booking.BarberNotes = req.Notes
 
 	now := time.Now()
 	switch req.Status {
 	case "in_progress":
 		booking.ActualStart = &now
-		h.db.Model(&models.Booking{}).Where("barber_id = ? AND status = ? AND id != ?", booking.BarberID, models.BookingStatusPending, booking.ID).
-			Update("queue_position", gorm.Expr("queue_position - 1"))
 	case "completed":
 		booking.ActualEnd = &now
 		booking.CompletedAt = &now
+		h.db.Model(&models.Barber{}).Where("id = ?", booking.BarberID).Update("current_queue_length", gorm.Expr("GREATEST(current_queue_length - 1, 0)"))
+	case "no_show":
+		h.db.Model(&models.Barber{}).Where("id = ?", booking.BarberID).Update("current_queue_length", gorm.Expr("GREATEST(current_queue_length - 1, 0)"))
 	}
 
 	h.db.Save(&booking)
@@ -401,11 +512,14 @@ func (h *BookingHandler) UpdateStatus(c *gin.Context) {
 	h.db.Create(&models.BookingStatusLog{
 		BookingID:      booking.ID,
 		FromStatus:     fromStatus,
-		ToStatus:       models.BookingStatus(req.Status),
+		ToStatus:       toStatus,
 		ChangedBy:      userID,
 		ChangedByRole:  claims.Role,
 		Reason:         req.Notes,
 	})
+
+	// Recalculate queue positions, wait times and broadcast WebSocket updates
+	h.refreshQueue(booking.BarberID)
 
 	go h.sendStatusUpdateNotifications(&booking)
 
@@ -582,27 +696,95 @@ func (h *BookingHandler) GetMyQueuePosition(c *gin.Context) {
 	}
 
 	// Calculate current queue position & wait time
-	var aheadCount int64
-	h.db.Model(&models.Booking{}).
-		Where("barber_id = ? AND status IN ? AND (queue_position < ? OR (queue_position = ? AND created_at < ?)) AND id != ?",
-			booking.BarberID,
-			[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
-			booking.QueuePosition, booking.QueuePosition, booking.CreatedAt, booking.ID).
-		Count(&aheadCount)
+	var aheadBookings []models.Booking
+	h.db.Where("barber_id = ? AND status IN ? AND (queue_position < ? OR (queue_position = ? AND created_at < ?)) AND id != ?",
+		booking.BarberID,
+		[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
+		booking.QueuePosition, booking.QueuePosition, booking.CreatedAt, booking.ID).
+		Order("queue_position ASC, scheduled_start ASC").
+		Find(&aheadBookings)
 
 	var barber models.Barber
 	h.db.First(&barber, booking.BarberID)
 
-	currentWait := int(aheadCount) * (barber.SlotDuration + barber.BufferBetweenSlots)
+	currentWait := 0
+	for _, ab := range aheadBookings {
+		duration := ab.TotalDuration
+		if duration <= 0 {
+			duration = barber.SlotDuration
+		}
+		
+		if ab.Status == models.BookingStatusInProgress {
+			start := ab.CreatedAt
+			if ab.ActualStart != nil {
+				start = *ab.ActualStart
+			} else if !ab.ScheduledStart.IsZero() {
+				start = ab.ScheduledStart
+			}
+			elapsed := int(time.Since(start).Minutes())
+			remaining := duration - elapsed
+			if remaining < 0 {
+				remaining = 0
+			}
+			currentWait += remaining + barber.BufferBetweenSlots
+		} else {
+			currentWait += duration + barber.BufferBetweenSlots
+		}
+	}
 
 	utils.SuccessResponse(c, gin.H{
 		"booking_id":            booking.ID,
-		"current_position":      aheadCount + 1,
-		"people_ahead":          aheadCount,
+		"current_position":      len(aheadBookings) + 1,
+		"people_ahead":          len(aheadBookings),
 		"estimated_wait_min":    currentWait,
 		"status":                booking.Status,
 		"scheduled_start":       booking.ScheduledStart,
 	})
+}
+
+type ReorderQueueRequest struct {
+	BookingIDs []uuid.UUID `json:"booking_ids" binding:"required,min=1"`
+}
+
+func (h *BookingHandler) ReorderQueue(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+	var barber models.Barber
+	if err := h.db.Where("user_id = ?", userID).First(&barber).Error; err != nil {
+		utils.NotFoundResponse(c, "Barber profile not found")
+		return
+	}
+
+	var req ReorderQueueRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "Invalid input: "+err.Error())
+		return
+	}
+
+	tx := h.db.Begin()
+
+	for i, id := range req.BookingIDs {
+		result := tx.Model(&models.Booking{}).
+			Where("id = ? AND barber_id = ? AND status IN ?",
+				id,
+				barber.ID,
+				[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
+			).
+			Update("queue_position", i+1)
+
+		if result.Error != nil {
+			tx.Rollback()
+			utils.InternalErrorResponse(c, "Failed to update queue position")
+			return
+		}
+	}
+
+	tx.Commit()
+
+	qSvc := queue.NewQueueService(h.db, h.hub)
+	qSvc.RecalculateWaitTimes(barber.ID)
+	qSvc.BroadcastQueueUpdate(barber.ID)
+
+	utils.SuccessResponse(c, gin.H{"message": "Queue reordered successfully"})
 }
 
 func (h *BookingHandler) processRefund(booking *models.Booking) {
@@ -639,4 +821,72 @@ func (h *BookingHandler) processRefund(booking *models.Booking) {
 	h.db.Save(&payment)
 
 	h.db.Model(booking).Update("payment_status", "refunded")
+}
+
+type PayBookingRequest struct {
+	Method    string `json:"method" binding:"required,oneof=cash upi"`
+	Status    string `json:"status" binding:"required,oneof=pending initiated success failed"`
+	Reference string `json:"reference"`
+}
+
+func (h *BookingHandler) PayBooking(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid booking ID")
+		return
+	}
+
+	var req PayBookingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "Invalid input: "+err.Error())
+		return
+	}
+
+	var booking models.Booking
+	if err := h.db.First(&booking, id).Error; err != nil {
+		utils.NotFoundResponse(c, "Booking not found")
+		return
+	}
+
+	// Verify that the user is the customer or the barber of this booking
+	var barber models.Barber
+	isBarber := false
+	if h.db.Where("user_id = ?", userID).First(&barber).Error == nil {
+		if barber.ID == booking.BarberID {
+			isBarber = true
+		}
+	}
+
+	if booking.CustomerID != userID && !isBarber {
+		utils.ForbiddenResponse(c, "Not authorized to pay for this booking")
+		return
+	}
+
+	booking.PaymentStatus = req.Status
+	booking.PaymentID = req.Method + ":" + req.Reference
+
+	if err := h.db.Save(&booking).Error; err != nil {
+		utils.InternalErrorResponse(c, "Failed to update payment status")
+		return
+	}
+
+	// If payment is successful, log it in BookingStatusLog
+	if req.Status == "success" {
+		role := "customer"
+		if isBarber {
+			role = "barber"
+		}
+		h.db.Create(&models.BookingStatusLog{
+			BookingID:      booking.ID,
+			FromStatus:     booking.Status,
+			ToStatus:       booking.Status,
+			ChangedBy:      userID,
+			ChangedByRole:  role,
+			Reason:         "Payment successful via " + req.Method,
+		})
+	}
+
+	utils.SuccessResponse(c, booking)
 }

@@ -104,12 +104,12 @@ class AuthRepositoryImpl implements AuthRepository {
     await _localDataSource.saveRefreshToken(tokens['refresh_token'] as String);
     
     // Fill required user schema properties from login response context if missing
-    if (!userMap.containsKey('phone')) userMap['phone'] = phone;
-    if (!userMap.containsKey('full_name')) userMap['full_name'] = 'Client';
-    if (!userMap.containsKey('role')) userMap['role'] = 'customer';
-    if (!userMap.containsKey('status')) userMap['status'] = 'active';
-    if (!userMap.containsKey('otp_verified')) userMap['otp_verified'] = true;
-    if (!userMap.containsKey('language_pref')) userMap['language_pref'] = 'en';
+    if (!userMap.containsKey('phone') || userMap['phone'] == null) userMap['phone'] = phone;
+    if (!userMap.containsKey('full_name') || userMap['full_name'] == null) userMap['full_name'] = 'Client';
+    if (!userMap.containsKey('role') || userMap['role'] == null) userMap['role'] = 'customer';
+    if (!userMap.containsKey('status') || userMap['status'] == null) userMap['status'] = 'active';
+    if (!userMap.containsKey('otp_verified') || userMap['otp_verified'] == null) userMap['otp_verified'] = true;
+    if (!userMap.containsKey('language_pref') || userMap['language_pref'] == null) userMap['language_pref'] = 'en';
 
     await _localDataSource.saveUserData(userMap);
     return UserModel.fromJson(userMap);

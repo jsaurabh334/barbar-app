@@ -5,7 +5,10 @@ import 'package:shimmer/shimmer.dart';
 import '../../data/models/barber_model.dart';
 import '../../core/network/websocket_client.dart';
 import '../../core/theme/app_theme.dart';
+import 'barber_detail_screen.dart';
 import 'map_discovery_screen.dart';
+import 'shop_screen.dart';
+import 'wallet_screen.dart';
 import '../bloc/auth/auth_bloc.dart';
 import '../bloc/auth/auth_event.dart';
 import '../bloc/auth/auth_state.dart';
@@ -146,12 +149,18 @@ class _HomeScreenState extends State<HomeScreen> {
             ListTile(
               leading: const Icon(LucideIcons.shoppingBag, color: AppColors.textSecondary),
               title: const Text('Grooming Products'),
-              onTap: () {},
+              onTap: () {
+                Navigator.pop(context); // Close drawer
+                Navigator.push(context, MaterialPageRoute(builder: (c) => const ShopScreen()));
+              },
             ),
             ListTile(
               leading: const Icon(LucideIcons.wallet, color: AppColors.textSecondary),
               title: const Text('My Wallet'),
-              onTap: () {},
+              onTap: () {
+                Navigator.pop(context); // Close drawer
+                Navigator.push(context, MaterialPageRoute(builder: (c) => const WalletScreen()));
+              },
             ),
             const Divider(color: AppColors.border),
             const Spacer(),
@@ -431,146 +440,157 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildBarberCard(BarberModel barber) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: AppColors.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border, width: 1),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Salon Banner Image
-            SizedBox(
-              height: 140,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    barber.shopImage ?? '',
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, _, __) => Container(
-                      color: AppColors.surface,
-                      child: const Icon(LucideIcons.scissors, color: AppColors.textSecondary, size: 40),
-                    ),
-                  ),
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.7),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.star, color: Colors.amber, size: 16),
-                          const SizedBox(width: 4),
-                          Text(
-                            barber.rating.toStringAsFixed(1),
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white),
-                          ),
-                        ],
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => BarberDetailScreen(barber: barber),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border, width: 1),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Salon Banner Image
+              SizedBox(
+                height: 140,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.network(
+                      barber.shopImage ?? '',
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, _, __) => Container(
+                        color: AppColors.surface,
+                        child: const Icon(LucideIcons.scissors, color: AppColors.textSecondary, size: 40),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            
-            // Details Section
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          barber.shopName,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 18),
-                        ),
-                      ),
-                      Text(
-                        barber.isAvailable ? 'AVAILABLE' : 'CLOSED',
-                        style: TextStyle(
-                          color: barber.isAvailable ? AppColors.success : AppColors.error,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    barber.shopDescription ?? '',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(LucideIcons.mapPin, size: 14, color: AppColors.textMuted),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          barber.address,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textMuted),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 24, color: AppColors.border),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(LucideIcons.users, size: 16, color: AppColors.textSecondary),
-                          const SizedBox(width: 6),
-                          Text(
-                            '${barber.currentQueueLength} in queue',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
+                          color: Colors.black.withValues(alpha: 0.7),
+                          borderRadius: BorderRadius.circular(6),
                         ),
                         child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(LucideIcons.clock, size: 14, color: AppColors.primary),
-                            const SizedBox(width: 6),
+                            const Icon(Icons.star, color: Colors.amber, size: 16),
+                            const SizedBox(width: 4),
                             Text(
-                              '~${barber.averageWaitTime.toInt()} mins wait',
-                              style: const TextStyle(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
+                              barber.rating.toStringAsFixed(1),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white),
                             ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              
+              // Details Section
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            barber.shopName,
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 18),
+                          ),
+                        ),
+                        Text(
+                          barber.isAvailable ? 'AVAILABLE' : 'CLOSED',
+                          style: TextStyle(
+                            color: barber.isAvailable ? AppColors.success : AppColors.error,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      barber.shopDescription ?? '',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(LucideIcons.mapPin, size: 14, color: AppColors.textMuted),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            barber.address,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textMuted),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 24, color: AppColors.border),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(LucideIcons.users, size: 16, color: AppColors.textSecondary),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${barber.currentQueueLength} in queue',
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(LucideIcons.clock, size: 14, color: AppColors.primary),
+                              const SizedBox(width: 6),
+                              Text(
+                                '~${barber.averageWaitTime.toInt()} mins wait',
+                                style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

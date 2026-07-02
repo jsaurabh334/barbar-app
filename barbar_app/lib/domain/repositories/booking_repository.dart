@@ -11,4 +11,7 @@ abstract class BookingRepository {
   Future<Map<String, dynamic>> getQueuePosition(String bookingId);
   Future<void> updateBookingStatus(String bookingId, String status);
   Future<List<BookingModel>> getAllBookings();
+  Future<List<BookingModel>> getBarberBookings();
+  Future<void> payBooking(String bookingId, String method, String status, String reference);
+  Future<Map<String, dynamic>> getBookingInvoice(String bookingId);
 }

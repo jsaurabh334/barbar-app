@@ -9,7 +9,7 @@ class BookingRemoteDataSource {
 
   Future<List<ServiceModel>> getServices(String barberId) async {
     final response = await _apiClient.dio.get('/public/barbers/$barberId/services');
-    if (response.statusCode == 200 && response.data['success'] == true) {
+    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
       final List<dynamic> data = response.data['data'];
       return data.map((e) => ServiceModel.fromJson(e as Map<String, dynamic>)).toList();
     }
@@ -29,7 +29,7 @@ class BookingRemoteDataSource {
         'scheduled_start': scheduledStart,
       },
     );
-    if (response.statusCode == 201 && response.data['success'] == true) {
+    if (response.statusCode == 201 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
       return response.data['data'] as Map<String, dynamic>;
     }
     throw Exception(response.data['error'] ?? 'Booking creation failed');
@@ -37,7 +37,7 @@ class BookingRemoteDataSource {
 
   Future<Map<String, dynamic>> getQueuePosition(String bookingId) async {
     final response = await _apiClient.dio.get('/barber/queue/$bookingId');
-    if (response.statusCode == 200 && response.data['success'] == true) {
+    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
       return response.data['data'] as Map<String, dynamic>;
     }
     throw Exception(response.data['error'] ?? 'Failed to fetch queue position');
@@ -48,17 +48,48 @@ class BookingRemoteDataSource {
       '/barber/bookings/$bookingId/status',
       data: {'status': status},
     );
-    if (response.statusCode != 200 || response.data['success'] != true) {
+    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
       throw Exception(response.data['error'] ?? 'Failed to update status');
+    }
+  }
+
+  Future<void> payBooking(String bookingId, String method, String status, String reference) async {
+    final response = await _apiClient.dio.post(
+      '/bookings/$bookingId/payment',
+      data: {
+        'method': method,
+        'status': status,
+        'reference': reference,
+      },
+    );
+    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
+      throw Exception(response.data['error'] ?? 'Payment registration failed');
     }
   }
 
   Future<List<BookingModel>> getCustomerBookings() async {
     final response = await _apiClient.dio.get('/bookings');
-    if (response.statusCode == 200 && response.data['success'] == true) {
+    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
       final List<dynamic> data = response.data['data'];
       return data.map((e) => BookingModel.fromJson(e as Map<String, dynamic>)).toList();
     }
     throw Exception(response.data['error'] ?? 'Failed to fetch bookings');
+  }
+
+  Future<List<BookingModel>> getBarberBookings() async {
+    final response = await _apiClient.dio.get('/barber/bookings');
+    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+      final List<dynamic> data = response.data['data'];
+      return data.map((e) => BookingModel.fromJson(e as Map<String, dynamic>)).toList();
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch barber bookings');
+  }
+
+  Future<Map<String, dynamic>> getBookingInvoice(String bookingId) async {
+    final response = await _apiClient.dio.get('/bookings/$bookingId/invoice');
+    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch invoice details');
   }
 }

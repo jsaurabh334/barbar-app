@@ -48,7 +48,7 @@ class UploadService {
         ),
       );
 
-      if (response.statusCode == 201 && response.data['success'] == true) {
+      if (response.statusCode == 201 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
         final fileUrl = response.data['data']['file_url'] as String;
         return UploadResult(success: true, fileUrl: fileUrl);
       }

@@ -8,6 +8,8 @@ import '../bloc/booking/booking_bloc.dart';
 import '../bloc/booking/booking_event.dart';
 import '../bloc/booking/booking_state.dart';
 import '../widgets/glass_card.dart';
+import 'payment_screen.dart';
+import 'invoice_screen.dart';
 
 class QueueTrackerScreen extends StatefulWidget {
   final WebSocketClient webSocketClient;
@@ -65,13 +67,17 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
       ),
       body: BlocConsumer<BookingBloc, BookingState>(
         listener: (context, state) {
-          if (state is BookingsLoaded) {
+          if (state is BookingsLoaded && state.bookings.isNotEmpty) {
             final active = state.bookings.firstWhere(
-              (b) => b.status == 'pending' || b.status == 'confirmed' || b.status == 'in_progress',
+              (b) => b.status == 'pending' || b.status == 'confirmed' || b.status == 'in_progress' || b.status == 'completed',
               orElse: () => state.bookings.first,
             );
             setState(() {
               _activeBooking = active;
+            });
+          } else if (state is BookingsLoaded && state.bookings.isEmpty) {
+            setState(() {
+              _activeBooking = null;
             });
           }
         },
@@ -102,10 +108,41 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 12),
+
+                // Booking header details
+                GlassCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('SALON PARTNER', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text('Barber Shop #${_activeBooking!.barberId.substring(0, 8)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const Text('BOOKING ID', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text('#${_activeBooking!.id.substring(0, 8)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
                 
                 // Pulsing Ring visualization
                 Center(child: _buildRadialTracker(pos, ahead, status)),
                 const SizedBox(height: 32),
+
+                // Booking Timeline
+                _buildTimeline(status, _activeBooking!.paymentStatus),
+                const SizedBox(height: 24),
 
                 // Wait Info Glass Card
                 _buildDetailsCard(wait, ahead, status),
@@ -113,7 +150,39 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
 
                 // Selected services summary list
                 _buildServicesCard(),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
+
+                // Payment Action buttons
+                if (status == 'completed' && _activeBooking!.paymentStatus != 'success')
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PaymentScreen(booking: _activeBooking!),
+                        ),
+                      );
+                    },
+                    icon: const Icon(LucideIcons.creditCard),
+                    label: const Text('PROCEED TO PAYMENT'),
+                  )
+                else if (_activeBooking!.paymentStatus == 'success')
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => InvoiceScreen(bookingId: _activeBooking!.id),
+                        ),
+                      );
+                    },
+                    icon: const Icon(LucideIcons.fileText),
+                    label: const Text('VIEW INVOICE / RECEIPT'),
+                  ),
+
+                const SizedBox(height: 16),
 
                 // Cancel booking option
                 if (status == 'pending' || status == 'confirmed')
@@ -127,6 +196,103 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildTimeline(String status, String paymentStatus) {
+    final steps = ['booked', 'confirmed', 'in_progress', 'completed', 'paid'];
+    final labels = ['Booked', 'Confirmed', 'Serving', 'Completed', 'Paid'];
+    
+    int activeIndex = 0;
+    if (status == 'pending') activeIndex = 0;
+    if (status == 'confirmed') activeIndex = 1;
+    if (status == 'in_progress') activeIndex = 2;
+    if (status == 'completed') {
+      activeIndex = 3;
+      if (paymentStatus == 'success') {
+        activeIndex = 4;
+      }
+    } else if (status == 'cancelled') {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: AppColors.error.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+        child: const Row(
+          children: [
+            Icon(LucideIcons.alertTriangle, color: AppColors.error),
+            SizedBox(width: 10),
+            Text('This booking has been Cancelled', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      );
+    } else if (status == 'no_show') {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: AppColors.error.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+        child: const Row(
+          children: [
+            Icon(LucideIcons.alertTriangle, color: AppColors.error),
+            SizedBox(width: 10),
+            Text('No Show: Booking marked inactive', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('TRACKING TIMELINE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(steps.length, (index) {
+              final isDone = index <= activeIndex;
+              final isCurrent = index == activeIndex;
+              return Expanded(
+                child: Row(
+                  children: [
+                    Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 12,
+                          backgroundColor: isDone ? AppColors.primary : AppColors.border,
+                          child: isDone
+                              ? Icon(isCurrent ? LucideIcons.loader : LucideIcons.check, size: 12, color: Colors.white)
+                              : null,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          labels[index],
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                            color: isDone ? AppColors.textPrimary : AppColors.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (index < steps.length - 1)
+                      Expanded(
+                        child: Container(
+                          height: 2,
+                          color: index < activeIndex ? AppColors.primary : AppColors.border,
+                          margin: const EdgeInsets.only(bottom: 16),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }),
+          ),
+        ],
       ),
     );
   }

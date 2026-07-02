@@ -8,7 +8,7 @@ class WalletRemoteDataSource {
 
   Future<Map<String, dynamic>> getWalletDetails() async {
     final response = await _apiClient.dio.get('/wallet');
-    if (response.statusCode == 200 && response.data['success'] == true) {
+    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
       final wallet = response.data['data'] as Map<String, dynamic>;
       final transactions = await getTransactions();
       return {
@@ -21,7 +21,7 @@ class WalletRemoteDataSource {
 
   Future<List<TransactionModel>> getTransactions() async {
     final response = await _apiClient.dio.get('/wallet/transactions');
-    if (response.statusCode == 200 && response.data['success'] == true) {
+    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
       final List<dynamic> data = response.data['data'];
       return data.map((e) => TransactionModel.fromJson(e as Map<String, dynamic>)).toList();
     }
@@ -39,7 +39,7 @@ class WalletRemoteDataSource {
         'bank_account_id': bankAccountId,
       },
     );
-    if (response.statusCode != 201 || response.data['success'] != true) {
+    if (response.statusCode != 201 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
       throw Exception(response.data['error'] ?? 'Withdrawal request failed');
     }
   }

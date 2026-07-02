@@ -11,6 +11,7 @@ class BookingModel {
   final int estimatedWaitMinutes;
   final double finalPrice;
   final String paymentStatus;
+  final String customerName;
   final List<ServiceModel> services;
 
   BookingModel({
@@ -24,6 +25,7 @@ class BookingModel {
     required this.estimatedWaitMinutes,
     required this.finalPrice,
     required this.paymentStatus,
+    this.customerName = 'Guest Customer',
     this.services = const [],
   });
 
@@ -32,6 +34,11 @@ class BookingModel {
     List<ServiceModel> serviceList = rawServices != null
         ? rawServices.map((e) => ServiceModel.fromJson(e as Map<String, dynamic>)).toList()
         : [];
+
+    String parsedCustomerName = 'Guest Customer';
+    if (json['customer'] != null && json['customer']['full_name'] != null) {
+      parsedCustomerName = json['customer']['full_name'] as String;
+    }
 
     return BookingModel(
       id: json['id'] as String,
@@ -44,6 +51,7 @@ class BookingModel {
       estimatedWaitMinutes: (json['estimated_wait_minutes'] as num?)?.toInt() ?? 0,
       finalPrice: (json['final_price'] as num?)?.toDouble() ?? 0.0,
       paymentStatus: (json['payment_status'] as String?) ?? 'pending',
+      customerName: parsedCustomerName,
       services: serviceList,
     );
   }
@@ -60,6 +68,7 @@ class BookingModel {
       'estimated_wait_minutes': estimatedWaitMinutes,
       'final_price': finalPrice,
       'payment_status': paymentStatus,
+      'customer_name': customerName,
       'services': services.map((e) => e.toJson()).toList(),
     };
   }
@@ -75,6 +84,7 @@ class BookingModel {
     int? estimatedWaitMinutes,
     double? finalPrice,
     String? paymentStatus,
+    String? customerName,
     List<ServiceModel>? services,
   }) {
     return BookingModel(
@@ -88,6 +98,7 @@ class BookingModel {
       estimatedWaitMinutes: estimatedWaitMinutes ?? this.estimatedWaitMinutes,
       finalPrice: finalPrice ?? this.finalPrice,
       paymentStatus: paymentStatus ?? this.paymentStatus,
+      customerName: customerName ?? this.customerName,
       services: services ?? this.services,
     );
   }

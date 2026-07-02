@@ -48,12 +48,16 @@ class DirectoryRepositoryImpl implements DirectoryRepository {
     String? search,
   }) async {
     try {
-      return await _remoteDataSource.getNearbyBarbers(
+      final barbers = await _remoteDataSource.getNearbyBarbers(
         latitude: latitude,
         longitude: longitude,
         radius: radius,
         search: search,
       );
+      if (barbers.isEmpty) {
+        return List.from(_mockBarbers);
+      }
+      return barbers;
     } catch (_) {
       return List.from(_mockBarbers);
     }

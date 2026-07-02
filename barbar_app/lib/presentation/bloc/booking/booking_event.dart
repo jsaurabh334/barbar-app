@@ -61,3 +61,22 @@ class StreamQueuePositionUpdate extends BookingEvent {
 }
 
 class FetchAllBookings extends BookingEvent {}
+
+class FetchBarberBookings extends BookingEvent {}
+
+class PayBooking extends BookingEvent {
+  final String bookingId;
+  final String method;
+  final String status;
+  final String reference;
+
+  const PayBooking({
+    required this.bookingId,
+    required this.method,
+    required this.status,
+    required this.reference,
+  });
+
+  @override
+  List<Object?> get props => [bookingId, method, status, reference];
+}

@@ -42,6 +42,9 @@ class MarketplaceRepositoryImpl implements MarketplaceRepository {
   Future<List<ProductModel>> getProducts() async {
     try {
       _cachedProducts = await _remoteDataSource.getProducts();
+      if (_cachedProducts.isEmpty) {
+        _cachedProducts = List.from(_mockProducts);
+      }
       return List.from(_cachedProducts);
     } catch (_) {
       _cachedProducts = List.from(_mockProducts);

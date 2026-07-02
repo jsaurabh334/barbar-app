@@ -103,7 +103,7 @@ class ApiClient {
         data: {'refresh_token': refreshToken},
       );
 
-      if (response.statusCode == 200 && response.data['success'] == true) {
+      if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
         final tokens = response.data['data']['tokens'];
         final newAccessToken = tokens['access_token'] as String;
         final newRefreshToken = tokens['refresh_token'] as String;

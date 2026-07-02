@@ -41,18 +41,8 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
-    environment:
-      SERVER_PORT: "8080"
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      DB_NAME: barbar_app
-      DB_SSLMODE: disable
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      JWT_SECRET: "change-this-to-a-secure-random-string"
-      GIN_MODE: release
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy

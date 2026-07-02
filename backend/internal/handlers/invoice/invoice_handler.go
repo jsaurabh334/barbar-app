@@ -35,3 +35,13 @@ func (h *InvoiceHandler) GetBookingReceipt(c *gin.Context) {
 	c.Header("Content-Type", "text/html")
 	c.String(200, html)
 }
+
+func (h *InvoiceHandler) GetBookingInvoiceJSON(c *gin.Context) {
+	bookingID := c.Param("id")
+	data, err := h.svc.GetBookingInvoiceData(bookingID)
+	if err != nil {
+		utils.NotFoundResponse(c, err.Error())
+		return
+	}
+	utils.SuccessResponse(c, data)
+}

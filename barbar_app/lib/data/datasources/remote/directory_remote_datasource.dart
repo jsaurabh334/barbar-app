@@ -21,7 +21,7 @@ class DirectoryRemoteDataSource {
         if (search != null) 'search': search,
       },
     );
-    if (response.statusCode == 200 && response.data['success'] == true) {
+    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
       final List<dynamic> data = response.data['data'];
       return data.map((e) => BarberModel.fromJson(e as Map<String, dynamic>)).toList();
     }

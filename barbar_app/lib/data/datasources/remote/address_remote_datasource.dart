@@ -7,7 +7,7 @@ class AddressRemoteDataSource {
 
   Future<List<Map<String, dynamic>>> getAddresses() async {
     final response = await _apiClient.dio.get('/addresses');
-    if (response.statusCode == 200 && response.data['success'] == true) {
+    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
       final List<dynamic> data = response.data['data'];
       return data.cast<Map<String, dynamic>>();
     }
@@ -16,7 +16,7 @@ class AddressRemoteDataSource {
 
   Future<Map<String, dynamic>> createAddress(Map<String, dynamic> address) async {
     final response = await _apiClient.dio.post('/addresses', data: address);
-    if (response.statusCode == 201 && response.data['success'] == true) {
+    if (response.statusCode == 201 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
       return response.data['data'] as Map<String, dynamic>;
     }
     throw Exception(response.data['error'] ?? 'Failed to create address');
@@ -24,7 +24,7 @@ class AddressRemoteDataSource {
 
   Future<Map<String, dynamic>> updateAddress(String id, Map<String, dynamic> address) async {
     final response = await _apiClient.dio.put('/addresses/$id', data: address);
-    if (response.statusCode == 200 && response.data['success'] == true) {
+    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
       return response.data['data'] as Map<String, dynamic>;
     }
     throw Exception(response.data['error'] ?? 'Failed to update address');
@@ -32,14 +32,14 @@ class AddressRemoteDataSource {
 
   Future<void> deleteAddress(String id) async {
     final response = await _apiClient.dio.delete('/addresses/$id');
-    if (response.statusCode != 200 || response.data['success'] != true) {
+    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
       throw Exception(response.data['error'] ?? 'Failed to delete address');
     }
   }
 
   Future<void> setDefaultAddress(String id) async {
     final response = await _apiClient.dio.put('/addresses/$id/default');
-    if (response.statusCode != 200 || response.data['success'] != true) {
+    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
       throw Exception(response.data['error'] ?? 'Failed to set default address');
     }
   }

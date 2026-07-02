@@ -24,11 +24,21 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
   int _selectedTab = 0;
   String _startTime = '09:00';
   String _endTime = '21:00';
+  List<BookingModel> _bookings = [];
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    context.read<BookingBloc>().add(FetchAllBookings());
+    context.read<BookingBloc>().add(FetchBarberBookings());
+
+    // Listen to real-time websocket updates to refresh dashboard queues
+    widget.webSocketClient.events.listen((event) {
+      if (!mounted) return;
+      if (event['type'] == 'queue_update') {
+        context.read<BookingBloc>().add(FetchBarberBookings());
+      }
+    });
   }
 
   @override
@@ -58,29 +68,57 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
           BottomNavigationBarItem(icon: Icon(LucideIcons.calendar), label: 'Schedule Hours'),
         ],
       ),
-      body: _selectedTab == 0 ? _buildActiveQueuesTab() : _buildScheduleTab(),
+      body: BlocConsumer<BookingBloc, BookingState>(
+        listener: (context, state) {
+          if (state is BookingLoading) {
+            setState(() => _isLoading = true);
+          } else {
+            setState(() => _isLoading = false);
+          }
+
+          if (state is BookingsLoaded) {
+            setState(() {
+              _bookings = state.bookings;
+            });
+          } else if (state is BookingFailure) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.error),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+        },
+        builder: (context, state) {
+          if (_isLoading && _bookings.isEmpty) {
+            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+          }
+          return Stack(
+            children: [
+              _selectedTab == 0 ? _buildActiveQueuesTab() : _buildScheduleTab(),
+              if (_isLoading)
+                const Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: LinearProgressIndicator(color: AppColors.primary, backgroundColor: Colors.transparent),
+                ),
+            ],
+          );
+        },
+      ),
     );
   }
 
   Widget _buildActiveQueuesTab() {
-    return BlocBuilder<BookingBloc, BookingState>(
-      builder: (context, state) {
-        if (state is BookingLoading) {
-          return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-        } else if (state is BookingsLoaded) {
-          final bookings = state.bookings;
-          if (bookings.isEmpty) {
-            return const Center(child: Text('No client bookings scheduled.'));
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.all(20),
-            itemCount: bookings.length,
-            itemBuilder: (context, index) {
-              return _buildBookingQueueCard(bookings[index]);
-            },
-          );
-        }
-        return const SizedBox.shrink();
+    if (_bookings.isEmpty) {
+      return const Center(child: Text('No client bookings scheduled.'));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(20),
+      itemCount: _bookings.length,
+      itemBuilder: (context, index) {
+        return _buildBookingQueueCard(_bookings[index]);
       },
     );
   }
@@ -138,7 +176,9 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Booking ID: #${booking.id.substring(0, 8)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text(booking.customerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 2),
+                    Text('Booking ID: #${booking.id.substring(0, 8)}', style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
                     const SizedBox(height: 2),
                     Text(
                       booking.services.map((s) => s.name).join(', '),
@@ -163,34 +203,57 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
             Row(
               children: [
                 Expanded(
+                  flex: 2,
                   child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.error,
                       side: const BorderSide(color: AppColors.error),
+                      minimumSize: const Size.fromHeight(46),
                     ),
-                    onPressed: () => _updateStatus(booking.id, 'no_show'),
-                    child: const Text('NO SHOW'),
+                    onPressed: _isLoading ? null : () => _updateStatus(booking.id, 'no_show'),
+                    child: const Text(
+                      'NO SHOW',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
+                  flex: 3,
                   child: ElevatedButton(
-                    onPressed: () {
-                      _updateStatus(booking.id, 'in_progress');
-                      _simulateLiveSyncUpdate(booking.id, booking.queuePosition - 1);
-                    },
-                    child: const Text('START SERVICE'),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(46),
+                    ),
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            _updateStatus(booking.id, 'in_progress');
+                            _simulateLiveSyncUpdate(booking.id, booking.queuePosition - 1);
+                          },
+                    child: const Text(
+                      'START SERVICE',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
               ],
             )
           else if (booking.status == 'in_progress')
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
-              onPressed: () {
-                _updateStatus(booking.id, 'completed');
-                _simulateLiveSyncUpdate(booking.id, 0);
-              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.success,
+                minimumSize: const Size.fromHeight(46),
+              ),
+              onPressed: _isLoading
+                  ? null
+                  : () {
+                      _updateStatus(booking.id, 'completed');
+                      _simulateLiveSyncUpdate(booking.id, 0);
+                    },
               child: const Text('COMPLETE APPOINTMENT'),
             ),
         ],

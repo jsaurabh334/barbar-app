@@ -98,45 +98,77 @@ func (s *InvoiceService) GenerateOrderInvoice(orderID string) (string, error) {
 	return s.renderHTML(data), nil
 }
 
-func (s *InvoiceService) GenerateBookingReceipt(bookingID string) (string, error) {
+func (s *InvoiceService) GetBookingInvoiceData(bookingID string) (*InvoiceData, error) {
 	var booking models.Booking
 	if err := s.db.Preload("Barber").Preload("Customer").Preload("Services").First(&booking, "id = ?", bookingID).Error; err != nil {
-		return "", fmt.Errorf("booking not found: %w", err)
+		return nil, fmt.Errorf("booking not found: %w", err)
 	}
 
 	customerName := "Guest"
+	customerEmail := ""
+	customerPhone := ""
 	if booking.Customer != nil {
 		customerName = booking.Customer.FullName
+		customerEmail = booking.Customer.Email
+		customerPhone = booking.Customer.Phone
 	}
 
-	barberName := ""
-	if booking.Barber != nil {
-		barberName = booking.Barber.ShopName
+	var items []InvoiceItem
+	for _, svc := range booking.Services {
+		items = append(items, InvoiceItem{
+			Name:     svc.ServiceName,
+			Quantity: svc.Quantity,
+			Price:    svc.UnitPrice,
+			Total:    svc.TotalPrice,
+		})
 	}
 
-	items := []InvoiceItem{
-		{
+	// Fallback if no services are preloaded or present
+	if len(items) == 0 {
+		barberName := ""
+		if booking.Barber != nil {
+			barberName = booking.Barber.ShopName
+		}
+		items = append(items, InvoiceItem{
 			Name:     fmt.Sprintf("Barber Service - %s", barberName),
 			Quantity: 1,
 			Price:    booking.FinalPrice,
 			Total:    booking.FinalPrice,
-		},
+		})
 	}
+
+	subtotal := booking.TotalPrice
+	discount := booking.DiscountAmount
+	tax := subtotal * 0.18
+	total := booking.FinalPrice
 
 	data := InvoiceData{
-		InvoiceNo:    fmt.Sprintf("REC-%s", booking.ID.String()[:8]),
-		Date:         booking.CreatedAt.Format("02 Jan 2006"),
-		DueDate:      booking.ScheduledStart.Format("02 Jan 2006"),
-		CustomerName: customerName,
-		Items:        items,
-		Total:        booking.FinalPrice,
-		PlatformName: s.platform,
-		Currency:     "INR",
-		Status:       string(booking.Status),
-		Notes:        "Booking receipt",
+		InvoiceNo:     fmt.Sprintf("REC-%s", booking.ID.String()[:8]),
+		Date:          booking.CreatedAt.Format("02 Jan 2006"),
+		DueDate:       booking.ScheduledStart.Format("02 Jan 2006"),
+		CustomerName:  customerName,
+		CustomerEmail: customerEmail,
+		CustomerPhone: customerPhone,
+		Items:         items,
+		Subtotal:      subtotal,
+		Tax:           tax,
+		Discount:      discount,
+		Total:         total,
+		PlatformName:  s.platform,
+		Currency:      "INR",
+		Status:        string(booking.Status),
+		Notes:         "Booking receipt",
 	}
 
-	return s.renderHTML(data), nil
+	return &data, nil
+}
+
+func (s *InvoiceService) GenerateBookingReceipt(bookingID string) (string, error) {
+	data, err := s.GetBookingInvoiceData(bookingID)
+	if err != nil {
+		return "", err
+	}
+	return s.renderHTML(*data), nil
 }
 
 const invoiceHTML = `<!DOCTYPE html>
