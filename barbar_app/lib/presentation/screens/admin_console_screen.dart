@@ -1,27 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:barbar_app/presentation/screens/admin/vendors/admin_vendors_screen.dart';
+import 'package:barbar_app/presentation/bloc/admin/admin_vendors_bloc.dart';
+import 'package:barbar_app/presentation/screens/admin/delivery/admin_delivery_screen.dart';
+import 'package:barbar_app/presentation/bloc/admin/admin_delivery_bloc.dart';
+import 'package:barbar_app/presentation/bloc/admin/admin_customers_bloc.dart';
+import 'package:barbar_app/domain/repositories/admin_repository.dart';
 import '../../core/theme/app_theme.dart';
 import '../bloc/auth/auth_bloc.dart';
 import '../bloc/auth/auth_event.dart';
-
-class KycDocument {
-  final String id;
-  final String applicantName;
-  final String role; // barber or vendor
-  final String docType; // PAN Card, Shop License
-  final String fileUrl;
-  String status;
-
-  KycDocument({
-    required this.id,
-    required this.applicantName,
-    required this.role,
-    required this.docType,
-    required this.fileUrl,
-    required this.status,
-  });
-}
+import 'admin/customers/admin_customers_screen.dart';
+import 'admin/admin_dashboard_screen.dart';
 
 class DisputeCase {
   final String id;
@@ -52,12 +42,6 @@ class AdminConsoleScreen extends StatefulWidget {
 
 class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-
-  // KYC State
-  final List<KycDocument> _documents = [
-    KycDocument(id: 'kyc-1', applicantName: 'John Barber', role: 'barber', docType: 'Shop License', fileUrl: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1', status: 'pending'),
-    KycDocument(id: 'kyc-2', applicantName: 'Acme Products', role: 'vendor', docType: 'PAN Card Registry', fileUrl: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a', status: 'pending'),
-  ];
 
   // Disputes State
   final List<DisputeCase> _disputes = [
@@ -96,7 +80,10 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 7, vsync: this);
+    _tabController.addListener(() {
+      setState(() {});
+    });
   }
 
   @override
@@ -113,6 +100,46 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: Drawer(
+        backgroundColor: AppColors.surface,
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(
+                color: AppColors.cardBg,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    'SUPER ADMIN',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Management Console',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            _buildDrawerItem(LucideIcons.layoutDashboard, 'Dashboard (Barbers)', 0),
+            _buildDrawerItem(LucideIcons.users, 'Customers', 1),
+            _buildDrawerItem(LucideIcons.store, 'Vendors', 2),
+            _buildDrawerItem(LucideIcons.bike, 'Delivery', 3),
+            _buildDrawerItem(LucideIcons.scale, 'Disputes', 4),
+            _buildDrawerItem(LucideIcons.settings, 'Settings', 5),
+            _buildDrawerItem(LucideIcons.activity, 'Analytics', 6),
+          ],
+        ),
+      ),
       appBar: AppBar(
         title: const Text(
           'SUPER ADMIN CONSOLE',
@@ -124,24 +151,30 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
             onPressed: () => context.read<AuthBloc>().add(LogoutRequested()),
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: AppColors.primary,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textSecondary,
-          isScrollable: true,
-          tabs: const [
-            Tab(icon: Icon(LucideIcons.shieldAlert), text: 'KYC'),
-            Tab(icon: Icon(LucideIcons.scale), text: 'Disputes'),
-            Tab(icon: Icon(LucideIcons.settings), text: 'Settings'),
-            Tab(icon: Icon(LucideIcons.activity), text: 'Analytics'),
-          ],
-        ),
       ),
       body: TabBarView(
         controller: _tabController,
+        physics: const NeverScrollableScrollPhysics(),
         children: [
-          _buildKycTab(),
+          const AdminDashboardScreen(),
+          BlocProvider(
+            create: (context) => AdminCustomersBloc(
+              adminRepository: context.read<AdminRepository>(),
+            )..add(const LoadCustomers()),
+            child: const AdminCustomersScreen(),
+          ),
+          BlocProvider(
+            create: (context) => AdminVendorsBloc(
+              adminRepository: context.read<AdminRepository>(),
+            )..add(const LoadVendors()),
+            child: const AdminVendorsScreen(),
+          ),
+          BlocProvider(
+            create: (context) => AdminDeliveryBloc(
+              adminRepository: context.read<AdminRepository>(),
+            )..add(const LoadDeliveryPartners()),
+            child: const AdminDeliveryScreen(),
+          ),
           _buildDisputesTab(),
           _buildSettingsTab(),
           _buildAnalyticsTab(),
@@ -150,147 +183,22 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
     );
   }
 
-  // ================= KYC Tab =================
-  Widget _buildKycTab() {
-    final pendingDocs = _documents.where((d) => d.status == 'pending').toList();
-    if (pendingDocs.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(LucideIcons.checkSquare, size: 64, color: AppColors.success),
-            SizedBox(height: 16),
-            Text(
-              'All KYC documents verified!',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-          ],
+  Widget _buildDrawerItem(IconData icon, String title, int index) {
+    final isSelected = _tabController.index == index;
+    return ListTile(
+      leading: Icon(icon, color: isSelected ? AppColors.primary : Colors.grey),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: isSelected ? AppColors.primary : Colors.grey,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
         ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(20),
-      itemCount: pendingDocs.length,
-      itemBuilder: (context, index) {
-        return _buildKycCard(pendingDocs[index]);
-      },
-    );
-  }
-
-  Widget _buildKycCard(KycDocument doc) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      decoration: BoxDecoration(
-        color: AppColors.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
       ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(doc.applicantName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  doc.role.toUpperCase(),
-                  style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 10),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text('Doc Type: ${doc.docType}', style: const TextStyle(color: AppColors.textSecondary)),
-          const Divider(height: 24, color: AppColors.border),
-          SizedBox(
-            height: 120,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                doc.fileUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (c, _, __) => const Icon(LucideIcons.file),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.error,
-                    side: const BorderSide(color: AppColors.error),
-                  ),
-                  onPressed: () => _verifyKycDocument(doc.id, 'rejected'),
-                  child: const Text('REJECT'),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.success,
-                    foregroundColor: Colors.black,
-                  ),
-                  onPressed: () => _verifyKycDocument(doc.id, 'approved'),
-                  child: const Text('APPROVE'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _verifyKycDocument(String id, String status) {
-    _remarksController.clear();
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: AppColors.surface,
-          title: Text(status == 'approved' ? 'Approve Verification' : 'Reject Verification'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _remarksController,
-                decoration: const InputDecoration(labelText: 'Remarks / Comments'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('CANCEL'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  _documents.firstWhere((d) => d.id == id).status = status;
-                });
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Document status updated to ${status.toUpperCase()}'),
-                    backgroundColor: status == 'approved' ? AppColors.success : AppColors.error,
-                  ),
-                );
-              },
-              child: const Text('CONFIRM'),
-            ),
-          ],
-        );
+      selected: isSelected,
+      selectedTileColor: AppColors.primary.withValues(alpha: 0.1),
+      onTap: () {
+        _tabController.animateTo(index);
+        Navigator.pop(context); // close drawer
       },
     );
   }
@@ -373,7 +281,7 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
                     side: const BorderSide(color: AppColors.error),
                   ),
                   onPressed: () => _resolveDispute(d.id, 'rejected'),
-                  child: const Text('REJECT REFUND'),
+                  child: const FittedBox(child: Text('REJECT REFUND')),
                 ),
               ),
               const SizedBox(width: 16),
@@ -384,7 +292,7 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
                     foregroundColor: Colors.black,
                   ),
                   onPressed: () => _resolveDispute(d.id, 'resolved'),
-                  child: const Text('APPROVE REFUND'),
+                  child: const FittedBox(child: Text('APPROVE REFUND')),
                 ),
               ),
             ],

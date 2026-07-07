@@ -21,7 +21,11 @@ COPY --from=builder /app/server /usr/local/bin/server
 
 COPY --from=builder /app/.env /.env
 
+COPY --from=builder /app/static /app/static
+
 USER appuser
+
+WORKDIR /app
 
 EXPOSE 8080
 

@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"time"
 
+	"os"
+
 	"github.com/barbar-app/backend/internal/auth"
 	"github.com/barbar-app/backend/internal/config"
 	"github.com/barbar-app/backend/internal/database"
@@ -53,6 +55,9 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 	router.Use(middleware.CORSMiddleware(cfg.Server.AllowOrigins))
 	router.Use(gin.Logger())
 
+	// Serve demo static files
+	router.Static("/static/demo", "./static/demo")
+
 	// Health check
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "version": cfg.App.Version, "timestamp": time.Now()})
@@ -82,6 +87,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 	wishlistH := wishlistHandler.NewWishlistHandler(db)
 	couponH := couponHandler.NewCouponHandler(db)
 	adminH := adminHandler.NewAdminHandler(db)
+	adminCustomerH := adminHandler.NewAdminCustomerHandler(db)
 	addressH := addressHandler.NewAddressHandler(db)
 	kycH := kycHandler.NewKYCHandler(db)
 
@@ -156,6 +162,10 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			auth.POST("/login", rateLimiter.RateLimit(30, time.Minute, middleware.RateLimitByIP), authH.Login)
 			auth.POST("/otp/send", rateLimiter.RateLimit(10, time.Minute, middleware.RateLimitByIP), authH.SendOTP)
 			auth.POST("/otp/verify", rateLimiter.RateLimit(10, time.Minute, middleware.RateLimitByIP), authH.VerifyOTP)
+			// Debug endpoint - only registered when not in production mode or DEV_OTP_DEBUG=true
+			if cfg.Server.Mode != "release" || os.Getenv("DEV_OTP_DEBUG") == "true" {
+				auth.GET("/otp/debug/:phone", authH.GetOTPDebug)
+			}
 			auth.POST("/refresh", rateLimiter.RateLimit(30, time.Minute, middleware.RateLimitByIP), authH.RefreshToken)
 			auth.POST("/forgot-password", rateLimiter.RateLimit(10, time.Minute, middleware.RateLimitByIP), authH.ForgotPassword)
 			auth.POST("/reset-password", rateLimiter.RateLimit(10, time.Minute, middleware.RateLimitByIP), authH.ResetPassword)
@@ -366,14 +376,26 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			adminRoutes.GET("/system/health", adminH.GetSystemHealth)
 			adminRoutes.GET("/audit-logs", adminH.GetAuditLogs)
 
-			// User management
+			// User management (Legacy, keep if used elsewhere)
 			adminRoutes.GET("/users", authH.ListUsers)
 			adminRoutes.GET("/users/:id", authH.GetUser)
 			adminRoutes.PUT("/users/:id/status", authH.UpdateUserStatus)
 
+			// Customer management
+			adminRoutes.GET("/customers", adminCustomerH.ListCustomers)
+			adminRoutes.GET("/customers/:id", adminCustomerH.GetCustomerDetails)
+			adminRoutes.PUT("/customers/:id/block", adminCustomerH.BlockCustomer)
+			adminRoutes.PUT("/customers/:id/unblock", adminCustomerH.UnblockCustomer)
+			adminRoutes.PUT("/customers/:id/delete", adminCustomerH.DeleteCustomer)
+
 			// Barber management
 			adminRoutes.GET("/barbers", adminH.ListBarbers)
+			adminRoutes.GET("/barbers/:id", adminH.GetBarberDetails)
+			adminRoutes.GET("/barbers/:id/status", adminH.GetBarberStatus)
 			adminRoutes.PUT("/barbers/:id/approve", adminH.ApproveBarber)
+			adminRoutes.PUT("/barbers/:id/reject", adminH.RejectBarber)
+			adminRoutes.PUT("/barbers/:id/suspend", adminH.SuspendBarber)
+			adminRoutes.PUT("/barbers/:id/activate", adminH.ActivateBarber)
 
 			// Vendor management
 			adminRoutes.GET("/vendors", adminH.ListVendors)

@@ -38,6 +38,13 @@ class WebSocketClient {
 
     try {
       _channel = WebSocketChannel.connect(wsUri);
+      
+      // We must catch errors on the ready future to prevent unhandled exceptions
+      _channel!.ready.catchError((error) {
+        _setConnectionState(false);
+        _scheduleReconnect();
+      });
+
       _setConnectionState(true);
 
       _channel!.stream.listen(
@@ -57,6 +64,7 @@ class WebSocketClient {
           _setConnectionState(false);
           _scheduleReconnect();
         },
+        cancelOnError: true,
       );
     } catch (_) {
       _setConnectionState(false);

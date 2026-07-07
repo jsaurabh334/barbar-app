@@ -36,14 +36,6 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<bool> sendOtp(String phone) async {
-    final cleanPhone = phone.replaceAll(RegExp(r'\s+'), '');
-    if (cleanPhone == '+919999999999' ||
-        cleanPhone == '+918888888888' ||
-        cleanPhone == '+917777777777' ||
-        cleanPhone == '+916666666666' ||
-        cleanPhone == '+915555555555') {
-      return true;
-    }
     return await _remoteDataSource.sendOtp(phone);
   }
 
@@ -52,48 +44,6 @@ class AuthRepositoryImpl implements AuthRepository {
     required String phone,
     required String otp,
   }) async {
-    final cleanPhone = phone.replaceAll(RegExp(r'\s+'), '');
-    final isTestPhone = cleanPhone == '+919999999999' ||
-        cleanPhone == '+918888888888' ||
-        cleanPhone == '+917777777777' ||
-        cleanPhone == '+916666666666' ||
-        cleanPhone == '+915555555555';
-        
-    if (isTestPhone && otp == '123456') {
-      String role = 'customer';
-      String name = 'Test Customer';
-      if (cleanPhone == '+918888888888') {
-        role = 'barber';
-        name = 'Test Barber';
-      } else if (cleanPhone == '+917777777777') {
-        role = 'vendor';
-        name = 'Test Vendor';
-      } else if (cleanPhone == '+916666666666') {
-        role = 'delivery';
-        name = 'Test Delivery';
-      } else if (cleanPhone == '+915555555555') {
-        role = 'admin';
-        name = 'Test Admin';
-      }
-
-      final userMap = {
-        'id': 'mock-test-id-${role}',
-        'email': 'test_${role}@barbar.app',
-        'phone': cleanPhone,
-        'full_name': name,
-        'avatar': null,
-        'role': role,
-        'status': 'active',
-        'otp_verified': true,
-        'language_pref': 'en',
-      };
-
-      await _localDataSource.saveAccessToken('mock-test-access-token');
-      await _localDataSource.saveRefreshToken('mock-test-refresh-token');
-      await _localDataSource.saveUserData(userMap);
-      return UserModel.fromJson(userMap);
-    }
-
     final data = await _remoteDataSource.verifyOtp(phone: phone, otp: otp);
     
     // Save tokens and user details

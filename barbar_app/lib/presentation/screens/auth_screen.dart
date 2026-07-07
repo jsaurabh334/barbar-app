@@ -26,7 +26,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   final _signUpNameController = TextEditingController();
   final _signUpEmailController = TextEditingController();
   final _signUpPasswordController = TextEditingController();
-  final _otpController = TextEditingController();
+  final _otpController = TextEditingController(text: '123456');
 
   String _selectedRole = 'customer'; // customer, barber, vendor, delivery, admin
   String? _pendingPhone; // Holds phone number during OTP flow
@@ -176,7 +176,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           ),
           const SizedBox(height: 24),
           SizedBox(
-            height: 380, // Safe bounds for form fields
+            height: 460, // Safe bounds for form fields
             child: TabBarView(
               controller: _tabController,
               children: [
@@ -218,7 +218,22 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
               return null;
             },
           ),
-          const Spacer(),
+          const SizedBox(height: 12),
+          Text('Fast Test Logins (NO OTP):', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: [
+              _buildDemoLoginBtn('Customer', '+919999999999'),
+              _buildDemoLoginBtn('Barber', '+918888888888'),
+              _buildDemoLoginBtn('Vendor', '+917777777777'),
+              _buildDemoLoginBtn('Delivery', '+916666666666'),
+              _buildDemoLoginBtn('Admin', '+915555555555'),
+            ],
+          ),
+          const SizedBox(height: 16),
           ElevatedButton(
             onPressed: state is AuthLoading ? null : _submitLogin,
             child: state is AuthLoading
@@ -236,30 +251,23 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                     ],
                   ),
           ),
-          const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: state is AuthLoading
-                ? null
-                : () {
-                    _loginPhoneController.text = '+919999999999';
-                    _submitLogin();
-                  },
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: AppColors.primary),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(LucideIcons.playCircle, size: 18, color: AppColors.primary),
-                SizedBox(width: 8),
-                Text('TEST PROFILE LOGIN (NO OTP)', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
           const SizedBox(height: 16),
         ],
       ),
+    );
+  }
+
+  Widget _buildDemoLoginBtn(String label, String phone) {
+    return OutlinedButton(
+      onPressed: () {
+        _loginPhoneController.text = phone;
+        _submitLogin();
+      },
+      style: OutlinedButton.styleFrom(
+        side: const BorderSide(color: AppColors.primary, width: 1),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+      child: Text(label, style: const TextStyle(color: AppColors.primary, fontSize: 12)),
     );
   }
 
@@ -308,8 +316,6 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
               _buildRoleChip('customer', 'Customer'),
               _buildRoleChip('barber', 'Barber'),
               _buildRoleChip('vendor', 'Vendor'),
-              _buildRoleChip('delivery', 'Delivery'),
-              _buildRoleChip('admin', 'Admin'),
             ],
           ),
           const SizedBox(height: 32),
@@ -431,19 +437,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   void _submitLogin() {
     if (_loginFormKey.currentState?.validate() ?? false) {
       final phone = _loginPhoneController.text.trim();
-      final cleanPhone = phone.replaceAll(RegExp(r'\s+'), '');
-      
-      final isTestPhone = cleanPhone == '+919999999999' ||
-          cleanPhone == '+918888888888' ||
-          cleanPhone == '+917777777777' ||
-          cleanPhone == '+916666666666' ||
-          cleanPhone == '+915555555555';
-
-      if (isTestPhone) {
-        context.read<AuthBloc>().add(VerifyOtpRequested(phone: phone, otp: '123456'));
-      } else {
-        context.read<AuthBloc>().add(SendOtpRequested(phone));
-      }
+      context.read<AuthBloc>().add(SendOtpRequested(phone));
     }
   }
 

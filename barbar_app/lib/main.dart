@@ -6,12 +6,15 @@ import 'core/network/websocket_client.dart';
 import 'core/theme/app_theme.dart';
 import 'data/datasources/local/auth_local_datasource.dart';
 import 'data/datasources/remote/auth_remote_datasource.dart';
+import 'data/datasources/admin_remote_data_source.dart';
 import 'data/datasources/remote/booking_remote_datasource.dart';
 import 'data/datasources/remote/directory_remote_datasource.dart';
 import 'data/datasources/remote/marketplace_remote_datasource.dart';
 import 'data/datasources/remote/wallet_remote_datasource.dart';
 import 'data/repositories/auth_repository_impl.dart';
+import 'data/repositories/admin_repository_impl.dart';
 import 'data/repositories/booking_repository_impl.dart';
+import 'domain/repositories/admin_repository.dart';
 import 'domain/repositories/booking_repository.dart';
 import 'data/repositories/directory_repository_impl.dart';
 import 'data/repositories/marketplace_repository_impl.dart';
@@ -49,12 +52,15 @@ void main() {
   final marketplaceRemoteDataSource = MarketplaceRemoteDataSource(apiClient);
   final walletRemoteDataSource = WalletRemoteDataSource(apiClient);
 
+  final adminRemoteDataSource = AdminRemoteDataSource(apiClient);
+
   // Repositories
   final authRepository = AuthRepositoryImpl(authRemoteDataSource, localDataSource);
   final bookingRepository = BookingRepositoryImpl(bookingRemoteDataSource);
   final directoryRepository = DirectoryRepositoryImpl(directoryRemoteDataSource);
   final marketplaceRepository = MarketplaceRepositoryImpl(marketplaceRemoteDataSource);
   final walletRepository = WalletRepositoryImpl(walletRemoteDataSource);
+  final adminRepository = AdminRepositoryImpl(adminRemoteDataSource);
 
   runApp(
     MyApp(
@@ -63,6 +69,7 @@ void main() {
       directoryRepository: directoryRepository,
       marketplaceRepository: marketplaceRepository,
       walletRepository: walletRepository,
+      adminRepository: adminRepository,
       webSocketClient: webSocketClient,
     ),
   );
@@ -74,6 +81,7 @@ class MyApp extends StatelessWidget {
   final DirectoryRepositoryImpl directoryRepository;
   final MarketplaceRepositoryImpl marketplaceRepository;
   final WalletRepositoryImpl walletRepository;
+  final AdminRepositoryImpl adminRepository;
   final WebSocketClient webSocketClient;
 
   const MyApp({
@@ -83,6 +91,7 @@ class MyApp extends StatelessWidget {
     required this.directoryRepository,
     required this.marketplaceRepository,
     required this.walletRepository,
+    required this.adminRepository,
     required this.webSocketClient,
   });
 
@@ -92,6 +101,9 @@ class MyApp extends StatelessWidget {
       providers: [
         RepositoryProvider<BookingRepository>(
           create: (context) => bookingRepository,
+        ),
+        RepositoryProvider<AdminRepository>(
+          create: (context) => adminRepository,
         ),
       ],
       child: MultiBlocProvider(
@@ -118,7 +130,7 @@ class MyApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           home: BlocBuilder<AuthBloc, AuthState>(
             builder: (context, state) {
-              if (state is AuthInitial || state is AuthLoading) {
+              if (state is AuthInitial) {
                 return const Scaffold(
                   body: Center(
                     child: CircularProgressIndicator(

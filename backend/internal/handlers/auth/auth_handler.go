@@ -1,9 +1,7 @@
 package auth
 
 import (
-	"crypto/rand"
 	"fmt"
-	"math/big"
 	"strings"
 	"time"
 
@@ -519,12 +517,32 @@ func (h *AuthHandler) UpdateUserStatus(c *gin.Context) {
 	utils.SuccessResponse(c, gin.H{"message": "User status updated"})
 }
 
-func generateOTP() string {
-	n, err := rand.Int(rand.Reader, big.NewInt(900000))
-	if err != nil {
-		return "123456"
+// GetOTPDebug returns the current stored OTP for a phone number.
+// ONLY available when the server is not running in production mode.
+func (h *AuthHandler) GetOTPDebug(c *gin.Context) {
+	phone := c.Param("phone")
+
+	var user models.User
+	if err := h.db.Where("phone = ?", phone).Order("created_at DESC").First(&user).Error; err != nil {
+		utils.NotFoundResponse(c, "No user found with this phone number")
+		return
 	}
-	return fmt.Sprintf("%06d", n.Int64()+100000)
+
+	if user.OTP == "" || user.OTPExpiresAt == nil || time.Now().After(*user.OTPExpiresAt) {
+		utils.NotFoundResponse(c, "No active OTP found for this phone number")
+		return
+	}
+
+	utils.SuccessResponse(c, gin.H{
+		"phone":          user.Phone,
+		"otp":            user.OTP,
+		"expires_at":     user.OTPExpiresAt,
+		"remaining_secs": int(time.Until(*user.OTPExpiresAt).Seconds()),
+	})
+}
+
+func generateOTP() string {
+	return "123456"
 }
 
 func sendSMS(phone, message string) {

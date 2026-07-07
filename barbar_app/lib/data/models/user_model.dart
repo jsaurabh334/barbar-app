@@ -8,6 +8,9 @@ class UserModel {
   final String status;
   final bool otpVerified;
   final String languagePref;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final DateTime? lastLoginAt;
 
   UserModel({
     required this.id,
@@ -19,6 +22,9 @@ class UserModel {
     required this.status,
     required this.otpVerified,
     required this.languagePref,
+    this.createdAt,
+    this.updatedAt,
+    this.lastLoginAt,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -32,6 +38,9 @@ class UserModel {
       status: (json['status'] as String?) ?? 'active',
       otpVerified: (json['otp_verified'] as bool?) ?? false,
       languagePref: (json['language_pref'] as String?) ?? 'en',
+      createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at']) : null,
+      updatedAt: json['updated_at'] != null ? DateTime.tryParse(json['updated_at']) : null,
+      lastLoginAt: json['last_login_at'] != null ? DateTime.tryParse(json['last_login_at']) : null,
     );
   }
 
@@ -46,6 +55,9 @@ class UserModel {
       'status': status,
       'otp_verified': otpVerified,
       'language_pref': languagePref,
+      if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
+      if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
+      if (lastLoginAt != null) 'last_login_at': lastLoginAt!.toIso8601String(),
     };
   }
 
@@ -59,6 +71,9 @@ class UserModel {
     String? status,
     bool? otpVerified,
     String? languagePref,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    DateTime? lastLoginAt,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -70,6 +85,9 @@ class UserModel {
       status: status ?? this.status,
       otpVerified: otpVerified ?? this.otpVerified,
       languagePref: languagePref ?? this.languagePref,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      lastLoginAt: lastLoginAt ?? this.lastLoginAt,
     );
   }
 }

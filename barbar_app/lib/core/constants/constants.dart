@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 
 class AppConstants {
   // Session / Storage keys
@@ -21,7 +22,7 @@ class AppConfig {
     } else {
       // 10.0.2.2 is the localhost alias for Android Emulator.
       // Use 'http://localhost:8080/api/v1' for iOS Simulator or macOS app.
-      final host = Platform.isAndroid ? '10.0.2.2' : 'localhost';
+      final host = (!kIsWeb && Platform.isAndroid) ? '10.0.2.2' : 'localhost';
       return 'http://$host:8080/api/v1/';
     }
   }
@@ -30,7 +31,7 @@ class AppConfig {
     if (isProduction) {
       return 'wss://api.barbar.app/ws';
     } else {
-      final host = Platform.isAndroid ? '10.0.2.2' : 'localhost';
+      final host = (!kIsWeb && Platform.isAndroid) ? '10.0.2.2' : 'localhost';
       return 'ws://$host:8080/ws';
     }
   }

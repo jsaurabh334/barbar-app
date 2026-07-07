@@ -11,8 +11,9 @@ const (
 	BarberStatusActive     BarberStatus = "active"
 	BarberStatusInactive   BarberStatus = "inactive"
 	BarberStatusBreak      BarberStatus = "on_break"
-	BarberStatusClosed     BarberStatus = "closed"
+	BarberStatusClosed           BarberStatus = "closed"
 	BarberStatusUnderMaintenance BarberStatus = "under_maintenance"
+	BarberStatusSuspended        BarberStatus = "suspended"
 )
 
 type BarberVerificationStatus string
@@ -61,9 +62,10 @@ type Barber struct {
 	BusinessDays       JSONB                    `gorm:"type:jsonb" json:"business_days,omitempty"`
 
 	// Relations
-	User     *User           `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Services []BarberService `gorm:"foreignKey:BarberID" json:"services,omitempty"`
-	Bookings []Booking       `gorm:"foreignKey:BarberID" json:"bookings,omitempty"`
+	User     *User            `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Services []BarberService  `gorm:"foreignKey:BarberID" json:"services,omitempty"`
+	Documents []BarberDocument `gorm:"foreignKey:BarberID" json:"documents,omitempty"`
+	Bookings []Booking        `gorm:"foreignKey:BarberID" json:"bookings,omitempty"`
 }
 
 type BarberService struct {
