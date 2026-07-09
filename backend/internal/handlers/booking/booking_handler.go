@@ -1,6 +1,7 @@
 package booking
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/barbar-app/backend/internal/auth"
@@ -185,6 +186,11 @@ func (h *BookingHandler) Create(c *gin.Context) {
 		return
 	}
 
+	if len(services) != len(req.ServiceIDs) {
+		utils.BadRequestResponse(c, "One or more services do not belong to this barber")
+		return
+	}
+
 	var totalDuration int
 	var totalPrice float64
 	for _, svc := range services {
@@ -263,6 +269,14 @@ func (h *BookingHandler) Create(c *gin.Context) {
 	}
 
 	tx := h.db.Begin()
+
+	// Advisory lock: prevent concurrent double-booking even when no rows exist yet
+	lockKey := fmt.Sprintf("%s@%s", req.BarberID.String(), req.ScheduledStart.Format("2006-01-02T15:04:05"))
+	if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?)::bigint)", lockKey).Error; err != nil {
+		tx.Rollback()
+		utils.InternalErrorResponse(c, "Failed to acquire slot lock, try again")
+		return
+	}
 
 	// Row lock slot double booking check
 	var doubleBookingCount int64

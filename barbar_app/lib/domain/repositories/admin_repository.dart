@@ -29,4 +29,7 @@ abstract class AdminRepository {
   Future<List<KycDocumentModel>> getKycDocuments(String userId);
   Future<void> approveKycDocument(String documentId);
   Future<void> rejectKycDocument(String documentId, String reason);
+
+  Future<Map<String, dynamic>> getAllReviews({int page = 1, int limit = 20, String? status});
+  Future<void> moderateReview(String reviewId, String status, {String reason = ''});
 }

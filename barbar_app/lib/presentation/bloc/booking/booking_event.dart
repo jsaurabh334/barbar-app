@@ -40,6 +40,33 @@ class CheckQueuePosition extends BookingEvent {
   List<Object?> get props => [bookingId];
 }
 
+class CancelBooking extends BookingEvent {
+  final String bookingId;
+  final String? reason;
+
+  const CancelBooking({required this.bookingId, this.reason});
+
+  @override
+  List<Object?> get props => [bookingId, reason];
+}
+
+class StreamQueuePositionUpdate extends BookingEvent {
+  final int newPosition;
+  final int estimatedWaitMin;
+  final int remainingTime;
+  final String currentlyServing;
+
+  const StreamQueuePositionUpdate({
+    required this.newPosition,
+    required this.estimatedWaitMin,
+    this.remainingTime = 0,
+    this.currentlyServing = '',
+  });
+
+  @override
+  List<Object?> get props => [newPosition, estimatedWaitMin, remainingTime, currentlyServing];
+}
+
 class UpdateBookingStatus extends BookingEvent {
   final String bookingId;
   final String status;
@@ -48,16 +75,6 @@ class UpdateBookingStatus extends BookingEvent {
 
   @override
   List<Object?> get props => [bookingId, status];
-}
-
-class StreamQueuePositionUpdate extends BookingEvent {
-  final int newPosition;
-  final int estimatedWaitMin;
-
-  const StreamQueuePositionUpdate({required this.newPosition, required this.estimatedWaitMin});
-
-  @override
-  List<Object?> get props => [newPosition, estimatedWaitMin];
 }
 
 class FetchAllBookings extends BookingEvent {}
@@ -79,4 +96,14 @@ class PayBooking extends BookingEvent {
 
   @override
   List<Object?> get props => [bookingId, method, status, reference];
+}
+
+class FetchAvailableSlots extends BookingEvent {
+  final String barberId;
+  final String date;
+
+  const FetchAvailableSlots({required this.barberId, required this.date});
+
+  @override
+  List<Object?> get props => [barberId, date];
 }

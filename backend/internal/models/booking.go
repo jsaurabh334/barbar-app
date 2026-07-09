@@ -56,9 +56,9 @@ type BookingService struct {
 	BaseModel
 	BookingID    uuid.UUID `gorm:"type:uuid;index" json:"booking_id"`
 	ServiceID    uuid.UUID `gorm:"type:uuid" json:"service_id"`
-	ServiceName  string    `gorm:"size:255" json:"service_name"`
+	ServiceName  string    `gorm:"size:255" json:"name"`
 	Quantity     int       `gorm:"default:1" json:"quantity"`
-	UnitPrice    float64   `json:"unit_price"`
+	UnitPrice    float64   `json:"price"`
 	TotalPrice   float64   `json:"total_price"`
 	DurationMin  int       `json:"duration_minutes"`
 	AddedBy      string    `gorm:"size:50;default:customer" json:"added_by"`

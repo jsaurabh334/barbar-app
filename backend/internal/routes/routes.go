@@ -35,6 +35,7 @@ import (
 	walletHandler "github.com/barbar-app/backend/internal/handlers/wallet"
 	webhookHandler "github.com/barbar-app/backend/internal/handlers/webhook"
 	wishlistHandler "github.com/barbar-app/backend/internal/handlers/wishlist"
+	reviewHandler "github.com/barbar-app/backend/internal/handlers/review"
 	analyticsSvc "github.com/barbar-app/backend/internal/services/analytics"
 	invoiceSvc "github.com/barbar-app/backend/internal/services/invoice"
 	notifService "github.com/barbar-app/backend/internal/services/notification"
@@ -107,6 +108,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 
 	invoiceService := invoiceSvc.NewInvoiceService(db, cfg.App.BaseURL)
 	invoiceH := invoiceHandler.NewInvoiceHandler(invoiceService)
+	reviewH := reviewHandler.NewReviewHandler(db, notifSvc, hub)
 
 	// Initialize queue service and start no-show scheduler
 	queueSvc := queueService.NewQueueService(db, hub)
@@ -127,6 +129,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			public.GET("/barbers", middleware.CacheMiddleware(300*time.Second), barberH.ListNearby)
 			public.GET("/barbers/:id", barberH.GetProfile)
 			public.GET("/barbers/:id/services", barberH.ListServices)
+			public.GET("/barbers/:id/available-slots", barberH.ListAvailableSlots)
 
 			// Products
 			public.GET("/products", middleware.CacheMiddleware(300*time.Second), productH.List)
@@ -140,6 +143,10 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 
 			// Categories
 			public.GET("/categories", middleware.CacheMiddleware(600*time.Second), productH.ListCategories)
+
+			// Reviews
+			public.GET("/barbers/:id/reviews", reviewH.ListPublicReviews)
+			public.GET("/barbers/:id/rating-summary", reviewH.GetShopRatingSummary)
 
 			// Search
 			public.GET("/search", searchH.Search)
@@ -193,13 +200,23 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 		bookingRoutes := v1.Group("/bookings")
 		bookingRoutes.Use(authMW.Authenticate())
 		{
-			bookingRoutes.POST("/", bookingH.Create)
-			bookingRoutes.GET("/", bookingH.ListCustomerBookings)
+			bookingRoutes.POST("", bookingH.Create)
+			bookingRoutes.GET("", bookingH.ListCustomerBookings)
 			bookingRoutes.GET("/:id", bookingH.Get)
 			bookingRoutes.POST("/:id/cancel", bookingH.Cancel)
 			bookingRoutes.GET("/:id/receipt", invoiceH.GetBookingReceipt)
 			bookingRoutes.GET("/:id/invoice", invoiceH.GetBookingInvoiceJSON)
 			bookingRoutes.POST("/:id/payment", bookingH.PayBooking)
+		}
+
+		// ==================== Review routes ====================
+		reviewRoutes := v1.Group("/reviews")
+		reviewRoutes.Use(authMW.Authenticate())
+		{
+			reviewRoutes.POST("", reviewH.Create)
+			reviewRoutes.GET("/mine", reviewH.ListMyReviews)
+			reviewRoutes.PUT("/:id", reviewH.Update)
+			reviewRoutes.POST("/:id/report", reviewH.Report)
 		}
 
 		// ==================== Barber routes ====================
@@ -217,6 +234,8 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			barberRoutes.GET("/queue", bookingH.GetQueue)
 			barberRoutes.GET("/queue/:booking_id", bookingH.GetMyQueuePosition)
 			barberRoutes.PUT("/queue/reorder", bookingH.ReorderQueue)
+
+			barberRoutes.POST("/reviews/:id/reply", reviewH.CreateReply)
 
 			// Services management
 			barberRoutes.GET("/services", barberH.ListServices)
@@ -429,6 +448,10 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			adminRoutes.POST("/coupons", couponH.Create)
 			adminRoutes.PUT("/coupons/:id", couponH.Update)
 			adminRoutes.DELETE("/coupons/:id", couponH.Delete)
+
+			// Reviews
+			adminRoutes.GET("/reviews", reviewH.ListAllReviews)
+			adminRoutes.PUT("/reviews/:id/moderate", reviewH.Moderate)
 
 			// Settings
 			adminRoutes.GET("/settings", adminH.GetSettings)

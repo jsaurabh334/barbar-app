@@ -1,6 +1,7 @@
 package barber
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -37,12 +38,12 @@ type RegisterBarberRequest struct {
 }
 
 type ServiceInput struct {
-	Name        string  `json:"name" binding:"required"`
-	Description string  `json:"description"`
-	Category    string  `json:"category" binding:"required"`
-	Price       float64 `json:"price" binding:"required,gt=0"`
-	DurationMin int     `json:"duration_minutes" binding:"required,gt=0"`
-	IsAddon     bool    `json:"is_addon"`
+	Name        string    `json:"name" binding:"required"`
+	Description string    `json:"description"`
+	CategoryID  uuid.UUID `json:"category_id" binding:"required"`
+	Price       float64   `json:"price" binding:"required,gt=0"`
+	DurationMin int       `json:"duration_minutes" binding:"required,gt=0"`
+	IsAddon     bool      `json:"is_addon"`
 }
 
 func (h *BarberHandler) Register(c *gin.Context) {
@@ -101,7 +102,7 @@ func (h *BarberHandler) Register(c *gin.Context) {
 			BarberID:    barber.ID,
 			Name:        svc.Name,
 			Description: svc.Description,
-			Category:    svc.Category,
+			CategoryID:  &svc.CategoryID,
 			Price:       svc.Price,
 			DurationMin: svc.DurationMin,
 			IsAddon:     svc.IsAddon,
@@ -197,6 +198,141 @@ func (h *BarberHandler) UpdateAvailability(c *gin.Context) {
 	utils.SuccessResponse(c, gin.H{"message": "Availability updated"})
 }
 
+func (h *BarberHandler) ListAvailableSlots(c *gin.Context) {
+	barberID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid barber ID")
+		return
+	}
+
+	dateStr := c.Query("date")
+	if dateStr == "" {
+		utils.BadRequestResponse(c, "date query parameter is required (YYYY-MM-DD)")
+		return
+	}
+	date, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid date format, use YYYY-MM-DD")
+		return
+	}
+
+	var barber models.Barber
+	if err := h.db.First(&barber, barberID).Error; err != nil {
+		utils.NotFoundResponse(c, "Barber not found")
+		return
+	}
+
+	// Check if barber is closed this day via BarberHoliday
+	var holiday int64
+	h.db.Model(&models.BarberHoliday{}).Where("barber_id = ? AND date = ? AND is_active = ?", barberID, date, true).Count(&holiday)
+	if holiday > 0 {
+		utils.SuccessResponse(c, []map[string]interface{}{})
+		return
+	}
+
+	dayOfWeek := int(date.Weekday()) // 0=Sunday, 6=Saturday
+
+	// Get weekly schedule override if it exists
+	var weekly models.BarberAvailability
+	startTime := barber.StartTime
+	endTime := barber.EndTime
+	h.db.Where("barber_id = ? AND day_of_week = ? AND is_active = ?", barberID, dayOfWeek, true).Limit(1).Find(&weekly)
+	if weekly.ID != uuid.Nil {
+		startTime = weekly.StartTime
+		endTime = weekly.EndTime
+	} else if startTime == "" || endTime == "" {
+		utils.SuccessResponse(c, []map[string]interface{}{})
+		return
+	}
+
+	// Parse slot duration from barber config
+	slotDur := barber.SlotDuration
+	if slotDur <= 0 {
+		slotDur = 30
+	}
+	buffer := barber.BufferBetweenSlots
+	if buffer < 0 {
+		buffer = 0
+	}
+	step := slotDur + buffer
+	if step <= 0 {
+		step = 30
+	}
+
+	startParsed, _ := time.Parse("15:04", startTime)
+	endParsed, _ := time.Parse("15:04", endTime)
+
+	breakStart, breakEnd := -1, -1
+	if barber.BreakStartTime != "" && barber.BreakEndTime != "" {
+		bs, _ := time.Parse("15:04", barber.BreakStartTime)
+		be, _ := time.Parse("15:04", barber.BreakEndTime)
+		breakStart = bs.Hour()*60 + bs.Minute()
+		breakEnd = be.Hour()*60 + be.Minute()
+	}
+
+	// Fetch existing bookings for this date
+	dayStart := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.Local)
+	dayEnd := dayStart.Add(24 * time.Hour)
+	var existingBookings []models.Booking
+	h.db.Where("barber_id = ? AND scheduled_start >= ? AND scheduled_start < ? AND status IN ?",
+		barberID, dayStart, dayEnd,
+		[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
+	).Find(&existingBookings)
+
+	// Build occupied time map: for each existing booking, mark its slot range
+	type occupiedRange struct{ startMin, endMin int }
+	occupied := make([]occupiedRange, 0)
+	for _, b := range existingBookings {
+		bTime := b.ScheduledStart
+		bMin := bTime.Hour()*60 + bTime.Minute()
+		dur := b.TotalDuration
+		if dur <= 0 {
+			dur = slotDur
+		}
+		occupied = append(occupied, occupiedRange{startMin: bMin, endMin: bMin + dur})
+	}
+
+	// Generate slots
+	var slots []map[string]interface{}
+	startMin := startParsed.Hour()*60 + startParsed.Minute()
+	endMin := endParsed.Hour()*60 + endParsed.Minute()
+	now := time.Now()
+	isToday := date.Year() == now.Year() && date.YearDay() == now.YearDay()
+
+	for slotStart := startMin; slotStart+slotDur <= endMin; slotStart += step {
+		slotEnd := slotStart + slotDur
+
+		// Skip break hours
+		if breakStart >= 0 && slotStart >= breakStart && slotStart < breakEnd {
+			continue
+		}
+
+		// Skip past slots (if today)
+		if isToday && slotStart <= now.Hour()*60+now.Minute() {
+			continue
+		}
+
+		// Check overlap with existing bookings
+		available := true
+		for _, occ := range occupied {
+			if slotStart < occ.endMin && slotEnd > occ.startMin {
+				available = false
+				break
+			}
+		}
+
+		hour := slotStart / 60
+		min := slotStart % 60
+		timeStr := fmt.Sprintf("%02d:%02d", hour, min)
+		slots = append(slots, map[string]interface{}{
+			"time":      timeStr,
+			"available": available,
+		})
+	}
+
+	utils.SuccessResponse(c, slots)
+}
+
 func (h *BarberHandler) ListServices(c *gin.Context) {
 	barberID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -221,12 +357,12 @@ func (h *BarberHandler) AddService(c *gin.Context) {
 	}
 
 	var req struct {
-		Name        string  `json:"name" binding:"required"`
-		Description string  `json:"description"`
-		Category    string  `json:"category" binding:"required"`
-		Price       float64 `json:"price" binding:"required,gt=0"`
-		DurationMin int     `json:"duration_minutes" binding:"required,gt=0"`
-		IsAddon     bool    `json:"is_addon"`
+		Name        string    `json:"name" binding:"required"`
+		Description string    `json:"description"`
+		CategoryID  uuid.UUID `json:"category_id" binding:"required"`
+		Price       float64   `json:"price" binding:"required,gt=0"`
+		DurationMin int       `json:"duration_minutes" binding:"required,gt=0"`
+		IsAddon     bool      `json:"is_addon"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequestResponse(c, "Invalid input")
@@ -237,7 +373,7 @@ func (h *BarberHandler) AddService(c *gin.Context) {
 		BarberID:    barber.ID,
 		Name:        req.Name,
 		Description: req.Description,
-		Category:    req.Category,
+		CategoryID:  &req.CategoryID,
 		Price:       req.Price,
 		DurationMin: req.DurationMin,
 		IsAddon:     req.IsAddon,
@@ -265,7 +401,7 @@ func (h *BarberHandler) UpdateService(c *gin.Context) {
 		return
 	}
 
-	allowed := []string{"name", "description", "category", "price", "discount_price", "duration_minutes", "is_active", "is_addon", "sort_order"}
+	allowed := []string{"name", "description", "category_id", "price", "discount_price", "duration_minutes", "is_active", "is_addon", "sort_order"}
 	filtered := make(map[string]interface{})
 	for _, key := range allowed {
 		if val, ok := updates[key]; ok {
@@ -295,13 +431,21 @@ func (h *BarberHandler) DeleteService(c *gin.Context) {
 }
 
 func (h *BarberHandler) ListNearby(c *gin.Context) {
-	lat, _ := strconv.ParseFloat(c.Query("lat"), 64)
-	lng, _ := strconv.ParseFloat(c.Query("lng"), 64)
+	lat := c.Query("lat")
+	if lat == "" {
+		lat = c.Query("latitude")
+	}
+	lng := c.Query("lng")
+	if lng == "" {
+		lng = c.Query("longitude")
+	}
+	latF, _ := strconv.ParseFloat(lat, 64)
+	lngF, _ := strconv.ParseFloat(lng, 64)
 	radius, _ := strconv.ParseFloat(c.Query("radius"), 64)
 	page, pageSize := utils.GetPageParams(c)
 
 	if radius == 0 {
-		radius = 10 // Default 10km
+		radius = 10
 	}
 
 	var barbers []models.Barber
@@ -317,21 +461,52 @@ func (h *BarberHandler) ListNearby(c *gin.Context) {
 		countQuery = countQuery.Where("LOWER(city) = LOWER(?)", city)
 		dataQuery = dataQuery.Where("LOWER(city) = LOWER(?)", city)
 	}
-	if service := c.Query("service"); service != "" {
-		countQuery = countQuery.Where("id IN (SELECT barber_id FROM barber_services WHERE LOWER(name) LIKE LOWER(?))", "%"+service+"%")
-		dataQuery = dataQuery.Where("id IN (SELECT barber_id FROM barber_services WHERE LOWER(name) LIKE LOWER(?))", "%"+service+"%")
+
+	// Search by service name or shop name
+	search := c.Query("search")
+	if search == "" {
+		search = c.Query("service")
+	}
+	if search != "" {
+		like := "%" + search + "%"
+		countQuery = countQuery.Where(
+			"(LOWER(shop_name) LIKE LOWER(?) OR id IN (SELECT barber_id FROM barber_services WHERE LOWER(name) LIKE LOWER(?)))",
+			like, like,
+		)
+		dataQuery = dataQuery.Where(
+			"(LOWER(shop_name) LIKE LOWER(?) OR id IN (SELECT barber_id FROM barber_services WHERE LOWER(name) LIKE LOWER(?)))",
+			like, like,
+		)
 	}
 	if minRating := c.Query("min_rating"); minRating != "" {
 		countQuery = countQuery.Where("rating >= ?", minRating)
 		dataQuery = dataQuery.Where("rating >= ?", minRating)
 	}
 
+	if c.Query("open_now") == "true" {
+		now := time.Now()
+		currentTime := now.Format("15:04")
+		countQuery = countQuery.Where("start_time <= ? AND end_time > ?", currentTime, currentTime).
+			Where("(break_start_time IS NULL OR break_start_time = '' OR break_end_time IS NULL OR break_end_time = '' OR ? < break_start_time OR ? >= break_end_time)", currentTime, currentTime)
+		dataQuery = dataQuery.Where("start_time <= ? AND end_time > ?", currentTime, currentTime).
+			Where("(break_start_time IS NULL OR break_start_time = '' OR break_end_time IS NULL OR break_end_time = '' OR ? < break_start_time OR ? >= break_end_time)", currentTime, currentTime)
+	}
+
+	if categoryID := c.Query("category_id"); categoryID != "" {
+		countQuery = countQuery.Joins("JOIN barber_services ON barber_services.barber_id = barbers.id AND barber_services.deleted_at IS NULL").
+			Where("barber_services.category_id = ? AND barber_services.is_active = ?", categoryID, true).
+			Distinct("barbers.id")
+		dataQuery = dataQuery.Joins("JOIN barber_services ON barber_services.barber_id = barbers.id AND barber_services.deleted_at IS NULL").
+			Where("barber_services.category_id = ? AND barber_services.is_active = ?", categoryID, true).
+			Distinct("barbers.id")
+	}
+
 	countQuery.Count(&total)
 
 	// Haversine distance calculation
-	if lat != 0 && lng != 0 {
+	if latF != 0 && lngF != 0 {
 		dataQuery = dataQuery.Where("(6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))) <= ?",
-			lat, lng, lat, radius)
+			latF, lngF, latF, radius)
 	}
 
 	dataQuery.Offset((page - 1) * pageSize).Limit(pageSize).Order("is_featured DESC, rating DESC, created_at DESC").Find(&barbers)

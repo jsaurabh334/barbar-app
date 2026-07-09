@@ -48,3 +48,12 @@ class RegisterRequested extends AuthEvent {
 }
 
 class LogoutRequested extends AuthEvent {}
+
+class UpdateProfileRequested extends AuthEvent {
+  final Map<String, dynamic> data;
+
+  const UpdateProfileRequested(this.data);
+
+  @override
+  List<Object?> get props => [data];
+}

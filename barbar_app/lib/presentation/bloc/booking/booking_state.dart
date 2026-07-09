@@ -22,6 +22,15 @@ class ServicesLoaded extends BookingState {
   List<Object?> get props => [services];
 }
 
+class AvailableSlotsLoaded extends BookingState {
+  final List<Map<String, dynamic>> slots;
+
+  const AvailableSlotsLoaded(this.slots);
+
+  @override
+  List<Object?> get props => [slots];
+}
+
 class BookingCreatedSuccess extends BookingState {
   final BookingModel booking;
 
@@ -35,15 +44,19 @@ class QueuePositionLoaded extends BookingState {
   final int currentPosition;
   final int peopleAhead;
   final int estimatedWaitMin;
+  final int remainingTime;
+  final String currentlyServing;
 
   const QueuePositionLoaded({
     required this.currentPosition,
     required this.peopleAhead,
     required this.estimatedWaitMin,
+    this.remainingTime = 0,
+    this.currentlyServing = '',
   });
 
   @override
-  List<Object?> get props => [currentPosition, peopleAhead, estimatedWaitMin];
+  List<Object?> get props => [currentPosition, peopleAhead, estimatedWaitMin, remainingTime, currentlyServing];
 }
 
 class BookingsLoaded extends BookingState {

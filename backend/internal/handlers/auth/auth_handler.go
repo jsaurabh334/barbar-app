@@ -318,7 +318,7 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	allowed := []string{"full_name", "avatar", "language_pref"}
+	allowed := []string{"full_name", "avatar", "language_pref", "email"}
 	filtered := make(map[string]interface{})
 	for _, key := range allowed {
 		if val, ok := updates[key]; ok {

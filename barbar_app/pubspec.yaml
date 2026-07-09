@@ -47,7 +47,11 @@ dependencies:
   json_annotation: ^4.9.0
   equatable: ^2.0.5
   google_maps_flutter: ^2.12.3
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
   intl: ^0.20.3
+  cached_network_image: ^3.4.1
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

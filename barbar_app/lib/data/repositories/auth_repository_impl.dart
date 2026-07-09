@@ -85,4 +85,11 @@ class AuthRepositoryImpl implements AuthRepository {
     final token = await _localDataSource.getAccessToken();
     return token != null;
   }
+
+  @override
+  Future<UserModel> updateProfile(Map<String, dynamic> data) async {
+    final updatedUser = await _remoteDataSource.updateProfile(data);
+    await _localDataSource.saveUserData(updatedUser.toJson());
+    return updatedUser;
+  }
 }

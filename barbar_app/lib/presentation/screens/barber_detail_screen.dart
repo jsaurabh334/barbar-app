@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/barber_model.dart';
 import '../../data/models/service_model.dart';
@@ -8,6 +9,8 @@ import '../bloc/booking/booking_bloc.dart';
 import '../bloc/booking/booking_event.dart';
 import '../bloc/booking/booking_state.dart';
 import '../widgets/glass_card.dart';
+import 'booking_confirmation_screen.dart';
+import 'review_list_screen.dart';
 
 class BarberDetailScreen extends StatefulWidget {
   final BarberModel barber;
@@ -21,23 +24,34 @@ class BarberDetailScreen extends StatefulWidget {
 class _BarberDetailScreenState extends State<BarberDetailScreen> {
   final List<String> _selectedServiceIds = [];
   DateTime _selectedDate = DateTime.now();
-  TimeOfDay _selectedTime = const TimeOfDay(hour: 10, minute: 0);
+  String? _selectedTimeSlot;
+  int _galleryIndex = 0;
+  List<ServiceModel> _allServices = [];
 
   @override
   void initState() {
     super.initState();
-    // Load services list
     context.read<BookingBloc>().add(FetchServices(widget.barber.id));
+    _fetchSlots();
+  }
+
+  void _fetchSlots() {
+    final dateStr = '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
+    context.read<BookingBloc>().add(FetchAvailableSlots(barberId: widget.barber.id, date: dateStr));
   }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final allImages = [
+      if (widget.barber.fullShopImage != null) widget.barber.fullShopImage!,
+      ...widget.barber.fullShopImages,
+    ];
 
     return Scaffold(
       body: Stack(
         children: [
-          // Banner Image background
+          // Background image / gallery
           Positioned(
             top: 0,
             left: 0,
@@ -46,11 +60,22 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Image.network(
-                  widget.barber.shopImage ?? '',
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, _, __) => Container(color: AppColors.surface),
-                ),
+                if (allImages.isNotEmpty)
+                  PageView.builder(
+                    onPageChanged: (index) => setState(() => _galleryIndex = index),
+                    itemCount: allImages.length,
+                    itemBuilder: (context, index) => CachedNetworkImage(
+                      imageUrl: allImages[index],
+                      fit: BoxFit.cover,
+                      errorWidget: (context, _, __) => Container(color: AppColors.surface),
+                    ),
+                  )
+                else
+                  CachedNetworkImage(
+                    imageUrl: widget.barber.fullShopImage ?? '',
+                    fit: BoxFit.cover,
+                    errorWidget: (context, _, __) => Container(color: AppColors.surface),
+                  ),
                 Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -66,11 +91,32 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
                     ),
                   ),
                 ),
+                if (allImages.length > 1)
+                  Positioned(
+                    bottom: 60,
+                    left: 0,
+                    right: 0,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        allImages.length,
+                        (i) => Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          width: _galleryIndex == i ? 20 : 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: _galleryIndex == i ? AppColors.primary : Colors.white.withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
 
-          // Safe area app bar
+          // App bar
           Positioned(
             top: 0,
             left: 0,
@@ -101,7 +147,7 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
             ),
           ),
 
-          // Sliding sheet content
+          // Content sheet
           Positioned.fill(
             top: size.height * 0.28,
             child: Container(
@@ -117,7 +163,7 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Barber Info
+                    // Shop Info
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -144,21 +190,35 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
                             ],
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.amber.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.star, color: Colors.amber, size: 16),
-                              const SizedBox(width: 4),
-                              Text(
-                                widget.barber.rating.toStringAsFixed(1),
-                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber),
+                        InkWell(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ReviewListScreen(
+                                shopId: widget.barber.id,
+                                shopName: widget.barber.shopName,
                               ),
-                            ],
+                            ),
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.star, color: Colors.amber, size: 16),
+                                const SizedBox(width: 4),
+                                Text(
+                                  widget.barber.rating.toStringAsFixed(1),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber),
+                                ),
+                                const SizedBox(width: 2),
+                                const Icon(Icons.chevron_right, color: Colors.amber, size: 14),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -168,28 +228,65 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
                       widget.barber.shopDescription ?? 'No description provided.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
+
+                    // Tags
+                    if (widget.barber.tags != null && widget.barber.tags!.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: widget.barber.tags!.map((tag) => Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            tag,
+                            style: const TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        )).toList(),
+                      ),
+                    ],
+
                     const Divider(height: 32, color: AppColors.border),
 
-                    // Services Section
+                    // Working Hours
+                    Text(
+                      'Working Hours',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildWorkingHours(),
+                    const Divider(height: 32, color: AppColors.border),
+
+                    // Services
                     Text(
                       'Select Grooming Services',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 12),
-                    BlocBuilder<BookingBloc, BookingState>(
+                    BlocConsumer<BookingBloc, BookingState>(
+                      listener: (context, state) {
+                        if (state is ServicesLoaded) {
+                          setState(() => _allServices = state.services);
+                        }
+                      },
                       builder: (context, state) {
-                        if (state is BookingLoading) {
+                        if (state is BookingLoading && _allServices.isEmpty) {
                           return const Center(
                             child: Padding(
                               padding: EdgeInsets.all(20.0),
                               child: CircularProgressIndicator(color: AppColors.primary),
                             ),
                           );
-                        } else if (state is ServicesLoaded) {
+                        }
+                        if (_allServices.isNotEmpty) {
                           return Column(
-                            children: state.services.map((service) => _buildServiceTile(service)).toList(),
+                            children: _allServices.map((service) => _buildServiceTile(service)).toList(),
                           );
-                        } else if (state is BookingFailure) {
+                        }
+                        if (state is BookingFailure) {
                           return Text(state.error, style: const TextStyle(color: AppColors.error));
                         }
                         return const SizedBox.shrink();
@@ -197,71 +294,75 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
                     ),
                     const Divider(height: 32, color: AppColors.border),
 
-                    // Date & Time Picker Layout
+                    // Date
                     Text(
-                      'Schedule Slots',
+                      'Select Date',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildPickerButton(
-                            icon: LucideIcons.calendar,
-                            title: 'Date',
-                            value: '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
-                            onTap: _pickDate,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _buildPickerButton(
-                            icon: LucideIcons.clock,
-                            title: 'Time',
-                            value: _selectedTime.format(context),
-                            onTap: _pickTime,
-                          ),
-                        ),
-                      ],
+                    _buildPickerButton(
+                      icon: LucideIcons.calendar,
+                      title: 'Date',
+                      value: '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
+                      onTap: _pickDate,
                     ),
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 16),
 
-                    // Checkout CTA Action
+                    // Time Slots
+                    Text(
+                      'Available Time Slots',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildTimeSlots(),
+                    const SizedBox(height: 16),
+
+                    // Summary
+                    if (_selectedServiceIds.isNotEmpty && _selectedTimeSlot != null) ...[
+                      const Divider(height: 32, color: AppColors.border),
+                      Text(
+                        'Booking Summary',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildSummary(),
+                      const SizedBox(height: 24),
+                    ],
+
+                    // Book Button
                     BlocConsumer<BookingBloc, BookingState>(
                       listener: (context, state) {
                         if (state is BookingCreatedSuccess) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Appointment confirmed successfully! Joined queue.'),
-                              backgroundColor: AppColors.success,
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => BookingConfirmationScreen(
+                                booking: state.booking,
+                                shopName: widget.barber.shopName,
+                              ),
                             ),
                           );
-                          Navigator.pop(context); // Go back to Home
+                        } else if (state is BookingFailure) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(state.error.replaceAll('Exception: ', '')),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
                         }
                       },
                       builder: (context, state) {
-                        final priceSum = _calculateTotalPrice();
-                        
+                        final canBook = _selectedServiceIds.isNotEmpty && _selectedTimeSlot != null;
+
                         return ElevatedButton(
-                          onPressed: _selectedServiceIds.isEmpty || state is BookingLoading
-                              ? null
-                              : _confirmBooking,
+                          onPressed: canBook && state is! BookingLoading ? _confirmBooking : null,
                           child: state is BookingLoading
                               ? const SizedBox(
                                   height: 20,
                                   width: 20,
                                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                                 )
-                              : Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text('BOOK & JOIN QUEUE (${_selectedServiceIds.length} items)'),
-                                    Text(
-                                      '₹${priceSum.toInt()}',
-                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                                    ),
-                                  ],
-                                ),
+                              : const Text('Confirm Booking'),
                         );
                       },
                     ),
@@ -273,6 +374,200 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTimeSlots() {
+    return BlocBuilder<BookingBloc, BookingState>(
+      builder: (context, state) {
+        if (state is BookingLoading) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(12),
+              child: CircularProgressIndicator(color: AppColors.primary),
+            ),
+          );
+        } else if (state is AvailableSlotsLoaded) {
+          if (state.slots.isEmpty) {
+            return const Text('No slots available for this date.', style: TextStyle(color: AppColors.textMuted));
+          }
+          return Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: state.slots.map((slot) {
+              final time = slot['time'] as String;
+              final available = slot['available'] as bool;
+              final isSelected = _selectedTimeSlot == time;
+
+              return InkWell(
+                onTap: available ? () => setState(() => _selectedTimeSlot = time) : null,
+                borderRadius: BorderRadius.circular(10),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppColors.primary
+                        : available
+                            ? AppColors.surface
+                            : AppColors.surface.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.primary
+                          : available
+                              ? AppColors.border
+                              : AppColors.border.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Text(
+                    time,
+                    style: TextStyle(
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      color: isSelected
+                          ? Colors.white
+                          : available
+                              ? AppColors.textPrimary
+                              : AppColors.textMuted,
+                      decoration: available ? null : TextDecoration.lineThrough,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          );
+        } else if (state is BookingFailure) {
+          return InkWell(
+            onTap: _fetchSlots,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(LucideIcons.refreshCw, size: 14, color: AppColors.primary),
+                const SizedBox(width: 6),
+                const Text('Retry', style: TextStyle(color: AppColors.primary)),
+              ],
+            ),
+          );
+        }
+        return const SizedBox.shrink();
+      },
+    );
+  }
+
+  Widget _buildSummary() {
+    double total = 0;
+    final selectedServices = _allServices.where((s) => _selectedServiceIds.contains(s.id)).toList();
+    for (final s in selectedServices) {
+      total += s.price;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _summaryRow(LucideIcons.store, 'Shop', widget.barber.shopName),
+          const SizedBox(height: 8),
+          _summaryRow(LucideIcons.calendar, 'Date', '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}'),
+          const SizedBox(height: 8),
+          _summaryRow(LucideIcons.clock, 'Time', _selectedTimeSlot ?? ''),
+          const SizedBox(height: 8),
+          _summaryRow(LucideIcons.scissors, 'Services', selectedServices.map((s) => s.name).join(', ')),
+          const SizedBox(height: 8),
+          const Divider(height: 4, color: AppColors.border),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(LucideIcons.indianRupee, size: 16, color: AppColors.primary),
+              const SizedBox(width: 8),
+              const Text('Total', style: TextStyle(fontWeight: FontWeight.w600)),
+              const Spacer(),
+              Text(
+                '₹${total.toInt()}',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.primary),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: AppColors.primary),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 56,
+          child: Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        ),
+        Expanded(
+          child: Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWorkingHours() {
+    final dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    final shortNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final businessDays = widget.barber.businessDays;
+    final hasBusinessDays = businessDays != null && businessDays.isNotEmpty;
+
+    return Column(
+      children: List.generate(7, (i) {
+        final dayLower = dayNames[i].toLowerCase();
+        final isOpen = hasBusinessDays
+            ? businessDays.any((d) {
+                if (d is Map<String, dynamic>) {
+                  return (d['day'] as String? ?? '').toLowerCase() == dayLower;
+                }
+                if (d is String) return d.toLowerCase() == dayLower;
+                return false;
+              })
+            : (widget.barber.startTime?.isNotEmpty ?? false) &&
+                (widget.barber.endTime?.isNotEmpty ?? false);
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 40,
+                child: Text(
+                  shortNames[i],
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: isOpen ? AppColors.textPrimary : AppColors.textMuted,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  isOpen
+                      ? '${widget.barber.startTime ?? '--'} - ${widget.barber.endTime ?? '--'}'
+                      : 'Closed',
+                  style: TextStyle(
+                    color: isOpen ? AppColors.textSecondary : AppColors.error,
+                  ),
+                ),
+              ),
+              Icon(
+                isOpen ? LucideIcons.checkCircle : LucideIcons.xCircle,
+                size: 16,
+                color: isOpen ? AppColors.success : AppColors.error,
+              ),
+            ],
+          ),
+        );
+      }),
     );
   }
 
@@ -351,19 +646,6 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
     );
   }
 
-  double _calculateTotalPrice() {
-    double sum = 0;
-    // Sum pricing dynamically
-    final state = context.read<BookingBloc>().state;
-    if (state is ServicesLoaded) {
-      for (final id in _selectedServiceIds) {
-        final s = state.services.firstWhere((element) => element.id == id);
-        sum += s.price;
-      }
-    }
-    return sum;
-  }
-
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -385,29 +667,24 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
     if (picked != null) {
       setState(() {
         _selectedDate = picked;
+        _selectedTimeSlot = null;
       });
-    }
-  }
-
-  Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _selectedTime,
-    );
-    if (picked != null) {
-      setState(() {
-        _selectedTime = picked;
-      });
+      _fetchSlots();
     }
   }
 
   void _confirmBooking() {
-    final dateStr = DateTime(
+    if (_selectedTimeSlot == null) return;
+    final parts = _selectedTimeSlot!.split(':');
+    final hour = int.parse(parts[0]);
+    final minute = int.parse(parts[1]);
+
+    final dateStr = DateTime.utc(
       _selectedDate.year,
       _selectedDate.month,
       _selectedDate.day,
-      _selectedTime.hour,
-      _selectedTime.minute,
+      hour,
+      minute,
     ).toIso8601String();
 
     context.read<BookingBloc>().add(

@@ -5,6 +5,7 @@ import 'package:barbar_app/presentation/bloc/admin/admin_dashboard_bloc.dart';
 import 'package:barbar_app/domain/repositories/admin_repository.dart';
 import 'package:barbar_app/presentation/screens/admin/pending_barbers_screen.dart';
 import 'package:barbar_app/presentation/screens/admin/active_barbers_screen.dart';
+import 'package:barbar_app/core/theme/app_theme.dart';
 
 class AdminDashboardScreen extends StatelessWidget {
   const AdminDashboardScreen({Key? key}) : super(key: key);
@@ -33,14 +34,15 @@ class _DashboardViewState extends State<_DashboardView> {
     final todayStr = DateFormat('dd MMMM yyyy').format(DateTime.now());
 
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Admin Dashboard'),
+        backgroundColor: AppColors.surface,
+        title: const Text('Admin Dashboard', style: TextStyle(color: AppColors.textPrimary)),
         actions: [
-          IconButton(icon: const Icon(Icons.notifications), onPressed: () {}),
+          IconButton(icon: const Icon(Icons.notifications, color: AppColors.textPrimary), onPressed: () {}),
           const CircleAvatar(
-            backgroundColor: Colors.blue,
-            child: Icon(Icons.person, color: Colors.white),
+            backgroundColor: AppColors.primary,
+            child: Icon(Icons.person, color: Colors.black),
           ),
           const SizedBox(width: 16),
         ],
@@ -61,8 +63,8 @@ class _DashboardViewState extends State<_DashboardView> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text("Today: $todayStr", style: const TextStyle(color: Colors.grey)),
-                  const Text("Last Sync: Just Now", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  Text("Today: $todayStr", style: const TextStyle(color: AppColors.textSecondary)),
+                  const Text("Last Sync: Just Now", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                 ],
               ),
               const SizedBox(height: 24),
@@ -160,7 +162,7 @@ class _DashboardViewState extends State<_DashboardView> {
                         const SizedBox(height: 24),
 
                         // --- Quick Actions ---
-                        const Text("Quick Actions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const Text("Quick Actions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                         const SizedBox(height: 12),
                         SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
@@ -178,9 +180,10 @@ class _DashboardViewState extends State<_DashboardView> {
                         const SizedBox(height: 24),
 
                         // --- Live Activity Feed (Mocked) ---
-                        const Text("Live Activity Feed", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const Text("Live Activity Feed", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                         const SizedBox(height: 12),
                         Card(
+                          color: AppColors.cardBg,
                           child: Column(
                             children: [
                               _buildActivityTile("Raj Hair Studio", "Approved", "2 min ago", Icons.check_circle, Colors.green),
@@ -192,9 +195,10 @@ class _DashboardViewState extends State<_DashboardView> {
                         const SizedBox(height: 24),
 
                         // --- System Health ---
-                        const Text("System Health", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const Text("System Health", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                         const SizedBox(height: 12),
                         Card(
+                          color: AppColors.cardBg,
                           child: Padding(
                             padding: const EdgeInsets.all(16.0),
                             child: Row(
@@ -229,9 +233,9 @@ class _DashboardViewState extends State<_DashboardView> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.cardBg,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey[200]!),
+          border: Border.all(color: AppColors.border),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -241,7 +245,7 @@ class _DashboardViewState extends State<_DashboardView> {
               children: [
                 Icon(icon, size: 20, color: color),
                 const SizedBox(width: 8),
-                Expanded(child: Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey), overflow: TextOverflow.ellipsis)),
+                Expanded(child: Text(title, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary), overflow: TextOverflow.ellipsis)),
               ],
             ),
             const SizedBox(height: 8),
@@ -256,8 +260,10 @@ class _DashboardViewState extends State<_DashboardView> {
     return Padding(
       padding: const EdgeInsets.only(right: 8.0),
       child: ActionChip(
-        avatar: Icon(icon, size: 16),
-        label: Text(label),
+        backgroundColor: AppColors.cardBg,
+        side: const BorderSide(color: AppColors.border),
+        avatar: Icon(icon, size: 16, color: AppColors.primary),
+        label: Text(label, style: const TextStyle(color: AppColors.textPrimary)),
         onPressed: () {
           // Navigate to specific screen based on label
         },
@@ -268,9 +274,9 @@ class _DashboardViewState extends State<_DashboardView> {
   Widget _buildActivityTile(String title, String subtitle, String time, IconData icon, Color color) {
     return ListTile(
       leading: CircleAvatar(backgroundColor: color.withOpacity(0.1), child: Icon(icon, color: color, size: 20)),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
-      trailing: Text(time, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary)),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      trailing: Text(time, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
     );
   }
 
@@ -279,7 +285,7 @@ class _DashboardViewState extends State<_DashboardView> {
       children: [
         Icon(isHealthy ? Icons.cloud_done : Icons.cloud_off, color: isHealthy ? Colors.green : Colors.red),
         const SizedBox(height: 4),
-        Text(label, style: const TextStyle(fontSize: 12)),
+        Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textPrimary)),
         Text(isHealthy ? "Online" : "Offline", style: TextStyle(fontSize: 10, color: isHealthy ? Colors.green : Colors.red, fontWeight: FontWeight.bold)),
       ],
     );

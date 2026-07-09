@@ -11,11 +11,17 @@ import 'data/datasources/remote/booking_remote_datasource.dart';
 import 'data/datasources/remote/directory_remote_datasource.dart';
 import 'data/datasources/remote/marketplace_remote_datasource.dart';
 import 'data/datasources/remote/wallet_remote_datasource.dart';
+import 'data/datasources/remote/address_remote_datasource.dart';
+import 'data/datasources/remote/review_remote_datasource.dart';
 import 'data/repositories/auth_repository_impl.dart';
 import 'data/repositories/admin_repository_impl.dart';
 import 'data/repositories/booking_repository_impl.dart';
+import 'data/repositories/address_repository_impl.dart';
+import 'data/repositories/review_repository_impl.dart';
 import 'domain/repositories/admin_repository.dart';
 import 'domain/repositories/booking_repository.dart';
+import 'domain/repositories/address_repository.dart';
+import 'domain/repositories/review_repository.dart';
 import 'data/repositories/directory_repository_impl.dart';
 import 'data/repositories/marketplace_repository_impl.dart';
 import 'data/repositories/wallet_repository_impl.dart';
@@ -25,6 +31,8 @@ import 'presentation/bloc/auth/auth_state.dart';
 import 'presentation/bloc/booking/booking_bloc.dart';
 import 'presentation/bloc/directory/directory_bloc.dart';
 import 'presentation/bloc/marketplace/marketplace_bloc.dart';
+import 'presentation/bloc/address/address_bloc.dart';
+import 'presentation/bloc/review/review_bloc.dart';
 import 'presentation/bloc/wallet/wallet_bloc.dart';
 import 'presentation/screens/admin_console_screen.dart';
 import 'presentation/screens/auth_screen.dart';
@@ -51,8 +59,10 @@ void main() {
   final directoryRemoteDataSource = DirectoryRemoteDataSource(apiClient);
   final marketplaceRemoteDataSource = MarketplaceRemoteDataSource(apiClient);
   final walletRemoteDataSource = WalletRemoteDataSource(apiClient);
+  final addressRemoteDataSource = AddressRemoteDataSource(apiClient);
 
   final adminRemoteDataSource = AdminRemoteDataSource(apiClient);
+  final reviewRemoteDataSource = ReviewRemoteDataSource(apiClient);
 
   // Repositories
   final authRepository = AuthRepositoryImpl(authRemoteDataSource, localDataSource);
@@ -60,7 +70,9 @@ void main() {
   final directoryRepository = DirectoryRepositoryImpl(directoryRemoteDataSource);
   final marketplaceRepository = MarketplaceRepositoryImpl(marketplaceRemoteDataSource);
   final walletRepository = WalletRepositoryImpl(walletRemoteDataSource);
+  final addressRepository = AddressRepositoryImpl(addressRemoteDataSource);
   final adminRepository = AdminRepositoryImpl(adminRemoteDataSource);
+  final reviewRepository = ReviewRepositoryImpl(reviewRemoteDataSource);
 
   runApp(
     MyApp(
@@ -69,7 +81,9 @@ void main() {
       directoryRepository: directoryRepository,
       marketplaceRepository: marketplaceRepository,
       walletRepository: walletRepository,
+      addressRepository: addressRepository,
       adminRepository: adminRepository,
+      reviewRepository: reviewRepository,
       webSocketClient: webSocketClient,
     ),
   );
@@ -81,7 +95,9 @@ class MyApp extends StatelessWidget {
   final DirectoryRepositoryImpl directoryRepository;
   final MarketplaceRepositoryImpl marketplaceRepository;
   final WalletRepositoryImpl walletRepository;
+  final AddressRepositoryImpl addressRepository;
   final AdminRepositoryImpl adminRepository;
+  final ReviewRepository reviewRepository;
   final WebSocketClient webSocketClient;
 
   const MyApp({
@@ -91,7 +107,9 @@ class MyApp extends StatelessWidget {
     required this.directoryRepository,
     required this.marketplaceRepository,
     required this.walletRepository,
+    required this.addressRepository,
     required this.adminRepository,
+    required this.reviewRepository,
     required this.webSocketClient,
   });
 
@@ -104,6 +122,12 @@ class MyApp extends StatelessWidget {
         ),
         RepositoryProvider<AdminRepository>(
           create: (context) => adminRepository,
+        ),
+        RepositoryProvider<AddressRepository>(
+          create: (context) => addressRepository,
+        ),
+        RepositoryProvider<ReviewRepository>(
+          create: (context) => reviewRepository,
         ),
       ],
       child: MultiBlocProvider(
@@ -122,6 +146,12 @@ class MyApp extends StatelessWidget {
           ),
           BlocProvider<WalletBloc>(
             create: (context) => WalletBloc(walletRepository),
+          ),
+          BlocProvider<AddressBloc>(
+            create: (context) => AddressBloc(addressRepository),
+          ),
+          BlocProvider<ReviewBloc>(
+            create: (context) => ReviewBloc(reviewRepository),
           ),
         ],
         child: MaterialApp(

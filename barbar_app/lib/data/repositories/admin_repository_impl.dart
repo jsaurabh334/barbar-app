@@ -191,4 +191,14 @@ class AdminRepositoryImpl implements AdminRepository {
       await remoteDataSource.rejectKycDocument(documentId, reason);
     } catch (_) {}
   }
+
+  @override
+  Future<Map<String, dynamic>> getAllReviews({int page = 1, int limit = 20, String? status}) async {
+    return remoteDataSource.getAllReviews(page: page, limit: limit, status: status);
+  }
+
+  @override
+  Future<void> moderateReview(String reviewId, String status, {String reason = ''}) async {
+    await remoteDataSource.moderateReview(reviewId, status, reason: reason);
+  }
 }

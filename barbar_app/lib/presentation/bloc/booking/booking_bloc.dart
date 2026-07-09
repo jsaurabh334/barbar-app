@@ -8,11 +8,12 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
 
   BookingBloc(this._bookingRepository) : super(BookingInitial()) {
     on<FetchServices>(_onFetchServices);
+    on<FetchAvailableSlots>(_onFetchAvailableSlots);
     on<CreateBooking>(_onCreateBooking);
     on<CheckQueuePosition>(_onCheckQueuePosition);
+    on<CancelBooking>(_onCancelBooking);
     on<UpdateBookingStatus>(_onUpdateBookingStatus);
     on<StreamQueuePositionUpdate>(_onStreamQueuePositionUpdate);
-    on<FetchBarberBookings>(_onFetchBarberBookings);
     on<FetchAllBookings>(_onFetchAllBookings);
     on<PayBooking>(_onPayBooking);
   }
@@ -22,6 +23,16 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     try {
       final services = await _bookingRepository.getServices(event.barberId);
       emit(ServicesLoaded(services));
+    } catch (e) {
+      emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onFetchAvailableSlots(FetchAvailableSlots event, Emitter<BookingState> emit) async {
+    emit(BookingLoading());
+    try {
+      final slots = await _bookingRepository.getAvailableSlots(event.barberId, event.date);
+      emit(AvailableSlotsLoaded(slots));
     } catch (e) {
       emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
     }
@@ -55,6 +66,17 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     }
   }
 
+  Future<void> _onCancelBooking(CancelBooking event, Emitter<BookingState> emit) async {
+    emit(BookingLoading());
+    try {
+      await _bookingRepository.cancelBooking(event.bookingId, reason: event.reason);
+      final bookings = await _bookingRepository.getAllBookings();
+      emit(BookingsLoaded(bookings));
+    } catch (e) {
+      emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
   Future<void> _onUpdateBookingStatus(UpdateBookingStatus event, Emitter<BookingState> emit) async {
     emit(BookingLoading());
     try {
@@ -71,6 +93,8 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
       currentPosition: event.newPosition,
       peopleAhead: event.newPosition > 0 ? event.newPosition - 1 : 0,
       estimatedWaitMin: event.estimatedWaitMin,
+      remainingTime: event.remainingTime,
+      currentlyServing: event.currentlyServing,
     ));
   }
 
@@ -78,16 +102,6 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     emit(BookingLoading());
     try {
       final bookings = await _bookingRepository.getAllBookings();
-      emit(BookingsLoaded(bookings));
-    } catch (e) {
-      emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
-    }
-  }
-
-  Future<void> _onFetchBarberBookings(FetchBarberBookings event, Emitter<BookingState> emit) async {
-    emit(BookingLoading());
-    try {
-      final bookings = await _bookingRepository.getBarberBookings();
       emit(BookingsLoaded(bookings));
     } catch (e) {
       emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));

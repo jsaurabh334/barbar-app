@@ -21,4 +21,6 @@ abstract class AuthRepository {
   Future<void> logout();
 
   Future<bool> isLoggedIn();
+
+  Future<UserModel> updateProfile(Map<String, dynamic> data);
 }

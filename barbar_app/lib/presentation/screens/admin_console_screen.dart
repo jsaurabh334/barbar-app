@@ -12,6 +12,7 @@ import '../bloc/auth/auth_bloc.dart';
 import '../bloc/auth/auth_event.dart';
 import 'admin/customers/admin_customers_screen.dart';
 import 'admin/admin_dashboard_screen.dart';
+import 'admin/admin_review_moderation_screen.dart';
 
 class DisputeCase {
   final String id;
@@ -80,7 +81,7 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 7, vsync: this);
+    _tabController = TabController(length: 8, vsync: this);
     _tabController.addListener(() {
       setState(() {});
     });
@@ -135,8 +136,9 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
             _buildDrawerItem(LucideIcons.store, 'Vendors', 2),
             _buildDrawerItem(LucideIcons.bike, 'Delivery', 3),
             _buildDrawerItem(LucideIcons.scale, 'Disputes', 4),
-            _buildDrawerItem(LucideIcons.settings, 'Settings', 5),
-            _buildDrawerItem(LucideIcons.activity, 'Analytics', 6),
+            _buildDrawerItem(LucideIcons.messageSquare, 'Reviews', 5),
+            _buildDrawerItem(LucideIcons.settings, 'Settings', 6),
+            _buildDrawerItem(LucideIcons.activity, 'Analytics', 7),
           ],
         ),
       ),
@@ -176,6 +178,9 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
             child: const AdminDeliveryScreen(),
           ),
           _buildDisputesTab(),
+          AdminReviewModerationScreen(
+            adminRepository: context.read<AdminRepository>(),
+          ),
           _buildSettingsTab(),
           _buildAnalyticsTab(),
         ],

@@ -44,6 +44,7 @@ type Barber struct {
 	VerificationStatus BarberVerificationStatus `gorm:"size:50;default:pending" json:"verification_status"`
 	Rating             float64                  `gorm:"default:0;index" json:"rating"`
 	ReviewCount        int                      `gorm:"default:0" json:"review_count"`
+	RatingDistribution JSONB                    `gorm:"type:jsonb;default:'{}'" json:"rating_distribution"`
 	TotalBookings      int                      `gorm:"default:0" json:"total_bookings"`
 	ExperienceYears    int                      `gorm:"default:0" json:"experience_years"`
 	StartTime          string                   `gorm:"size:5" json:"start_time"`
@@ -73,7 +74,8 @@ type BarberService struct {
 	BarberID       uuid.UUID `gorm:"type:uuid;index" json:"barber_id"`
 	Name           string    `gorm:"size:255;index" json:"name"`
 	Description    string    `gorm:"type:text" json:"description,omitempty"`
-	Category       string    `gorm:"size:100;index" json:"category"`
+	CategoryID     *uuid.UUID `gorm:"type:uuid;index" json:"category_id,omitempty"`
+	Category       *Category  `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
 	Price          float64   `gorm:"not null" json:"price"`
 	DiscountPrice  float64   `json:"discount_price,omitempty"`
 	DurationMin    int       `gorm:"not null" json:"duration_minutes"`

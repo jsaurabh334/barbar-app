@@ -9,9 +9,11 @@ abstract class BookingRepository {
     required String scheduledStart,
   });
   Future<Map<String, dynamic>> getQueuePosition(String bookingId);
+  Future<void> cancelBooking(String bookingId, {String? reason});
   Future<void> updateBookingStatus(String bookingId, String status);
-  Future<List<BookingModel>> getAllBookings();
   Future<List<BookingModel>> getBarberBookings();
+  Future<List<BookingModel>> getAllBookings();
   Future<void> payBooking(String bookingId, String method, String status, String reference);
   Future<Map<String, dynamic>> getBookingInvoice(String bookingId);
+  Future<List<Map<String, dynamic>>> getAvailableSlots(String barberId, String date);
 }

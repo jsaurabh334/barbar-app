@@ -1,3 +1,5 @@
+import '../../core/constants/constants.dart';
+
 class BarberModel {
   final String id;
   final String? userId;
@@ -20,6 +22,11 @@ class BarberModel {
   final List<dynamic>? services;
   final List<dynamic>? documents;
   final String? createdAt;
+  final List<String>? shopImages;
+  final List<dynamic>? businessDays;
+  final List<String>? tags;
+  final String? startTime;
+  final String? endTime;
 
   BarberModel({
     required this.id,
@@ -43,6 +50,11 @@ class BarberModel {
     this.services,
     this.documents,
     this.createdAt,
+    this.shopImages,
+    this.businessDays,
+    this.tags,
+    this.startTime,
+    this.endTime,
   });
 
   factory BarberModel.fromJson(Map<String, dynamic> json) {
@@ -68,6 +80,15 @@ class BarberModel {
       services: json['services'] as List<dynamic>?,
       documents: json['documents'] as List<dynamic>?,
       createdAt: json['created_at'] as String?,
+      shopImages: json['shop_images'] != null
+          ? (json['shop_images'] as List<dynamic>).cast<String>()
+          : null,
+      businessDays: json['business_days'] as List<dynamic>?,
+      tags: json['tags'] != null
+          ? (json['tags'] as List<dynamic>).cast<String>()
+          : null,
+      startTime: json['start_time'] as String?,
+      endTime: json['end_time'] as String?,
     );
   }
 
@@ -91,8 +112,33 @@ class BarberModel {
       'services': services,
       'documents': documents,
       'created_at': createdAt,
+      'shop_images': shopImages,
+      'business_days': businessDays,
+      'tags': tags,
+      'start_time': startTime,
+      'end_time': endTime,
     };
   }
+
+  static String getFullImageUrl(String? path) {
+    if (path == null || path.isEmpty) return '';
+    if (path.startsWith('http')) return path;
+    final base = AppConfig.apiBaseUrl.replaceAll('/api/v1/', '/');
+    return '$base${path.startsWith('/') ? path.substring(1) : path}';
+  }
+
+  String? get fullShopImage {
+    if (shopImage != null && shopImage!.isNotEmpty) {
+      return getFullImageUrl(shopImage);
+    }
+    final images = fullShopImages;
+    return images.isNotEmpty ? images.first : null;
+  }
+
+  List<String> get fullShopImages => shopImages
+      ?.map((e) => getFullImageUrl(e))
+      .where((e) => e.isNotEmpty)
+      .toList() ?? [];
 
   BarberModel copyWith({
     String? id,
@@ -115,6 +161,11 @@ class BarberModel {
     List<dynamic>? services,
     List<dynamic>? documents,
     String? createdAt,
+    List<String>? shopImages,
+    List<dynamic>? businessDays,
+    List<String>? tags,
+    String? startTime,
+    String? endTime,
   }) {
     return BarberModel(
       id: id ?? this.id,
@@ -137,6 +188,11 @@ class BarberModel {
       services: services ?? this.services,
       documents: documents ?? this.documents,
       createdAt: createdAt ?? this.createdAt,
+      shopImages: shopImages ?? this.shopImages,
+      businessDays: businessDays ?? this.businessDays,
+      tags: tags ?? this.tags,
+      startTime: startTime ?? this.startTime,
+      endTime: endTime ?? this.endTime,
     );
   }
 }

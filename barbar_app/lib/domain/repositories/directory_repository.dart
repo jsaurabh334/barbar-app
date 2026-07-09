@@ -1,4 +1,5 @@
 import '../../data/models/barber_model.dart';
+import '../../data/models/category_model.dart';
 
 abstract class DirectoryRepository {
   Future<List<BarberModel>> getNearbyBarbers({
@@ -6,5 +7,10 @@ abstract class DirectoryRepository {
     required double longitude,
     int radius = 5000,
     String? search,
+    double? minRating,
+    bool? openNow,
+    String? categoryId,
   });
+
+  Future<List<CategoryModel>> getCategories();
 }

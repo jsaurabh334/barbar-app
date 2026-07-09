@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../constants/constants.dart';
-import '../../../data/datasources/local/auth_local_datasource.dart';
+import '../../data/datasources/local/auth_local_datasource.dart';
 
 class WebSocketClient {
   final AuthLocalDataSource _localDataSource;

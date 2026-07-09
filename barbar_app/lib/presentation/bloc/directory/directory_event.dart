@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../../data/models/category_model.dart';
 
 abstract class DirectoryEvent extends Equatable {
   const DirectoryEvent();
@@ -12,16 +13,22 @@ class FetchNearbyBarbers extends DirectoryEvent {
   final double longitude;
   final int radius;
   final String? search;
+  final double? minRating;
+  final bool? openNow;
+  final String? categoryId;
 
   const FetchNearbyBarbers({
     required this.latitude,
     required this.longitude,
     this.radius = 5000,
     this.search,
+    this.minRating,
+    this.openNow,
+    this.categoryId,
   });
 
   @override
-  List<Object?> get props => [latitude, longitude, radius, search];
+  List<Object?> get props => [latitude, longitude, radius, search, minRating, openNow, categoryId];
 }
 
 class UpdateBarberQueue extends DirectoryEvent {
@@ -37,4 +44,20 @@ class UpdateBarberQueue extends DirectoryEvent {
 
   @override
   List<Object?> get props => [barberId, currentQueueLength, averageWaitTime];
+}
+
+class FetchCategories extends DirectoryEvent {
+  const FetchCategories();
+
+  @override
+  List<Object?> get props => [];
+}
+
+class SetSelectedCategory extends DirectoryEvent {
+  final CategoryModel? category;
+
+  const SetSelectedCategory(this.category);
+
+  @override
+  List<Object?> get props => [category];
 }

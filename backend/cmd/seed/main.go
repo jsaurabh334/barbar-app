@@ -99,6 +99,13 @@ func seedCategories(db *gorm.DB) {
 		{Name: "Shaving", Slug: "shaving", Description: "Razors, creams, aftershaves & brushes", IsActive: true, SortOrder: 4, CategoryType: "product"},
 		{Name: "Grooming Kits", Slug: "grooming-kits", Description: "Complete grooming kits & sets", IsActive: true, SortOrder: 5, CategoryType: "product"},
 		{Name: "Accessories", Slug: "accessories", Description: "Combs, brushes, clippers & trimmers", IsActive: true, SortOrder: 6, CategoryType: "product"},
+		// Barber service categories
+		{Name: "Haircut", Slug: "haircut", Description: "Haircut and styling services", IsActive: true, SortOrder: 1, CategoryType: models.CategoryTypeBarber},
+		{Name: "Beard", Slug: "beard", Description: "Beard trimming and shaping services", IsActive: true, SortOrder: 2, CategoryType: models.CategoryTypeBarber},
+		{Name: "Spa", Slug: "spa", Description: "Spa and relaxation services", IsActive: true, SortOrder: 3, CategoryType: models.CategoryTypeBarber},
+		{Name: "Hair Color", Slug: "hair-color", Description: "Hair coloring and highlights", IsActive: true, SortOrder: 4, CategoryType: models.CategoryTypeBarber},
+		{Name: "Facial", Slug: "facial", Description: "Facial treatments and cleanup", IsActive: true, SortOrder: 5, CategoryType: models.CategoryTypeBarber},
+		{Name: "Premium Grooming", Slug: "premium-grooming", Description: "Premium grooming and styling", IsActive: true, SortOrder: 6, CategoryType: models.CategoryTypeBarber},
 	}
 	for _, cat := range categories {
 		var existing int64
@@ -500,6 +507,14 @@ func seedAllData(db *gorm.DB) {
 	// 3. Barber Shops
 	shops := getShopData()
 
+	// Build a category name -> UUID lookup for barber service categories
+	var svcCategories []models.Category
+	db.Where("category_type = ?", models.CategoryTypeBarber).Find(&svcCategories)
+	svcCatMap := make(map[string]uuid.UUID)
+	for _, c := range svcCategories {
+		svcCatMap[c.Name] = c.ID
+	}
+
 	for _, sd := range shops {
 		user := models.User{
 			FullName:     sd.ShopName + " Owner",
@@ -587,11 +602,12 @@ func seedAllData(db *gorm.DB) {
 		}
 
 		for _, svc := range sd.Services {
+			catID := svcCatMap[svc.Category]
 			service := models.BarberService{
 				BarberID:    barber.ID,
 				Name:        svc.Name,
 				Description: svc.Description,
-				Category:    svc.Category,
+				CategoryID:  &catID,
 				Price:       svc.Price,
 				DurationMin: svc.DurationMin,
 				IsActive:    true,

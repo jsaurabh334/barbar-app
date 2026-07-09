@@ -8,46 +8,26 @@ class AddressRepositoryImpl implements AddressRepository {
 
   @override
   Future<List<Map<String, dynamic>>> getAddresses() async {
-    try {
-      return await _remoteDataSource.getAddresses();
-    } catch (_) {
-      return [];
-    }
+    return await _remoteDataSource.getAddresses();
   }
 
   @override
   Future<Map<String, dynamic>> createAddress(Map<String, dynamic> address) async {
-    try {
-      return await _remoteDataSource.createAddress(address);
-    } catch (_) {
-      throw Exception('Failed to create address');
-    }
+    return await _remoteDataSource.createAddress(address);
   }
 
   @override
   Future<Map<String, dynamic>> updateAddress(String id, Map<String, dynamic> address) async {
-    try {
-      return await _remoteDataSource.updateAddress(id, address);
-    } catch (_) {
-      throw Exception('Failed to update address');
-    }
+    return await _remoteDataSource.updateAddress(id, address);
   }
 
   @override
   Future<void> deleteAddress(String id) async {
-    try {
-      await _remoteDataSource.deleteAddress(id);
-    } catch (_) {
-      throw Exception('Failed to delete address');
-    }
+    await _remoteDataSource.deleteAddress(id);
   }
 
   @override
   Future<void> setDefaultAddress(String id) async {
-    try {
-      await _remoteDataSource.setDefaultAddress(id);
-    } catch (_) {
-      throw Exception('Failed to set default address');
-    }
+    await _remoteDataSource.setDefaultAddress(id);
   }
 }

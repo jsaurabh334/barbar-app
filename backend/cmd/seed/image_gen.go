@@ -69,7 +69,7 @@ func generateDemoImages(outputDir string, shopNames []string) {
 	log.Printf("Total images generated: %d", countImages(shopNames))
 }
 
-func createLabeledImage(w, h int, bgColor color.RGBA, shopName, view string) *image.RGBA {
+func createLabeledImage(w, h int, bgColor color.RGBA, _shopName, _view string) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	draw.Draw(img, img.Bounds(), &image.Uniform{bgColor}, image.Point{}, draw.Src)
 

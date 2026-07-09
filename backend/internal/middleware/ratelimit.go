@@ -30,6 +30,10 @@ func NewRateLimiter(client *redis.Client) *RateLimiter {
 
 func (rl *RateLimiter) RateLimit(limit int, window time.Duration, keyFn func(*gin.Context) string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if gin.Mode() == gin.TestMode {
+			c.Next()
+			return
+		}
 		key := fmt.Sprintf("rate:%s:%s", keyFn(c), c.FullPath())
 
 		count, err := rateLimitScript.Run(c, rl.client, []string{key}, window.Milliseconds()).Int()

@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
+import '../../models/user_model.dart';
 
 class AuthRemoteDataSource {
   final ApiClient _apiClient;
@@ -70,6 +71,18 @@ class AuthRemoteDataSource {
       await _apiClient.dio.post('/auth/logout');
     } catch (_) {
       // Allow local logout even if remote fails
+    }
+  }
+
+  Future<UserModel> updateProfile(Map<String, dynamic> data) async {
+    try {
+      final response = await _apiClient.dio.put('/auth/profile', data: data);
+      if (response.statusCode == 200 && response.data['status'] == 'success') {
+        return UserModel.fromJson(response.data['data'] as Map<String, dynamic>);
+      }
+      throw Exception(response.data['error'] ?? 'Profile update failed');
+    } on DioException catch (e) {
+      throw Exception(e.response?.data['error'] ?? 'Connection error');
     }
   }
 }

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../data/models/barber_model.dart';
+import '../../data/models/category_model.dart';
 import '../../core/network/websocket_client.dart';
 import '../../core/theme/app_theme.dart';
 import 'barber_detail_screen.dart';
@@ -32,17 +34,18 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
   bool _isLiveSynced = false;
+  double? _selectedMinRating;
+  bool _openNow = false;
 
   @override
   void initState() {
     super.initState();
-    
-    // Trigger initial fetching of nearby salons (using dummy coordinates for testing)
+
     context.read<DirectoryBloc>().add(
       const FetchNearbyBarbers(latitude: 12.9716, longitude: 77.5946),
     );
+    context.read<DirectoryBloc>().add(const FetchCategories());
 
-    // Set up WebSocket listeners for real-time queue synchronization
     widget.webSocketClient.connect();
     widget.webSocketClient.connectionStatus.listen((connected) {
       if (mounted) {
@@ -58,11 +61,10 @@ class _HomeScreenState extends State<HomeScreen> {
         final payload = event['payload'] as Map<String, dynamic>;
         final position = payload['current_position'] as int;
         final waitMin = (payload['estimated_wait_min'] as num).toDouble();
-        
-        // Trigger queue size updates dynamically in UI BLoC
+
         context.read<DirectoryBloc>().add(
           UpdateBarberQueue(
-            barberId: 'c0a80101-8fc2-11eb-8dcd-0242ac130003', // Map to primary shop for testing
+            barberId: 'c0a80101-8fc2-11eb-8dcd-0242ac130003',
             currentQueueLength: position + 2,
             averageWaitTime: waitMin,
           ),
@@ -76,6 +78,25 @@ class _HomeScreenState extends State<HomeScreen> {
     _searchController.dispose();
     widget.webSocketClient.disconnect();
     super.dispose();
+  }
+
+  void _fetchBarbers({String? categoryId}) {
+    final state = context.read<DirectoryBloc>().state;
+    String? finalCategoryId = categoryId;
+    if (finalCategoryId == null && state is DirectoryLoaded) {
+      finalCategoryId = state.selectedCategory?.id;
+    }
+
+    context.read<DirectoryBloc>().add(
+      FetchNearbyBarbers(
+        latitude: 12.9716,
+        longitude: 77.5946,
+        search: _searchController.text.isNotEmpty ? _searchController.text : null,
+        minRating: _selectedMinRating,
+        openNow: _openNow ? true : null,
+        categoryId: finalCategoryId,
+      ),
+    );
   }
 
   @override
@@ -150,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
               leading: const Icon(LucideIcons.shoppingBag, color: AppColors.textSecondary),
               title: const Text('Grooming Products'),
               onTap: () {
-                Navigator.pop(context); // Close drawer
+                Navigator.pop(context);
                 Navigator.push(context, MaterialPageRoute(builder: (c) => const ShopScreen()));
               },
             ),
@@ -158,7 +179,7 @@ class _HomeScreenState extends State<HomeScreen> {
               leading: const Icon(LucideIcons.wallet, color: AppColors.textSecondary),
               title: const Text('My Wallet'),
               onTap: () {
-                Navigator.pop(context); // Close drawer
+                Navigator.pop(context);
                 Navigator.push(context, MaterialPageRoute(builder: (c) => const WalletScreen()));
               },
             ),
@@ -178,9 +199,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          context.read<DirectoryBloc>().add(
-            const FetchNearbyBarbers(latitude: 12.9716, longitude: 77.5946),
-          );
+          _fetchBarbers();
+          context.read<DirectoryBloc>().add(const FetchCategories());
         },
         color: AppColors.primary,
         backgroundColor: AppColors.surface,
@@ -190,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Header Greeting & Live Status Indicator
+              // Header Greeting & Live Status
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -212,23 +232,18 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Active booking card mockup if customer has a live queue spot
+              // Active booking card
               _buildActiveQueueTrackerWidget(),
               const SizedBox(height: 24),
 
+              // Search bar + Map button
               Row(
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _searchController,
                       onChanged: (val) {
-                        context.read<DirectoryBloc>().add(
-                          FetchNearbyBarbers(
-                            latitude: 12.9716,
-                            longitude: 77.5946,
-                            search: val.isNotEmpty ? val : null,
-                          ),
-                        );
+                        _fetchBarbers();
                       },
                       decoration: const InputDecoration(
                         hintText: 'Search salons, styling services...',
@@ -238,7 +253,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(width: 12),
                   Container(
-                    height: 56, // Match height with standard InputDecoration content padding
+                    height: 56,
                     decoration: BoxDecoration(
                       color: AppColors.surface,
                       borderRadius: BorderRadius.circular(12),
@@ -256,6 +271,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+
+              // Categories + Filters
+              _buildCategoriesAndFilters(),
               const SizedBox(height: 24),
 
               // Nearby Salons Title
@@ -265,7 +284,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Salons List View
+              // Salon List
               BlocBuilder<DirectoryBloc, DirectoryState>(
                 builder: (context, state) {
                   if (state is DirectoryLoading) {
@@ -284,21 +303,206 @@ class _HomeScreenState extends State<HomeScreen> {
                       },
                     );
                   } else if (state is DirectoryFailure) {
-                    return Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 40),
-                        child: Text(
-                          state.error,
-                          style: const TextStyle(color: AppColors.error),
-                        ),
-                      ),
-                    );
+                    return _buildErrorState(state.error);
                   }
                   return const SizedBox.shrink();
                 },
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoriesAndFilters() {
+    return BlocBuilder<DirectoryBloc, DirectoryState>(
+      builder: (context, state) {
+        final categories = state is DirectoryLoaded ? state.categories : <CategoryModel>[];
+        final selectedCategory = state is DirectoryLoaded ? state.selectedCategory : null;
+        final isLoading = state is DirectoryLoaded && state.isCategoriesLoading;
+        final catError = state is DirectoryLoaded ? state.categoriesError : null;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Category Chips
+            if (isLoading)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: Text('Loading categories...', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+              )
+            else if (catError != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: InkWell(
+                  onTap: () => context.read<DirectoryBloc>().add(const FetchCategories()),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(LucideIcons.alertCircle, size: 14, color: AppColors.error),
+                      const SizedBox(width: 6),
+                      Text('Retry categories', style: TextStyle(color: AppColors.error, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              )
+            else if (categories.isNotEmpty)
+              SizedBox(
+                height: 36,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: categories.length + 1,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      return _buildCategoryChip(null, 'All', selectedCategory == null);
+                    }
+                    final cat = categories[index - 1];
+                    return _buildCategoryChip(cat, cat.name, selectedCategory?.id == cat.id);
+                  },
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: InkWell(
+                  onTap: () => context.read<DirectoryBloc>().add(const FetchCategories()),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.refreshCw, size: 14, color: AppColors.primary),
+                      SizedBox(width: 6),
+                      Text('Load categories', style: TextStyle(color: AppColors.primary, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 12),
+
+            // Rating + Open Now Filters
+            Row(
+              children: [
+                _buildFilterChip('3+', _selectedMinRating == 3.0, () {
+                  setState(() {
+                    _selectedMinRating = _selectedMinRating == 3.0 ? null : 3.0;
+                  });
+                  _fetchBarbers();
+                }),
+                const SizedBox(width: 8),
+                _buildFilterChip('4+', _selectedMinRating == 4.0, () {
+                  setState(() {
+                    _selectedMinRating = _selectedMinRating == 4.0 ? null : 4.0;
+                  });
+                  _fetchBarbers();
+                }),
+                const SizedBox(width: 8),
+                _buildFilterChip('5+', _selectedMinRating == 5.0, () {
+                  setState(() {
+                    _selectedMinRating = _selectedMinRating == 5.0 ? null : 5.0;
+                  });
+                  _fetchBarbers();
+                }),
+                const SizedBox(width: 12),
+                _buildToggleChip('Open Now', _openNow, () {
+                  setState(() {
+                    _openNow = !_openNow;
+                  });
+                  _fetchBarbers();
+                }),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCategoryChip(CategoryModel? category, String label, bool isSelected) {
+    return GestureDetector(
+      onTap: () {
+        context.read<DirectoryBloc>().add(SetSelectedCategory(category));
+        _fetchBarbers(categoryId: category?.id);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.black : AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, bool isSelected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.border,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.star, size: 14, color: isSelected ? Colors.black : AppColors.textSecondary),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.black : AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToggleChip(String label, bool isActive, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive ? AppColors.success.withValues(alpha: 0.15) : AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isActive ? AppColors.success : AppColors.border,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(LucideIcons.clock, size: 14, color: isActive ? AppColors.success : AppColors.textSecondary),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive ? AppColors.success : AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -462,16 +666,15 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Salon Banner Image
               SizedBox(
                 height: 140,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Image.network(
-                      barber.shopImage ?? '',
+                    CachedNetworkImage(
+                      imageUrl: barber.fullShopImage ?? '',
                       fit: BoxFit.cover,
-                      errorBuilder: (context, _, __) => Container(
+                      errorWidget: (context, _, __) => Container(
                         color: AppColors.surface,
                         child: const Icon(LucideIcons.scissors, color: AppColors.textSecondary, size: 40),
                       ),
@@ -501,8 +704,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-              
-              // Details Section
+
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
@@ -614,14 +816,45 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildEmptyState() {
-    return const Center(
+    return Center(
       child: Padding(
-        padding: EdgeInsets.symmetric(vertical: 40),
+        padding: const EdgeInsets.symmetric(vertical: 40),
         child: Column(
           children: [
-            Icon(LucideIcons.scissors, size: 48, color: AppColors.textMuted),
-            SizedBox(height: 12),
-            Text('No salons found in your location radius'),
+            const Icon(LucideIcons.scissors, size: 48, color: AppColors.textMuted),
+            const SizedBox(height: 12),
+            const Text('No salons found in your location radius'),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: _fetchBarbers,
+              icon: const Icon(LucideIcons.refreshCw, size: 16),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        child: Column(
+          children: [
+            const Icon(LucideIcons.alertCircle, size: 48, color: AppColors.error),
+            const SizedBox(height: 12),
+            Text(
+              error,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.error),
+            ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: _fetchBarbers,
+              icon: const Icon(LucideIcons.refreshCw, size: 16),
+              label: const Text('Retry'),
+            ),
           ],
         ),
       ),

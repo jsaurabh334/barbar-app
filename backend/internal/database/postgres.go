@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/barbar-app/backend/internal/config"
 	"github.com/barbar-app/backend/internal/models"
@@ -15,13 +16,20 @@ var DB *gorm.DB
 
 func InitPostgres(cfg *config.DatabaseConfig) *gorm.DB {
 	dsn := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s TimeZone=Asia/Kolkata",
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s TimeZone=Asia/Kolkata search_path=public",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Name, cfg.SSLMode,
 	)
 
+	prepareStmt := true
+	disableFK := false
+	if os.Getenv("BARBAR_ENV") == "test" {
+		prepareStmt = false
+		disableFK = true
+	}
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
-		PrepareStmt: true,
+		PrepareStmt: prepareStmt,
+		DisableForeignKeyConstraintWhenMigrating: disableFK,
 	})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
@@ -41,67 +49,100 @@ func InitPostgres(cfg *config.DatabaseConfig) *gorm.DB {
 }
 
 func RunMigrations(db *gorm.DB) {
+	if os.Getenv("BARBAR_ENV") == "test" {
+		db.Exec("SET session_replication_role = 'replica'")
+	}
+
 	// Ensure the UUID generation extension is available
 	if err := db.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`).Error; err != nil {
 		log.Fatalf("Failed to create uuid-ossp extension: %v", err)
 	}
 
 	err := db.AutoMigrate(
+		// Foundation — no FK dependencies
 		&models.User{},
+		&models.Category{},
+		&models.PlatformSetting{},
+		&models.TaxSetting{},
+		&models.NotificationTemplate{},
+
+		// User-level — FK → User
 		&models.UserSession{},
+		&models.Address{},
+		&models.KYCDocument{},
+		&models.DeviceToken{},
+		&models.AuditLog{},
+		&models.DeliveryPartner{},
+
+		// Shop-level — FK → User, Category
 		&models.Barber{},
-		&models.BarberService{},
 		&models.BarberAvailability{},
 		&models.BarberHoliday{},
 		&models.BarberDocument{},
-		&models.Booking{},
-		&models.BookingService{},
-		&models.BookingStatusLog{},
 		&models.Vendor{},
 		&models.VendorDocument{},
 		&models.VendorBankAccount{},
-		&models.Category{},
+
+		// Service/Product-level — FK → Barber, Category, Vendor
+		&models.BarberService{},
 		&models.Product{},
 		&models.ProductVariant{},
 		&models.ProductImage{},
-		&models.ProductReview{},
+		&models.SubCategory{},
+
+		// Transaction-level — FK → User, Barber, Vendor, Product, Category
+		&models.Booking{},
+		&models.BookingService{},
+		&models.BookingStatusLog{},
 		&models.CartItem{},
 		&models.WishlistItem{},
 		&models.Coupon{},
 		&models.CouponUsage{},
+		&models.ProductReview{},
+		&models.FeaturedListing{},
+
+		// Order-level — FK → User, Vendor, Product, Address
 		&models.Order{},
 		&models.OrderItem{},
 		&models.OrderStatusLog{},
 		&models.ShippingAddress{},
 		&models.Payment{},
 		&models.PaymentGatewayLog{},
+		&models.Invoice{},
+		&models.CommissionTransaction{},
+		&models.RefundRequest{},
+		&models.WithdrawalRequest{},
+
+		// Wallet — FK → User, Vendor
 		&models.Wallet{},
 		&models.WalletTransaction{},
-		&models.WithdrawalRequest{},
-		&models.RefundRequest{},
+		&models.VendorPayout{},
+
+		// Review-level — FK → Booking, User, Barber, Review
+		&models.Review{},
+		&models.ReviewImage{},
+		&models.ReviewReply{},
+		&models.ReviewReport{},
+
+		// Notifications — FK → User
 		&models.Notification{},
-		&models.NotificationTemplate{},
-		&models.DeviceToken{},
-		&models.AuditLog{},
+
+		// Dispute — FK → User, Order, Booking
 		&models.Dispute{},
 		&models.DisputeMessage{},
-		&models.CommissionTransaction{},
-		&models.PlatformSetting{},
-		&models.TaxSetting{},
-		&models.Address{},
-		&models.VendorPayout{},
-		&models.Invoice{},
-		&models.FeaturedListing{},
-		&models.KYCDocument{},
-		&models.SubCategory{},
+
+		// Webhook — FK → Vendor, Barber
 		&models.WebhookEndpoint{},
 		&models.WebhookEvent{},
-		&models.DeliveryPartner{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 	log.Println("Database migrations completed successfully")
+
+	if os.Getenv("BARBAR_ENV") == "test" {
+		db.Exec("SET session_replication_role = 'origin'")
+	}
 }
 
 func SeedData(db *gorm.DB, cfg *config.AppConfig) {

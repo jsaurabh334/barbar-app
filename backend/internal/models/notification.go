@@ -37,6 +37,8 @@ const (
 	NotifSystemAlert           NotificationType = "system_alert"
 	NotifDisputeUpdate         NotificationType = "dispute_update"
 	NotifVendorApproved        NotificationType = "vendor_approved"
+	NotifReviewReceived        NotificationType = "review_received"
+	NotifReviewModerated       NotificationType = "review_moderated"
 )
 
 type Notification struct {

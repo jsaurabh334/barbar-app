@@ -389,6 +389,16 @@ func (h *ProductHandler) ListReviews(c *gin.Context) {
 }
 
 func (h *ProductHandler) ListCategories(c *gin.Context) {
+	categoryType := c.DefaultQuery("type", string(models.CategoryTypeProduct))
+
+	if categoryType == string(models.CategoryTypeBarber) {
+		var result []models.Category
+		h.db.Where("category_type = ? AND is_active = ?", models.CategoryTypeBarber, true).
+			Order("sort_order ASC").Find(&result)
+		utils.SuccessResponse(c, result)
+		return
+	}
+
 	var categories []models.Category
 	query := h.db.Where("category_type = ? AND is_active = ?", models.CategoryTypeProduct, true).Order("sort_order ASC")
 	if parentID := c.Query("parent_id"); parentID != "" {

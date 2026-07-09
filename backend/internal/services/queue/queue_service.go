@@ -128,6 +128,36 @@ func (s *QueueService) BroadcastQueueUpdate(barberID uuid.UUID) {
 		return
 	}
 
+	// Gather in-progress info for richer customer payloads
+	var currentlyServing string
+	var remainingTime int
+	for _, entry := range status.Entries {
+		if entry.Booking.Status == models.BookingStatusInProgress {
+			if entry.Booking.Customer != nil {
+				currentlyServing = entry.Booking.Customer.FullName
+			}
+			duration := entry.Booking.TotalDuration
+			if duration <= 0 {
+				var barber models.Barber
+				s.db.First(&barber, barberID)
+				duration = barber.SlotDuration
+			}
+			start := entry.Booking.CreatedAt
+			if entry.Booking.ActualStart != nil {
+				start = *entry.Booking.ActualStart
+			} else if !entry.Booking.ScheduledStart.IsZero() {
+				start = entry.Booking.ScheduledStart
+			}
+			elapsed := int(time.Since(start).Minutes())
+			remaining := duration - elapsed
+			if remaining < 0 {
+				remaining = 0
+			}
+			remainingTime = remaining
+			break
+		}
+	}
+
 	for _, entry := range status.Entries {
 		customerID := entry.Booking.CustomerID
 		msg := &websocket.WSMessage{
@@ -136,8 +166,11 @@ func (s *QueueService) BroadcastQueueUpdate(barberID uuid.UUID) {
 				"booking_id":         entry.Booking.ID.String(),
 				"position":           entry.Position,
 				"current_position":   entry.Position,
+				"people_ahead":       entry.Position - 1,
 				"estimated_wait_ms":  entry.EstimatedWaitMs,
 				"estimated_wait_min": entry.EstimatedWaitMs / (60 * 1000),
+				"remaining_time":     remainingTime,
+				"currently_serving":  currentlyServing,
 				"queue_length":       status.QueueLength,
 			},
 		}

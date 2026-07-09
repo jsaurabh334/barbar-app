@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/product_model.dart';
 import '../bloc/marketplace/marketplace_bloc.dart';
 import '../bloc/marketplace/marketplace_event.dart';
 import '../bloc/marketplace/marketplace_state.dart';
+import 'order_history_screen.dart';
+import 'select_address_screen.dart';
 
 class ShopScreen extends StatefulWidget {
   const ShopScreen({super.key});
@@ -35,9 +38,15 @@ class _ShopScreenState extends State<ShopScreen> {
       appBar: AppBar(
         title: const Text('GROOMING STORE'),
         actions: [
+          IconButton(
+            icon: const Icon(LucideIcons.package),
+            tooltip: 'Order History',
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderHistoryScreen())),
+          ),
           _buildCartButton(),
         ],
       ),
+
       body: BlocConsumer<MarketplaceBloc, MarketplaceState>(
         listener: (context, state) {
           if (state is OrderCreatedSuccess) {
@@ -131,10 +140,10 @@ class _ShopScreenState extends State<ShopScreen> {
                 topLeft: Radius.circular(16),
                 topRight: Radius.circular(16),
               ),
-              child: Image.network(
-                product.imageUrl ?? '',
+              child: CachedNetworkImage(
+                imageUrl: product.imageUrl ?? '',
                 fit: BoxFit.cover,
-                errorBuilder: (context, _, __) => Container(
+                errorWidget: (context, _, __) => Container(
                   color: AppColors.surface,
                   child: const Icon(LucideIcons.image, color: AppColors.textSecondary),
                 ),
@@ -279,12 +288,12 @@ class _ShopScreenState extends State<ShopScreen> {
                             final p = cartProducts[index];
                             final qty = state.cart[p.id]!;
                             return ListTile(
-                              leading: Image.network(
-                                p.imageUrl ?? '',
+                              leading: CachedNetworkImage(
+                                imageUrl: p.imageUrl ?? '',
                                 width: 48,
                                 height: 48,
                                 fit: BoxFit.cover,
-                                errorBuilder: (c, _, __) => const Icon(LucideIcons.package),
+                                errorWidget: (c, _, __) => const Icon(LucideIcons.package),
                               ),
                               title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
                               subtitle: Text('₹${(p.discountPrice ?? p.basePrice).toInt()} x $qty'),
@@ -336,15 +345,21 @@ class _ShopScreenState extends State<ShopScreen> {
                       const SizedBox(height: 24),
                       
                       ElevatedButton(
-                        onPressed: () {
-                          context.read<MarketplaceBloc>().add(
-                            PlaceOrder(
-                              vendorId: cartProducts.first.vendorId,
-                              shippingAddressId: 'addr-uuid-1',
-                              couponCode: _couponController.text.isNotEmpty ? _couponController.text : null,
-                            ),
+                        onPressed: () async {
+                          final addressId = await Navigator.push<String>(
+                            context,
+                            MaterialPageRoute(builder: (_) => const SelectAddressScreen()),
                           );
-                          Navigator.pop(context);
+                          if (addressId != null && context.mounted) {
+                            context.read<MarketplaceBloc>().add(
+                              PlaceOrder(
+                                vendorId: cartProducts.first.vendorId,
+                                shippingAddressId: addressId,
+                                couponCode: _couponController.text.isNotEmpty ? _couponController.text : null,
+                              ),
+                            );
+                            Navigator.pop(context);
+                          }
                         },
                         child: Text('PLACE ORDER (₹${(subTotal + 50).toInt()})'),
                       ),

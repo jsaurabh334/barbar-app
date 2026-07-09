@@ -1,5 +1,3 @@
-import 'dart:convert';
-import 'package:dio/dio.dart';
 import 'package:barbar_app/core/network/api_client.dart';
 import 'package:barbar_app/data/models/barber_model.dart';
 import 'package:barbar_app/data/models/dashboard_stats_model.dart';
@@ -130,5 +128,19 @@ class AdminRemoteDataSource {
 
   Future<void> updateDeliveryPartnerStatus(String partnerId, String status) async {
     await apiClient.dio.put('/admin/delivery/$partnerId/status', data: {'status': status});
+  }
+
+  Future<Map<String, dynamic>> getAllReviews({int page = 1, int limit = 20, String? status}) async {
+    final queryParams = <String, dynamic>{'page': page, 'limit': limit};
+    if (status != null) queryParams['status'] = status;
+    final response = await apiClient.dio.get('/admin/reviews', queryParameters: queryParams);
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<void> moderateReview(String reviewId, String status, {String reason = ''}) async {
+    await apiClient.dio.put('/admin/reviews/$reviewId/moderate', data: {
+      'status': status,
+      if (reason.isNotEmpty) 'reason': reason,
+    });
   }
 }

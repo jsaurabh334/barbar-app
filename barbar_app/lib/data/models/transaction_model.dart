@@ -19,7 +19,7 @@ class TransactionModel {
     return TransactionModel(
       id: json['id'] as String,
       amount: (json['amount'] as num).toDouble(),
-      type: json['type'] as String? ?? 'credit',
+      type: json['txn_type'] as String? ?? json['type'] as String? ?? 'credit',
       description: json['description'] as String? ?? '',
       status: json['status'] as String? ?? 'completed',
       createdAt: json['created_at'] as String? ?? DateTime.now().toIso8601String(),

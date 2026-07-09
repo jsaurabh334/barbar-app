@@ -23,6 +23,7 @@ class QueueTrackerScreen extends StatefulWidget {
 class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTickerProviderStateMixin {
   late AnimationController _radialController;
   BookingModel? _activeBooking;
+  bool _wasDisconnected = false;
 
   @override
   void initState() {
@@ -42,14 +43,27 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
         final payload = event['payload'] as Map<String, dynamic>;
         final position = payload['current_position'] as int;
         final waitMin = (payload['estimated_wait_min'] as num).toInt();
+        final remainingTime = (payload['remaining_time'] as num?)?.toInt() ?? 0;
+        final currentlyServing = payload['currently_serving'] as String? ?? '';
         
         context.read<BookingBloc>().add(
           StreamQueuePositionUpdate(
             newPosition: position,
             estimatedWaitMin: waitMin,
+            remainingTime: remainingTime,
+            currentlyServing: currentlyServing,
           ),
         );
       }
+    });
+
+    // Sync queue state on WebSocket reconnection
+    widget.webSocketClient.connectionStatus.listen((isConnected) {
+      if (!mounted) return;
+      if (isConnected && _wasDisconnected && _activeBooking != null) {
+        context.read<BookingBloc>().add(CheckQueuePosition(_activeBooking!.id));
+      }
+      _wasDisconnected = !isConnected;
     });
   }
 
@@ -95,11 +109,15 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
           int wait = _activeBooking!.estimatedWaitMinutes;
           int ahead = pos > 1 ? pos - 1 : 0;
           String status = _activeBooking!.status;
+          int remainingTime = 0;
+          String currentlyServing = '';
 
           if (state is QueuePositionLoaded) {
             pos = state.currentPosition;
             ahead = state.peopleAhead;
             wait = state.estimatedWaitMin;
+            remainingTime = state.remainingTime;
+            currentlyServing = state.currentlyServing;
           }
 
           return SingleChildScrollView(
@@ -145,7 +163,7 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
                 const SizedBox(height: 24),
 
                 // Wait Info Glass Card
-                _buildDetailsCard(wait, ahead, status),
+                _buildDetailsCard(wait, ahead, status, currentlyServing, remainingTime),
                 const SizedBox(height: 24),
 
                 // Selected services summary list
@@ -216,7 +234,7 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
     } else if (status == 'cancelled') {
       return Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: AppColors.error.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+        decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
         child: const Row(
           children: [
             Icon(LucideIcons.alertTriangle, color: AppColors.error),
@@ -228,7 +246,7 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
     } else if (status == 'no_show') {
       return Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: AppColors.error.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+        decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
         child: const Row(
           children: [
             Icon(LucideIcons.alertTriangle, color: AppColors.error),
@@ -356,40 +374,78 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
     );
   }
 
-  Widget _buildDetailsCard(int wait, int ahead, String status) {
+  Widget _buildDetailsCard(int wait, int ahead, String status, String currentlyServing, int remainingTime) {
     return GlassCard(
       padding: const EdgeInsets.all(20),
       opacity: 0.1,
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('ESTIMATED DELAY', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                Text(
-                  '~$wait MINS',
-                  style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 22),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('ESTIMATED DELAY', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text(
+                      '~$wait MINS',
+                      style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 22),
+                    ),
+                  ],
                 ),
+              ),
+              Container(width: 1, height: 40, color: AppColors.border),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('STATUS INDEX', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text(
+                      status.toUpperCase(),
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (currentlyServing.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(height: 1, color: AppColors.border),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('BEING SERVED', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Text(
+                        currentlyServing,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+                if (remainingTime > 0)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const Text('EST. REMAINING', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$remainingTime MIN',
+                        style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w900, fontSize: 16),
+                      ),
+                    ],
+                  ),
               ],
             ),
-          ),
-          Container(width: 1, height: 40, color: AppColors.border),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('STATUS INDEX', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                Text(
-                  status.toUpperCase(),
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20),
-                ),
-              ],
-            ),
-          ),
+          ],
         ],
       ),
     );
@@ -455,9 +511,27 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
     );
   }
 
-  void _cancelBooking() {
-    context.read<BookingBloc>().add(
-      UpdateBookingStatus(bookingId: _activeBooking!.id, status: 'cancelled'),
+  Future<void> _cancelBooking() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.cardBg,
+        title: const Text('Cancel Appointment?'),
+        content: const Text('Your queue position will be removed and this action cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep Booking')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, Cancel'),
+          ),
+        ],
+      ),
     );
+    if (confirmed == true && _activeBooking != null && mounted) {
+      context.read<BookingBloc>().add(
+        CancelBooking(bookingId: _activeBooking!.id),
+      );
+    }
   }
 }

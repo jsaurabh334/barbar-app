@@ -12,6 +12,7 @@ class BookingModel {
   final double finalPrice;
   final String paymentStatus;
   final String customerName;
+  final String shopName;
   final List<ServiceModel> services;
 
   BookingModel({
@@ -26,6 +27,7 @@ class BookingModel {
     required this.finalPrice,
     required this.paymentStatus,
     this.customerName = 'Guest Customer',
+    this.shopName = '',
     this.services = const [],
   });
 
@@ -40,6 +42,11 @@ class BookingModel {
       parsedCustomerName = json['customer']['full_name'] as String;
     }
 
+    String parsedShopName = '';
+    if (json['barber'] != null && json['barber']['shop_name'] != null) {
+      parsedShopName = json['barber']['shop_name'] as String;
+    }
+
     return BookingModel(
       id: json['id'] as String,
       barberId: json['barber_id'] as String,
@@ -52,6 +59,7 @@ class BookingModel {
       finalPrice: (json['final_price'] as num?)?.toDouble() ?? 0.0,
       paymentStatus: (json['payment_status'] as String?) ?? 'pending',
       customerName: parsedCustomerName,
+      shopName: parsedShopName,
       services: serviceList,
     );
   }
@@ -69,6 +77,7 @@ class BookingModel {
       'final_price': finalPrice,
       'payment_status': paymentStatus,
       'customer_name': customerName,
+      'shop_name': shopName,
       'services': services.map((e) => e.toJson()).toList(),
     };
   }
@@ -85,6 +94,7 @@ class BookingModel {
     double? finalPrice,
     String? paymentStatus,
     String? customerName,
+    String? shopName,
     List<ServiceModel>? services,
   }) {
     return BookingModel(
@@ -99,6 +109,7 @@ class BookingModel {
       finalPrice: finalPrice ?? this.finalPrice,
       paymentStatus: paymentStatus ?? this.paymentStatus,
       customerName: customerName ?? this.customerName,
+      shopName: shopName ?? this.shopName,
       services: services ?? this.services,
     );
   }
