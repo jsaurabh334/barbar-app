@@ -25,6 +25,7 @@ import 'domain/repositories/review_repository.dart';
 import 'data/repositories/directory_repository_impl.dart';
 import 'data/repositories/marketplace_repository_impl.dart';
 import 'data/repositories/wallet_repository_impl.dart';
+import 'domain/repositories/auth_repository.dart';
 import 'presentation/bloc/auth/auth_bloc.dart';
 import 'presentation/bloc/auth/auth_event.dart';
 import 'presentation/bloc/auth/auth_state.dart';
@@ -117,6 +118,9 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
       providers: [
+        RepositoryProvider<AuthRepository>(
+          create: (context) => authRepository,
+        ),
         RepositoryProvider<BookingRepository>(
           create: (context) => bookingRepository,
         ),
