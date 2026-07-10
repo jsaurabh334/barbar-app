@@ -20,15 +20,19 @@ class CreateBooking extends BookingEvent {
   final String barberId;
   final List<String> serviceIds;
   final String scheduledStart;
+  final bool isHomeService;
+  final String? homeServiceAddressId;
 
   const CreateBooking({
     required this.barberId,
     required this.serviceIds,
     required this.scheduledStart,
+    this.isHomeService = false,
+    this.homeServiceAddressId,
   });
 
   @override
-  List<Object?> get props => [barberId, serviceIds, scheduledStart];
+  List<Object?> get props => [barberId, serviceIds, scheduledStart, isHomeService, homeServiceAddressId];
 }
 
 class CheckQueuePosition extends BookingEvent {

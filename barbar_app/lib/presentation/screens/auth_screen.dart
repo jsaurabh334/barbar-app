@@ -212,7 +212,8 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
               prefixIcon: Icon(LucideIcons.phone, size: 20),
             ),
             validator: (val) {
-              if (val == null || val.length < 10) {
+              final phoneRegExp = RegExp(r'^\+?[0-9]{10,15}$');
+              if (val == null || !phoneRegExp.hasMatch(val.replaceAll(' ', ''))) {
                 return 'Please enter a valid phone number with country code';
               }
               return null;
@@ -293,7 +294,10 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
               labelText: 'Phone Number',
               prefixIcon: Icon(LucideIcons.phone, size: 20),
             ),
-            validator: (val) => val == null || val.length < 10 ? 'Phone invalid' : null,
+            validator: (val) {
+              final phoneRegExp = RegExp(r'^\+?[0-9]{10,15}$');
+              return val == null || !phoneRegExp.hasMatch(val.replaceAll(' ', '')) ? 'Phone invalid' : null;
+            },
           ),
           const SizedBox(height: 16),
           TextFormField(
@@ -316,6 +320,8 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
               _buildRoleChip('customer', 'Customer'),
               _buildRoleChip('barber', 'Barber'),
               _buildRoleChip('vendor', 'Vendor'),
+              _buildRoleChip('delivery', 'Delivery'),
+              _buildRoleChip('admin', 'Admin'),
             ],
           ),
           const SizedBox(height: 32),

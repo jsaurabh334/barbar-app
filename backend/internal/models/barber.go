@@ -61,6 +61,11 @@ type Barber struct {
 	AverageWaitTime    float64                  `gorm:"default:0" json:"average_wait_time"`
 	Tags               JSONB                    `gorm:"type:jsonb" json:"tags,omitempty"`
 	BusinessDays       JSONB                    `gorm:"type:jsonb" json:"business_days,omitempty"`
+	Amenities          JSONB                    `gorm:"type:jsonb" json:"amenities,omitempty"`
+	IsHomeServiceAvailable bool                 `gorm:"default:false" json:"is_home_service_available"`
+	ServiceRadiusKm    float64                  `gorm:"default:0" json:"service_radius_km"`
+	TravelChargePerKm  float64                  `gorm:"default:0" json:"travel_charge_per_km"`
+	BaseTravelCharge   float64                  `gorm:"default:0" json:"base_travel_charge"`
 
 	// Relations
 	User     *User            `gorm:"foreignKey:UserID" json:"user,omitempty"`

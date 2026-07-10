@@ -25,6 +25,11 @@ class BarberModel {
   final List<String>? shopImages;
   final List<dynamic>? businessDays;
   final List<String>? tags;
+  final List<String>? amenities;
+  final bool isHomeServiceAvailable;
+  final double serviceRadiusKm;
+  final double travelChargePerKm;
+  final double baseTravelCharge;
   final String? startTime;
   final String? endTime;
 
@@ -53,6 +58,11 @@ class BarberModel {
     this.shopImages,
     this.businessDays,
     this.tags,
+    this.amenities,
+    this.isHomeServiceAvailable = false,
+    this.serviceRadiusKm = 0,
+    this.travelChargePerKm = 0,
+    this.baseTravelCharge = 0,
     this.startTime,
     this.endTime,
   });
@@ -87,8 +97,15 @@ class BarberModel {
       tags: json['tags'] != null
           ? (json['tags'] as List<dynamic>).cast<String>()
           : null,
+      amenities: json['amenities'] != null
+          ? (json['amenities'] as List<dynamic>).cast<String>()
+          : null,
       startTime: json['start_time'] as String?,
       endTime: json['end_time'] as String?,
+      isHomeServiceAvailable: json['is_home_service_available'] as bool? ?? false,
+      serviceRadiusKm: (json['service_radius_km'] as num?)?.toDouble() ?? 0,
+      travelChargePerKm: (json['travel_charge_per_km'] as num?)?.toDouble() ?? 0,
+      baseTravelCharge: (json['base_travel_charge'] as num?)?.toDouble() ?? 0,
     );
   }
 
@@ -115,6 +132,11 @@ class BarberModel {
       'shop_images': shopImages,
       'business_days': businessDays,
       'tags': tags,
+      'amenities': amenities,
+      'is_home_service_available': isHomeServiceAvailable,
+      'service_radius_km': serviceRadiusKm,
+      'travel_charge_per_km': travelChargePerKm,
+      'base_travel_charge': baseTravelCharge,
       'start_time': startTime,
       'end_time': endTime,
     };
@@ -164,6 +186,11 @@ class BarberModel {
     List<String>? shopImages,
     List<dynamic>? businessDays,
     List<String>? tags,
+    List<String>? amenities,
+    bool? isHomeServiceAvailable,
+    double? serviceRadiusKm,
+    double? travelChargePerKm,
+    double? baseTravelCharge,
     String? startTime,
     String? endTime,
   }) {
@@ -191,6 +218,11 @@ class BarberModel {
       shopImages: shopImages ?? this.shopImages,
       businessDays: businessDays ?? this.businessDays,
       tags: tags ?? this.tags,
+      amenities: amenities ?? this.amenities,
+      isHomeServiceAvailable: isHomeServiceAvailable ?? this.isHomeServiceAvailable,
+      serviceRadiusKm: serviceRadiusKm ?? this.serviceRadiusKm,
+      travelChargePerKm: travelChargePerKm ?? this.travelChargePerKm,
+      baseTravelCharge: baseTravelCharge ?? this.baseTravelCharge,
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
     );

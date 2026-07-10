@@ -75,15 +75,26 @@ class _WalletScreenState extends State<WalletScreen> {
                   ),
                   const SizedBox(height: 12),
                   
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: state.transactions.length,
-                    itemBuilder: (context, index) {
-                      final tx = state.transactions[index];
-                      return _buildTransactionItem(tx);
-                    },
-                  ),
+                  if (state.transactions.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: Center(
+                        child: Text(
+                          'No transactions yet.',
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
+                        ),
+                      ),
+                    )
+                  else
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: state.transactions.length,
+                      itemBuilder: (context, index) {
+                        final tx = state.transactions[index];
+                        return _buildTransactionItem(tx);
+                      },
+                    ),
                 ],
               ),
             );

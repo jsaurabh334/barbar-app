@@ -7,6 +7,8 @@ abstract class BookingRepository {
     required String barberId,
     required List<String> serviceIds,
     required String scheduledStart,
+    bool isHomeService,
+    String? homeServiceAddressId,
   });
   Future<Map<String, dynamic>> getQueuePosition(String bookingId);
   Future<void> cancelBooking(String bookingId, {String? reason});

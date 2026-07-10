@@ -10,7 +10,7 @@ class MarketplaceRemoteDataSource {
   Future<List<ProductModel>> getProducts() async {
     final response = await _apiClient.dio.get('/public/products');
     if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
-      final List<dynamic> data = response.data['data'];
+      final data = (response.data['data'] as List<dynamic>?) ?? [];
       return data.map((e) => ProductModel.fromJson(e as Map<String, dynamic>)).toList();
     }
     throw Exception(response.data['error'] ?? 'Failed to fetch products');
@@ -38,7 +38,7 @@ class MarketplaceRemoteDataSource {
   Future<List<OrderModel>> getOrders() async {
     final response = await _apiClient.dio.get('/orders');
     if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
-      final List<dynamic> data = response.data['data'];
+      final data = (response.data['data'] as List<dynamic>?) ?? [];
       return data.map((e) => OrderModel.fromJson(e as Map<String, dynamic>)).toList();
     }
     throw Exception(response.data['error'] ?? 'Failed to fetch orders');

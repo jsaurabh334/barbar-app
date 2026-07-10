@@ -8,7 +8,7 @@ class AddressRemoteDataSource {
   Future<List<Map<String, dynamic>>> getAddresses() async {
     final response = await _apiClient.dio.get('/addresses');
     if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
-      final List<dynamic> data = response.data['data'];
+      final data = (response.data['data'] as List<dynamic>?) ?? [];
       return data.cast<Map<String, dynamic>>();
     }
     throw Exception(response.data['error'] ?? 'Failed to fetch addresses');

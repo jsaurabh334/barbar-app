@@ -1,7 +1,9 @@
 package booking
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/barbar-app/backend/internal/auth"
@@ -115,11 +117,13 @@ func (h *BookingHandler) sendModificationNotifications(booking *models.Booking) 
 // (existing methods below)
 
 type CreateBookingRequest struct {
-	BarberID  uuid.UUID `json:"barber_id" binding:"required"`
-	ServiceIDs []uuid.UUID `json:"service_ids" binding:"required,min=1,dive"`
-	ScheduledStart time.Time `json:"scheduled_start" binding:"required"`
-	CustomerNotes  string    `json:"customer_notes"`
-	CouponCode     string    `json:"coupon_code,omitempty"`
+	BarberID             uuid.UUID   `json:"barber_id" binding:"required"`
+	ServiceIDs           []uuid.UUID `json:"service_ids" binding:"required,min=1,dive"`
+	ScheduledStart       time.Time   `json:"scheduled_start" binding:"required"`
+	CustomerNotes        string      `json:"customer_notes"`
+	CouponCode           string      `json:"coupon_code,omitempty"`
+	IsHomeService        bool        `json:"is_home_service"`
+	HomeServiceAddressID *uuid.UUID  `json:"home_service_address_id,omitempty"`
 }
 
 func (h *BookingHandler) Create(c *gin.Context) {
@@ -141,6 +145,25 @@ func (h *BookingHandler) Create(c *gin.Context) {
 	if !barber.IsAvailable || barber.Status != models.BarberStatusActive {
 		utils.BadRequestResponse(c, "Barber is not available")
 		return
+	}
+
+	// Home service validation
+	var homeServiceAddress *models.Address
+	if req.IsHomeService {
+		if !barber.IsHomeServiceAvailable {
+			utils.BadRequestResponse(c, "Barber does not offer home service")
+			return
+		}
+		if req.HomeServiceAddressID == nil {
+			utils.BadRequestResponse(c, "Home service address is required")
+			return
+		}
+		var addr models.Address
+		if err := h.db.Where("id = ? AND user_id = ?", *req.HomeServiceAddressID, customerID).First(&addr).Error; err != nil {
+			utils.BadRequestResponse(c, "Address not found or does not belong to you")
+			return
+		}
+		homeServiceAddress = &addr
 	}
 
 	// Validate working hours
@@ -198,42 +221,45 @@ func (h *BookingHandler) Create(c *gin.Context) {
 		totalPrice += svc.Price
 	}
 
-	// Calculate estimated wait time based on current queue
-	var aheadBookings []models.Booking
-	h.db.Where("barber_id = ? AND status IN ? AND (scheduled_start < ? OR (scheduled_start = ? AND created_at < ?))",
-		req.BarberID,
-		[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
-		req.ScheduledStart, req.ScheduledStart, time.Now()).
-		Order("queue_position ASC, scheduled_start ASC").
-		Find(&aheadBookings)
+	// Calculate queue position and estimated wait (shop bookings only)
+	var estimatedWait int
+	var queuePosition int
+	if !req.IsHomeService {
+		var aheadBookings []models.Booking
+		h.db.Where("barber_id = ? AND status IN ? AND (scheduled_start < ? OR (scheduled_start = ? AND created_at < ?))",
+			req.BarberID,
+			[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
+			req.ScheduledStart, req.ScheduledStart, time.Now()).
+			Order("queue_position ASC, scheduled_start ASC").
+			Find(&aheadBookings)
 
-	estimatedWait := 0
-	for _, ab := range aheadBookings {
-		duration := ab.TotalDuration
-		if duration <= 0 {
-			duration = barber.SlotDuration
-		}
-		
-		if ab.Status == models.BookingStatusInProgress {
-			start := ab.CreatedAt
-			if ab.ActualStart != nil {
-				start = *ab.ActualStart
-			} else if !ab.ScheduledStart.IsZero() {
-				start = ab.ScheduledStart
+		estimatedWait = 0
+		for _, ab := range aheadBookings {
+			duration := ab.TotalDuration
+			if duration <= 0 {
+				duration = barber.SlotDuration
 			}
-			elapsed := int(time.Since(start).Minutes())
-			remaining := duration - elapsed
-			if remaining < 0 {
-				remaining = 0
+			
+			if ab.Status == models.BookingStatusInProgress {
+				start := ab.CreatedAt
+				if ab.ActualStart != nil {
+					start = *ab.ActualStart
+				} else if !ab.ScheduledStart.IsZero() {
+					start = ab.ScheduledStart
+				}
+				elapsed := int(time.Since(start).Minutes())
+				remaining := duration - elapsed
+				if remaining < 0 {
+					remaining = 0
+				}
+				estimatedWait += remaining + barber.BufferBetweenSlots
+			} else {
+				estimatedWait += duration + barber.BufferBetweenSlots
 			}
-			estimatedWait += remaining + barber.BufferBetweenSlots
-		} else {
-			estimatedWait += duration + barber.BufferBetweenSlots
 		}
+
+		queuePosition = len(aheadBookings) + 1
 	}
-
-	// Calculate queue position
-	queuePosition := len(aheadBookings) + 1
 
 	// Apply coupon if provided
 	var discountAmount float64
@@ -257,7 +283,22 @@ func (h *BookingHandler) Create(c *gin.Context) {
 		}
 	}
 
-	finalPrice := totalPrice - discountAmount
+	// Calculate home service distance & travel charge
+	var travelDistance float64
+	var travelCharge float64
+	if req.IsHomeService && homeServiceAddress != nil {
+		travelDistance = haversineKm(
+			barber.Latitude, barber.Longitude,
+			homeServiceAddress.Latitude, homeServiceAddress.Longitude,
+		)
+		if barber.ServiceRadiusKm > 0 && travelDistance > barber.ServiceRadiusKm {
+			utils.BadRequestResponse(c, fmt.Sprintf("Address is %.1f km away, exceeds barber's service radius of %.1f km", travelDistance, barber.ServiceRadiusKm))
+			return
+		}
+		travelCharge = barber.BaseTravelCharge + (travelDistance * barber.TravelChargePerKm)
+	}
+
+	finalPrice := totalPrice - discountAmount + travelCharge
 	if finalPrice < 0 {
 		finalPrice = 0
 	}
@@ -295,10 +336,14 @@ func (h *BookingHandler) Create(c *gin.Context) {
 		return
 	}
 
+	bookingStatus := models.BookingStatusPending
+	if req.IsHomeService {
+		bookingStatus = models.BookingStatusHomeServicePending
+	}
 	booking := models.Booking{
 		BarberID:         req.BarberID,
 		CustomerID:       customerID,
-		Status:           models.BookingStatusPending,
+		Status:           bookingStatus,
 		ScheduledStart:   req.ScheduledStart,
 		ScheduledEnd:     req.ScheduledStart.Add(time.Duration(totalDuration) * time.Minute),
 		QueuePosition:    queuePosition,
@@ -309,6 +354,14 @@ func (h *BookingHandler) Create(c *gin.Context) {
 		FinalPrice:       finalPrice,
 		CustomerNotes:    req.CustomerNotes,
 		Source:           "app",
+		IsHomeService:    req.IsHomeService,
+		TravelDistanceKm: travelDistance,
+		TravelCharge:     travelCharge,
+	}
+	if req.IsHomeService && homeServiceAddress != nil {
+		booking.HomeServiceAddressID = &homeServiceAddress.ID
+		addrBytes, _ := json.Marshal(homeServiceAddress)
+		booking.HomeServiceAddress = string(addrBytes)
 	}
 
 	if err := tx.Create(&booking).Error; err != nil {
@@ -339,13 +392,15 @@ func (h *BookingHandler) Create(c *gin.Context) {
 	// Create status log
 	tx.Create(&models.BookingStatusLog{
 		BookingID:      booking.ID,
-		ToStatus:       models.BookingStatusPending,
+		ToStatus:       bookingStatus,
 		ChangedBy:      customerID,
 		ChangedByRole:  "customer",
 	})
 
-	// Update barber's current queue length
-	tx.Model(&barber).Update("current_queue_length", barber.CurrentQueueLength+1)
+	// Update barber's current queue length (shop bookings only)
+	if !req.IsHomeService {
+		tx.Model(&barber).Update("current_queue_length", barber.CurrentQueueLength+1)
+	}
 
 	// Update coupon usage
 	if req.CouponCode != "" && discountAmount > 0 {
@@ -413,7 +468,7 @@ func (h *BookingHandler) Cancel(c *gin.Context) {
 		}
 	}
 
-	if booking.Status != models.BookingStatusPending && booking.Status != models.BookingStatusConfirmed {
+	if booking.Status != models.BookingStatusPending && booking.Status != models.BookingStatusConfirmed && booking.Status != models.BookingStatusHomeServicePending {
 		utils.BadRequestResponse(c, "Booking cannot be cancelled from status: "+string(booking.Status))
 		return
 	}
@@ -440,8 +495,10 @@ func (h *BookingHandler) Cancel(c *gin.Context) {
 		Reason:         req.Reason,
 	})
 
-	// Reduce queue count
-	h.db.Model(&models.Barber{}).Where("id = ?", booking.BarberID).Update("current_queue_length", gorm.Expr("GREATEST(current_queue_length - 1, 0)"))
+	// Reduce queue count (not for home service pending — never queued)
+	if originalStatus != models.BookingStatusHomeServicePending {
+		h.db.Model(&models.Barber{}).Where("id = ?", booking.BarberID).Update("current_queue_length", gorm.Expr("GREATEST(current_queue_length - 1, 0)"))
+	}
 
 	// Recalculate queue positions, wait times and broadcast WebSocket updates
 	h.refreshQueue(booking.BarberID)
@@ -801,6 +858,213 @@ func (h *BookingHandler) ReorderQueue(c *gin.Context) {
 	utils.SuccessResponse(c, gin.H{"message": "Queue reordered successfully"})
 }
 
+func (h *BookingHandler) ListHomeServiceRequests(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+	var barber models.Barber
+	if err := h.db.Where("user_id = ?", userID).First(&barber).Error; err != nil {
+		utils.NotFoundResponse(c, "Barber profile not found")
+		return
+	}
+
+	page, pageSize := utils.GetPageParams(c)
+	var bookings []models.Booking
+	var total int64
+
+	query := h.db.Where("barber_id = ? AND status = ?", barber.ID, models.BookingStatusHomeServicePending)
+	query.Model(&models.Booking{}).Count(&total)
+	query.Preload("Customer").Preload("Services").
+		Offset((page - 1) * pageSize).Limit(pageSize).
+		Order("created_at DESC").Find(&bookings)
+
+	utils.PaginatedResponse(c, bookings, page, pageSize, total)
+}
+
+func (h *BookingHandler) AcceptHomeService(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+	var barber models.Barber
+	if err := h.db.Where("user_id = ?", userID).First(&barber).Error; err != nil {
+		utils.NotFoundResponse(c, "Barber profile not found")
+		return
+	}
+
+	bookingID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid booking ID")
+		return
+	}
+
+	var booking models.Booking
+	if err := h.db.Preload("Services").First(&booking, bookingID).Error; err != nil {
+		utils.NotFoundResponse(c, "Booking not found")
+		return
+	}
+
+	if booking.BarberID != barber.ID {
+		utils.ForbiddenResponse(c, "This booking does not belong to you")
+		return
+	}
+
+	if booking.Status != models.BookingStatusHomeServicePending {
+		utils.BadRequestResponse(c, "Booking is not in home service pending status")
+		return
+	}
+
+	if !booking.IsHomeService {
+		utils.BadRequestResponse(c, "Booking is not a home service booking")
+		return
+	}
+
+	// Travel buffer check — accounts for travel_to/travel_back of all bookings
+	travelTimeMin := int(booking.TravelDistanceKm*2 + 5)
+	newBlockedStart := booking.ScheduledStart.Add(-time.Duration(travelTimeMin) * time.Minute)
+	newBlockedEnd := booking.ScheduledStart.Add(time.Duration(booking.TotalDuration+travelTimeMin) * time.Minute)
+
+	var existing []models.Booking
+	h.db.Where("barber_id = ? AND id != ? AND status IN ?",
+		barber.ID, booking.ID,
+		[]models.BookingStatus{models.BookingStatusConfirmed, models.BookingStatusInProgress},
+	).Find(&existing)
+
+	for _, eb := range existing {
+		ebStart := eb.ScheduledStart
+		ebEnd := eb.ScheduledEnd
+		if eb.IsHomeService {
+			ebTravel := int(eb.TravelDistanceKm*2 + 5)
+			ebStart = eb.ScheduledStart.Add(-time.Duration(ebTravel) * time.Minute)
+			ebEnd = eb.ScheduledEnd.Add(time.Duration(ebTravel) * time.Minute)
+		}
+		if ebStart.Before(newBlockedEnd) && ebEnd.After(newBlockedStart) {
+			utils.BadRequestResponse(c, "Cannot accept: time conflicts with existing bookings (travel buffer overlap)")
+			return
+		}
+	}
+
+	// Calculate queue position
+	var aheadBookings []models.Booking
+	h.db.Where("barber_id = ? AND status IN ? AND (scheduled_start < ? OR (scheduled_start = ? AND created_at < ?))",
+		barber.ID,
+		[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
+		booking.ScheduledStart, booking.ScheduledStart, booking.CreatedAt).
+		Order("queue_position ASC, scheduled_start ASC").
+		Find(&aheadBookings)
+
+	queuePosition := len(aheadBookings) + 1
+
+	estimatedWait := 0
+	for _, ab := range aheadBookings {
+		duration := ab.TotalDuration
+		if duration <= 0 {
+			duration = barber.SlotDuration
+		}
+		if ab.Status == models.BookingStatusInProgress {
+			start := ab.CreatedAt
+			if ab.ActualStart != nil {
+				start = *ab.ActualStart
+			} else if !ab.ScheduledStart.IsZero() {
+				start = ab.ScheduledStart
+			}
+			elapsed := int(time.Since(start).Minutes())
+			remaining := duration - elapsed
+			if remaining < 0 {
+				remaining = 0
+			}
+			estimatedWait += remaining + barber.BufferBetweenSlots
+		} else {
+			estimatedWait += duration + barber.BufferBetweenSlots
+		}
+	}
+
+	estimatedWait += travelTimeMin
+
+	tx := h.db.Begin()
+
+	oldStatus := booking.Status
+	booking.Status = models.BookingStatusConfirmed
+	booking.QueuePosition = queuePosition
+	booking.EstimatedWaitMin = estimatedWait
+
+	if err := tx.Save(&booking).Error; err != nil {
+		tx.Rollback()
+		utils.InternalErrorResponse(c, "Failed to accept booking")
+		return
+	}
+
+	tx.Create(&models.BookingStatusLog{
+		BookingID:      booking.ID,
+		FromStatus:     oldStatus,
+		ToStatus:       models.BookingStatusConfirmed,
+		ChangedBy:      userID,
+		ChangedByRole:  "barber",
+	})
+
+	tx.Model(&barber).Update("current_queue_length", barber.CurrentQueueLength+1)
+
+	tx.Commit()
+
+	h.refreshQueue(barber.ID)
+
+	go h.sendBookingNotifications(&booking)
+
+	utils.SuccessResponse(c, booking)
+}
+
+func (h *BookingHandler) RejectHomeService(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+	var barber models.Barber
+	if err := h.db.Where("user_id = ?", userID).First(&barber).Error; err != nil {
+		utils.NotFoundResponse(c, "Barber profile not found")
+		return
+	}
+
+	bookingID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid booking ID")
+		return
+	}
+
+	var booking models.Booking
+	if err := h.db.First(&booking, bookingID).Error; err != nil {
+		utils.NotFoundResponse(c, "Booking not found")
+		return
+	}
+
+	if booking.BarberID != barber.ID {
+		utils.ForbiddenResponse(c, "This booking does not belong to you")
+		return
+	}
+
+	if booking.Status != models.BookingStatusHomeServicePending {
+		utils.BadRequestResponse(c, "Booking is not in home service pending status")
+		return
+	}
+
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	c.ShouldBindJSON(&req)
+
+	now := time.Now()
+	oldStatus := booking.Status
+	booking.Status = models.BookingStatusCancelled
+	booking.CancellationReason = req.Reason
+	booking.CancelledBy = &userID
+	booking.CancelledAt = &now
+	h.db.Save(&booking)
+
+	h.db.Create(&models.BookingStatusLog{
+		BookingID:      booking.ID,
+		FromStatus:     oldStatus,
+		ToStatus:       models.BookingStatusCancelled,
+		ChangedBy:      userID,
+		ChangedByRole:  "barber",
+		Reason:         req.Reason,
+	})
+
+	go h.sendCancellationNotifications(&booking)
+
+	utils.SuccessResponse(c, gin.H{"message": "Home service request rejected"})
+}
+
 func (h *BookingHandler) processRefund(booking *models.Booking) {
 	var payment models.Payment
 	if err := h.db.Where("order_id = ?", booking.ID).First(&payment).Error; err != nil {
@@ -903,4 +1167,16 @@ func (h *BookingHandler) PayBooking(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, booking)
+}
+
+// haversineKm calculates the distance in km between two lat/lng points
+func haversineKm(lat1, lng1, lat2, lng2 float64) float64 {
+	const R = 6371.0
+	dLat := (lat2 - lat1) * math.Pi / 180
+	dLng := (lng2 - lng1) * math.Pi / 180
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(lat1*math.Pi/180)*math.Cos(lat2*math.Pi/180)*
+			math.Sin(dLng/2)*math.Sin(dLng/2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	return R * c
 }

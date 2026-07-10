@@ -189,8 +189,8 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 		addressRoutes := v1.Group("/addresses")
 		addressRoutes.Use(authMW.Authenticate())
 		{
-			addressRoutes.GET("/", addressH.List)
-			addressRoutes.POST("/", addressH.Create)
+			addressRoutes.GET("", addressH.List)
+			addressRoutes.POST("", addressH.Create)
 			addressRoutes.PUT("/:id", addressH.Update)
 			addressRoutes.DELETE("/:id", addressH.Delete)
 			addressRoutes.PUT("/:id/default", addressH.SetDefault)
@@ -236,6 +236,11 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			barberRoutes.PUT("/queue/reorder", bookingH.ReorderQueue)
 
 			barberRoutes.POST("/reviews/:id/reply", reviewH.CreateReply)
+
+			// Home service management
+			barberRoutes.GET("/home-service-requests", bookingH.ListHomeServiceRequests)
+			barberRoutes.POST("/home-service-requests/:id/accept", bookingH.AcceptHomeService)
+			barberRoutes.POST("/home-service-requests/:id/reject", bookingH.RejectHomeService)
 
 			// Services management
 			barberRoutes.GET("/services", barberH.ListServices)

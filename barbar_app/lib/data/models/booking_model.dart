@@ -14,6 +14,10 @@ class BookingModel {
   final String customerName;
   final String shopName;
   final List<ServiceModel> services;
+  final bool isHomeService;
+  final Map<String, dynamic>? homeServiceAddress;
+  final double travelDistanceKm;
+  final double travelCharge;
 
   BookingModel({
     required this.id,
@@ -29,6 +33,10 @@ class BookingModel {
     this.customerName = 'Guest Customer',
     this.shopName = '',
     this.services = const [],
+    this.isHomeService = false,
+    this.homeServiceAddress,
+    this.travelDistanceKm = 0,
+    this.travelCharge = 0,
   });
 
   factory BookingModel.fromJson(Map<String, dynamic> json) {
@@ -61,6 +69,10 @@ class BookingModel {
       customerName: parsedCustomerName,
       shopName: parsedShopName,
       services: serviceList,
+      isHomeService: json['is_home_service'] as bool? ?? false,
+      homeServiceAddress: json['home_service_address'] as Map<String, dynamic>?,
+      travelDistanceKm: (json['travel_distance_km'] as num?)?.toDouble() ?? 0,
+      travelCharge: (json['travel_charge'] as num?)?.toDouble() ?? 0,
     );
   }
 
@@ -79,6 +91,10 @@ class BookingModel {
       'customer_name': customerName,
       'shop_name': shopName,
       'services': services.map((e) => e.toJson()).toList(),
+      'is_home_service': isHomeService,
+      'home_service_address': homeServiceAddress,
+      'travel_distance_km': travelDistanceKm,
+      'travel_charge': travelCharge,
     };
   }
 
@@ -96,6 +112,10 @@ class BookingModel {
     String? customerName,
     String? shopName,
     List<ServiceModel>? services,
+    bool? isHomeService,
+    Map<String, dynamic>? homeServiceAddress,
+    double? travelDistanceKm,
+    double? travelCharge,
   }) {
     return BookingModel(
       id: id ?? this.id,
@@ -111,6 +131,10 @@ class BookingModel {
       customerName: customerName ?? this.customerName,
       shopName: shopName ?? this.shopName,
       services: services ?? this.services,
+      isHomeService: isHomeService ?? this.isHomeService,
+      homeServiceAddress: homeServiceAddress ?? this.homeServiceAddress,
+      travelDistanceKm: travelDistanceKm ?? this.travelDistanceKm,
+      travelCharge: travelCharge ?? this.travelCharge,
     );
   }
 }

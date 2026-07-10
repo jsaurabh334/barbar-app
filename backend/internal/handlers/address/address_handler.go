@@ -104,7 +104,13 @@ func (h *AddressHandler) Update(c *gin.Context) {
 		return
 	}
 
-	allowed := []string{"label", "full_name", "phone", "pincode", "line_1", "line_2", "landmark",
+	// Map JSON field names to GORM column names
+	fieldMapping := map[string]string{
+		"line_1": "line1",
+		"line_2": "line2",
+	}
+
+	allowed := []string{"label", "full_name", "phone", "pincode", "line1", "line2", "landmark",
 		"city", "state", "country", "latitude", "longitude", "address_type"}
 
 	if val, ok := updates["is_default"]; ok {
@@ -117,6 +123,12 @@ func (h *AddressHandler) Update(c *gin.Context) {
 	for _, key := range allowed {
 		if val, ok := updates[key]; ok {
 			filtered[key] = val
+		}
+	}
+	// Map JSON field names to GORM column names
+	for jsonKey, colName := range fieldMapping {
+		if val, ok := updates[jsonKey]; ok {
+			filtered[colName] = val
 		}
 	}
 	if val, ok := updates["is_default"]; ok {

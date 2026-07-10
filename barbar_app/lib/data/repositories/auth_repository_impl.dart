@@ -92,4 +92,9 @@ class AuthRepositoryImpl implements AuthRepository {
     await _localDataSource.saveUserData(updatedUser.toJson());
     return updatedUser;
   }
+
+  @override
+  Future<String> uploadImage(String filePath) async {
+    return await _remoteDataSource.uploadImage(filePath);
+  }
 }

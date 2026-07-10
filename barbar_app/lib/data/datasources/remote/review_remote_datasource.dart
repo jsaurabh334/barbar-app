@@ -58,7 +58,7 @@ class ReviewRemoteDataSource {
   Future<List<ReviewModel>> getMyReviews({int page = 1, int limit = 10}) async {
     final response = await _apiClient.dio.get('/reviews/mine', queryParameters: {'page': page, 'limit': limit});
     if (response.statusCode == 200 && (response.data['status'] == 'success')) {
-      final List<dynamic> data = response.data['data'] as List;
+      final data = (response.data['data'] as List<dynamic>?) ?? [];
       return data.map((e) => ReviewModel.fromJson(e as Map<String, dynamic>)).toList();
     }
     throw Exception('Failed to fetch my reviews');

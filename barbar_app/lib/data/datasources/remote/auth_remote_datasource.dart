@@ -85,4 +85,19 @@ class AuthRemoteDataSource {
       throw Exception(e.response?.data['error'] ?? 'Connection error');
     }
   }
+
+  Future<String> uploadImage(String filePath) async {
+    try {
+      final formData = FormData.fromMap({
+        'file': await MultipartFile.fromFile(filePath),
+      });
+      final response = await _apiClient.dio.post('/upload/image', data: formData);
+      if (response.statusCode == 200 && response.data['status'] == 'success') {
+        return response.data['data']['url'] as String;
+      }
+      throw Exception('Upload failed');
+    } on DioException catch (e) {
+      throw Exception(e.response?.data['error'] ?? 'Connection error during upload');
+    }
+  }
 }

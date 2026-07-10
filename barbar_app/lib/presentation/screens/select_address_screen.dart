@@ -101,9 +101,9 @@ class _SelectAddressScreenState extends State<SelectAddressScreen> {
                       backgroundColor: AppColors.surface,
                       child: Icon(LucideIcons.mapPin, color: AppColors.primary),
                     ),
-                    title: Text(addr['title'] ?? 'Address', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text('${addr['street'] ?? ""}, ${addr['city'] ?? ""} - ${addr['postal_code'] ?? ""}'),
-                    onTap: () => Navigator.pop(context, addr['id'] as String),
+                    title: Text(addr['label'] ?? 'Address', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text([addr['line_1'] as String?, addr['city'] as String?, addr['state'] as String?, addr['pincode'] as String?].where((e) => e != null && e.isNotEmpty).join(', ')),
+                    onTap: () => Navigator.pop(context, addr),
                   ),
                 );
               },

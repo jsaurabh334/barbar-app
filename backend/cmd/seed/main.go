@@ -149,6 +149,10 @@ type seedShop struct {
 	EndTime         string
 	ClosedDays      string
 	HomeService     bool
+	Amenities       string
+	ServiceRadiusKm       float64
+	TravelChargePerKm     float64
+	BaseTravelCharge      float64
 	Services        []seedService
 	VendorIdx       int
 }
@@ -169,7 +173,7 @@ func getShopData() []seedShop {
 			Description: "Premium barber shop with 10+ years of experience. Specializing in modern and classic haircuts, beard styling, and grooming services.",
 			Address: "101, MG Road, Indiranagar", City: "Bangalore", State: "Karnataka", Pincode: "560038",
 			Lat: 12.9716, Lng: 77.5946, Rating: 4.5, ReviewCount: 340, QueueLength: 4, AvgWaitTime: 15, ExperienceYears: 8,
-			StartTime: "09:00", EndTime: "21:00", ClosedDays: "", HomeService: true,
+			StartTime: "09:00", EndTime: "21:00", ClosedDays: "", HomeService: true, Amenities: `["wifi","ac","card_payment","coffee"]`, ServiceRadiusKm: 8, TravelChargePerKm: 8, BaseTravelCharge: 30,
 			Services: []seedService{
 				{"Classic Haircut", "Professional haircut with scissors and clippers", "Haircut", 399, 30, false},
 				{"Beard Trim & Shape", "Precision beard trimming and shaping", "Beard", 199, 15, false},
@@ -182,7 +186,7 @@ func getShopData() []seedShop {
 			Description: "Affordable and quality grooming since 2015. Known for precision cuts and friendly service.",
 			Address: "45, 12th Main, Koramangala", City: "Bangalore", State: "Karnataka", Pincode: "560034",
 			Lat: 12.9352, Lng: 77.6245, Rating: 4.2, ReviewCount: 215, QueueLength: 6, AvgWaitTime: 22, ExperienceYears: 6,
-			StartTime: "09:30", EndTime: "20:30", ClosedDays: "", HomeService: false,
+			StartTime: "09:30", EndTime: "20:30", ClosedDays: "", HomeService: false, Amenities: `["wifi","ac","card_payment"]`,
 			Services: []seedService{
 				{"Haircut", "Regular haircut - comb & scissors", "Haircut", 249, 25, false},
 				{"Beard Trim", "Quick beard shaping and trim", "Beard", 149, 15, false},
@@ -195,7 +199,7 @@ func getShopData() []seedShop {
 			Description: "Trend-setting fade specialists. The go-to place for modern hairstyles and premium grooming.",
 			Address: "88, Church Street, MG Road", City: "Bangalore", State: "Karnataka", Pincode: "560001",
 			Lat: 12.9733, Lng: 77.6099, Rating: 4.8, ReviewCount: 550, QueueLength: 8, AvgWaitTime: 25, ExperienceYears: 5,
-			StartTime: "10:00", EndTime: "21:00", ClosedDays: "", HomeService: false,
+			StartTime: "10:00", EndTime: "21:00", ClosedDays: "", HomeService: false, Amenities: `["wifi","ac","card_payment","coffee"]`,
 			Services: []seedService{
 				{"Premium Fade Haircut", "Expert fade haircut - skin, mid or high fade", "Haircut", 599, 35, false},
 				{"Designer Beard", "Detailed beard design and sculpting", "Beard", 349, 20, false},
@@ -208,7 +212,7 @@ func getShopData() []seedShop {
 			Description: "A relaxing lounge-style salon. Perfect for a complete grooming session with friends.",
 			Address: "201, Brigade Road, MG Road", City: "Bangalore", State: "Karnataka", Pincode: "560001",
 			Lat: 12.9708, Lng: 77.6078, Rating: 3.8, ReviewCount: 102, QueueLength: 2, AvgWaitTime: 8, ExperienceYears: 4,
-			StartTime: "10:00", EndTime: "22:00", ClosedDays: "[\"tuesday\"]", HomeService: true,
+			StartTime: "10:00", EndTime: "22:00", ClosedDays: "[\"tuesday\"]", HomeService: true, Amenities: `["wifi","ac","card_payment","coffee","parking"]`, ServiceRadiusKm: 10, TravelChargePerKm: 7, BaseTravelCharge: 25,
 			Services: []seedService{
 				{"Standard Haircut", "Clean haircut - any style", "Haircut", 299, 25, false},
 				{"Beard Grooming", "Full beard care - wash, trim, oil", "Beard", 249, 20, false},
@@ -221,7 +225,7 @@ func getShopData() []seedShop {
 			Description: "Budget-friendly salon for the whole family. Kids welcome!",
 			Address: "12, 80 Feet Road, HSR Layout", City: "Bangalore", State: "Karnataka", Pincode: "560102",
 			Lat: 12.9116, Lng: 77.6389, Rating: 3.2, ReviewCount: 56, QueueLength: 1, AvgWaitTime: 5, ExperienceYears: 3,
-			StartTime: "08:00", EndTime: "20:00", ClosedDays: "[\"monday\"]", HomeService: false,
+			StartTime: "08:00", EndTime: "20:00", ClosedDays: "[\"monday\"]", HomeService: false, Amenities: `["card_payment"]`,
 			Services: []seedService{
 				{"Basic Haircut", "Simple haircut - any style", "Haircut", 149, 20, false},
 				{"Kids Haircut", "Child-friendly haircut with lollipop!", "Haircut", 199, 20, false},
@@ -234,7 +238,7 @@ func getShopData() []seedShop {
 			Description: "Hyderabad's premier grooming destination. Luxury meets tradition in every service.",
 			Address: "1-98/1, Jubilee Hills Road No 36", City: "Hyderabad", State: "Telangana", Pincode: "500033",
 			Lat: 17.4319, Lng: 78.4107, Rating: 4.6, ReviewCount: 420, QueueLength: 7, AvgWaitTime: 20, ExperienceYears: 10,
-			StartTime: "09:00", EndTime: "21:00", ClosedDays: "", HomeService: true,
+			StartTime: "09:00", EndTime: "21:00", ClosedDays: "", HomeService: true, Amenities: `["wifi","ac","card_payment","coffee","parking"]`, ServiceRadiusKm: 12, TravelChargePerKm: 10, BaseTravelCharge: 40,
 			Services: []seedService{
 				{"Signature Haircut", "Premium haircut with consultation", "Haircut", 699, 35, false},
 				{"Beard Sculpting", "Detailed beard sculpting and styling", "Beard", 399, 25, false},
@@ -247,7 +251,7 @@ func getShopData() []seedShop {
 			Description: "Fade haircut specialists in the heart of Hyderabad. Walk-in friendly!",
 			Address: "3-5-1109, Narayanguda", City: "Hyderabad", State: "Telangana", Pincode: "500029",
 			Lat: 17.3964, Lng: 78.4919, Rating: 4.0, ReviewCount: 187, QueueLength: 5, AvgWaitTime: 18, ExperienceYears: 4,
-			StartTime: "10:00", EndTime: "21:30", ClosedDays: "", HomeService: false,
+			StartTime: "10:00", EndTime: "21:30", ClosedDays: "", HomeService: false, Amenities: `["wifi","ac","card_payment"]`,
 			Services: []seedService{
 				{"Fade Haircut", "Clean fade - any type", "Haircut", 349, 25, false},
 				{"Beard & Fade Combo", "Beard trim + fade haircut combo", "Beard", 499, 35, false},
@@ -258,7 +262,7 @@ func getShopData() []seedShop {
 			Description: "Traditional Hyderabadi grooming with a modern touch. Experience royal treatment.",
 			Address: "16-2-752, Asmangadh, Malakpet", City: "Hyderabad", State: "Telangana", Pincode: "500036",
 			Lat: 17.3714, Lng: 78.4907, Rating: 3.5, ReviewCount: 78, QueueLength: 3, AvgWaitTime: 10, ExperienceYears: 7,
-			StartTime: "07:00", EndTime: "19:00", ClosedDays: "[\"wednesday\"]", HomeService: false,
+			StartTime: "07:00", EndTime: "19:00", ClosedDays: "[\"wednesday\"]", HomeService: false, Amenities: `["ac","card_payment"]`,
 			Services: []seedService{
 				{"Traditional Haircut", "Classic haircut - any style", "Haircut", 199, 20, false},
 				{"Royal Shave", "Traditional barber shave with hot towel", "Beard", 149, 20, false},
@@ -271,7 +275,7 @@ func getShopData() []seedShop {
 			Description: "Unisex salon offering stylish cuts and creative coloring for everyone.",
 			Address: "55, FC Road, Shivajinagar", City: "Pune", State: "Maharashtra", Pincode: "411004",
 			Lat: 18.5290, Lng: 73.8468, Rating: 4.3, ReviewCount: 289, QueueLength: 6, AvgWaitTime: 18, ExperienceYears: 6,
-			StartTime: "10:00", EndTime: "21:00", ClosedDays: "", HomeService: true,
+			StartTime: "10:00", EndTime: "21:00", ClosedDays: "", HomeService: true, Amenities: `["wifi","ac","card_payment","coffee"]`, ServiceRadiusKm: 8, TravelChargePerKm: 7, BaseTravelCharge: 25,
 			Services: []seedService{
 				{"Unisex Haircut", "Suitable for all hair types", "Haircut", 449, 30, false},
 				{"Beard Styling", "Complete beard styling", "Beard", 249, 20, false},
@@ -284,7 +288,7 @@ func getShopData() []seedShop {
 			Description: "Pune's first beard-only salon. Specialist in beard grooming, shaping and care.",
 			Address: "22, Lane 6, Koregaon Park", City: "Pune", State: "Maharashtra", Pincode: "411001",
 			Lat: 18.5362, Lng: 73.8943, Rating: 4.7, ReviewCount: 168, QueueLength: 5, AvgWaitTime: 15, ExperienceYears: 5,
-			StartTime: "10:00", EndTime: "22:00", ClosedDays: "", HomeService: false,
+			StartTime: "10:00", EndTime: "22:00", ClosedDays: "", HomeService: false, Amenities: `["wifi","ac","card_payment","coffee"]`,
 			Services: []seedService{
 				{"Beard Trim & Shape", "Expert beard trimming and shaping", "Beard", 349, 25, false},
 				{"Full Beard Grooming", "Complete beard wash, condition, trim, style", "Beard", 549, 35, false},
@@ -297,7 +301,7 @@ func getShopData() []seedShop {
 			Description: "Budget unisex salon. Great for students and young professionals.",
 			Address: "7, Market Yard Road, Bibwewadi", City: "Pune", State: "Maharashtra", Pincode: "411037",
 			Lat: 18.4729, Lng: 73.8791, Rating: 3.0, ReviewCount: 34, QueueLength: 0, AvgWaitTime: 2, ExperienceYears: 2,
-			StartTime: "09:00", EndTime: "20:00", ClosedDays: "[\"monday\"]", HomeService: true,
+			StartTime: "09:00", EndTime: "20:00", ClosedDays: "[\"monday\"]", HomeService: true, Amenities: `["wifi","card_payment"]`, ServiceRadiusKm: 5, TravelChargePerKm: 5, BaseTravelCharge: 20,
 			Services: []seedService{
 				{"Budget Haircut", "Quick haircut - any style", "Haircut", 99, 15, false},
 				{"Beard Trim", "Basic beard trim", "Beard", 79, 10, false},
@@ -309,7 +313,7 @@ func getShopData() []seedShop {
 			Description: "Premium grooming for the modern Delhi gent. International standards, local warmth.",
 			Address: "A-17, Connaught Place, Outer Circle", City: "Delhi", State: "Delhi", Pincode: "110001",
 			Lat: 28.6304, Lng: 77.2177, Rating: 4.4, ReviewCount: 376, QueueLength: 9, AvgWaitTime: 28, ExperienceYears: 7,
-			StartTime: "09:00", EndTime: "21:00", ClosedDays: "", HomeService: false,
+			StartTime: "09:00", EndTime: "21:00", ClosedDays: "", HomeService: false, Amenities: `["wifi","ac","card_payment","coffee"]`,
 			Services: []seedService{
 				{"Executive Haircut", "Premium haircut with styling", "Haircut", 599, 30, false},
 				{"Beard Sculpt", "Detailed beard sculpting", "Beard", 349, 25, false},
@@ -322,7 +326,7 @@ func getShopData() []seedShop {
 			Description: "Conveniently located near metro stations. Quick grooming for busy professionals.",
 			Address: "F-32, Sector 18, Rohini", City: "Delhi", State: "Delhi", Pincode: "110085",
 			Lat: 28.7320, Lng: 77.1008, Rating: 3.9, ReviewCount: 145, QueueLength: 4, AvgWaitTime: 12, ExperienceYears: 4,
-			StartTime: "08:00", EndTime: "22:00", ClosedDays: "", HomeService: true,
+			StartTime: "08:00", EndTime: "22:00", ClosedDays: "", HomeService: true, Amenities: `["wifi","ac","card_payment"]`, ServiceRadiusKm: 6, TravelChargePerKm: 6, BaseTravelCharge: 20,
 			Services: []seedService{
 				{"Express Haircut", "Quick 15-min haircut", "Haircut", 199, 15, false},
 				{"Beard Trim", "Quick beard tidy up", "Beard", 129, 10, false},
@@ -334,7 +338,7 @@ func getShopData() []seedShop {
 			Description: "5-star grooming experience. VIP rooms, premium products, and master barbers.",
 			Address: "28, Khan Market", City: "Delhi", State: "Delhi", Pincode: "110003",
 			Lat: 28.6010, Lng: 77.2270, Rating: 4.9, ReviewCount: 680, QueueLength: 10, AvgWaitTime: 35, ExperienceYears: 15,
-			StartTime: "10:00", EndTime: "20:00", ClosedDays: "[\"tuesday\"]", HomeService: true,
+			StartTime: "10:00", EndTime: "20:00", ClosedDays: "[\"tuesday\"]", HomeService: true, Amenities: `["wifi","ac","card_payment","coffee","parking"]`, ServiceRadiusKm: 15, TravelChargePerKm: 12, BaseTravelCharge: 50,
 			Services: []seedService{
 				{"VIP Haircut", "Master barber haircut with champagne", "Premium Grooming", 1499, 45, false},
 				{"Luxury Beard Grooming", "Premium products + hot towel + oil massage", "Premium Grooming", 799, 35, false},
@@ -349,7 +353,7 @@ func getShopData() []seedShop {
 			Description: "No-frills barbershop for quick, affordable cuts. Cash only.",
 			Address: "44, Lajpat Nagar Market", City: "Delhi", State: "Delhi", Pincode: "110024",
 			Lat: 28.5672, Lng: 77.2478, Rating: 2.8, ReviewCount: 23, QueueLength: 0, AvgWaitTime: 1, ExperienceYears: 1,
-			StartTime: "08:00", EndTime: "19:00", ClosedDays: "", HomeService: false,
+			StartTime: "08:00", EndTime: "19:00", ClosedDays: "", HomeService: false, Amenities: `["card_payment"]`,
 			Services: []seedService{
 				{"Basic Haircut", "Simple haircut", "Haircut", 99, 15, false},
 				{"Shave", "Quick shave", "Beard", 79, 10, false},
@@ -596,6 +600,11 @@ func seedAllData(db *gorm.DB) {
 			IsAvailable:        true,
 			BusinessDays:       []byte(daysJSON),
 			Tags:               []byte(tagsJSON),
+			Amenities:               []byte(sd.Amenities),
+			IsHomeServiceAvailable:  sd.HomeService,
+			ServiceRadiusKm:         sd.ServiceRadiusKm,
+			TravelChargePerKm:       sd.TravelChargePerKm,
+			BaseTravelCharge:        sd.BaseTravelCharge,
 		}
 		if err := db.Create(&barber).Error; err != nil {
 			log.Fatalf("Failed to create barber %s: %v", sd.ShopName, err)

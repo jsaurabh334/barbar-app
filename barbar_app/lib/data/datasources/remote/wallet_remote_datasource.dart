@@ -22,7 +22,7 @@ class WalletRemoteDataSource {
   Future<List<TransactionModel>> getTransactions() async {
     final response = await _apiClient.dio.get('/wallet/transactions');
     if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
-      final List<dynamic> data = response.data['data'];
+      final data = (response.data['data'] as List<dynamic>?) ?? [];
       return data.map((e) => TransactionModel.fromJson(e as Map<String, dynamic>)).toList();
     }
     throw Exception(response.data['error'] ?? 'Failed to fetch transactions');

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import '../bloc/booking/booking_bloc.dart';
+import '../bloc/booking/booking_event.dart';
+
 import '../../core/network/websocket_client.dart';
 import '../../core/theme/app_theme.dart';
 import 'booking_history_screen.dart';
@@ -10,15 +14,22 @@ import 'profile_screen.dart';
 
 class CustomerDashboardShell extends StatefulWidget {
   final WebSocketClient webSocketClient;
+  final int initialTab;
 
-  const CustomerDashboardShell({super.key, required this.webSocketClient});
+  const CustomerDashboardShell({super.key, required this.webSocketClient, this.initialTab = 0});
 
   @override
   State<CustomerDashboardShell> createState() => _CustomerDashboardShellState();
 }
 
 class _CustomerDashboardShellState extends State<CustomerDashboardShell> {
-  int _selectedTab = 0;
+  late int _selectedTab;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedTab = widget.initialTab;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +54,9 @@ class _CustomerDashboardShellState extends State<CustomerDashboardShell> {
           setState(() {
             _selectedTab = index;
           });
+          if (index == 2) {
+            context.read<BookingBloc>().add(FetchAllBookings());
+          }
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(LucideIcons.home), label: 'Home'),

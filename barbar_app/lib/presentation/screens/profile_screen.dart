@@ -10,6 +10,9 @@ import 'wallet_screen.dart';
 import 'package:barbar_app/presentation/bloc/address/address_bloc.dart';
 import 'package:barbar_app/presentation/bloc/address/address_event.dart';
 import 'package:barbar_app/presentation/bloc/address/address_state.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../domain/repositories/auth_repository.dart';
+import 'address_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -75,15 +78,20 @@ class _ProfileContent extends StatelessWidget {
               CircleAvatar(
                 radius: 48,
                 backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                child: Text(
-                  user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : '?',
-                  style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: AppColors.primary),
-                ),
+                backgroundImage: user.avatar != null && user.avatar!.isNotEmpty
+                    ? NetworkImage(user.avatar!)
+                    : null,
+                child: user.avatar == null || user.avatar!.isEmpty
+                    ? Text(
+                        user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : '?',
+                        style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: AppColors.primary),
+                      )
+                    : null,
               ),
               const SizedBox(height: 12),
               Text(user.fullName, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
-              Text('+${user.phone}', style: const TextStyle(color: AppColors.textSecondary)),
+              Text(user.phone.startsWith('+') ? user.phone : '+${user.phone}', style: const TextStyle(color: AppColors.textSecondary)),
               if (user.email != null && user.email!.isNotEmpty)
                 Text(user.email!, style: const TextStyle(color: AppColors.textSecondary)),
             ],
@@ -131,7 +139,7 @@ class _ProfileContent extends StatelessWidget {
 
         // Menu options
         _menuItem(context, LucideIcons.wallet, 'Wallet', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletScreen()))),
-        _menuItem(context, LucideIcons.mapPin, 'My Addresses', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _AddressListScreen()))),
+        _menuItem(context, LucideIcons.mapPin, 'My Addresses', () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddressScreen(onAddressSelected: (_) {})))),
         _menuItem(context, LucideIcons.settings, 'Account Settings', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _EditProfileScreen()))),
       ],
     );
@@ -189,12 +197,45 @@ class _EditProfileScreenState extends State<_EditProfileScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _emailController;
 
+  bool _isUploading = false;
+  String? _avatarUrl;
+
   @override
   void initState() {
     super.initState();
     final user = (context.read<AuthBloc>().state as AuthAuthenticated).user;
     _nameController = TextEditingController(text: user.fullName);
     _emailController = TextEditingController(text: user.email ?? '');
+    _avatarUrl = user.avatar;
+  }
+
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      setState(() => _isUploading = true);
+      try {
+        final authRepo = context.read<AuthRepository>();
+        final url = await authRepo.uploadImage(image.path);
+        setState(() {
+          _avatarUrl = url;
+          _isUploading = false;
+        });
+        if (mounted) {
+          context.read<AuthBloc>().add(UpdateProfileRequested({'avatar': url}));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Avatar updated'), backgroundColor: AppColors.success),
+          );
+        }
+      } catch (e) {
+        setState(() => _isUploading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to upload image'), backgroundColor: AppColors.error),
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -225,122 +266,101 @@ class _EditProfileScreenState extends State<_EditProfileScreen> {
           padding: const EdgeInsets.all(24),
           child: Form(
             key: _formKey,
-            child: Column(
-              children: [
-                TextFormField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'Full Name', prefixIcon: Icon(LucideIcons.user)),
-                  validator: (v) => v == null || v.isEmpty ? 'Name required' : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(LucideIcons.mail)),
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (v) {
-                    if (v != null && v.isNotEmpty && !v.contains('@')) return 'Invalid email';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                Text('Phone: +${(context.read<AuthBloc>().state as AuthAuthenticated).user.phone}',
-                    style: const TextStyle(color: AppColors.textSecondary)),
-                const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: () {
-                    if (_formKey.currentState?.validate() ?? false) {
-                      context.read<AuthBloc>().add(UpdateProfileRequested({
-                        'full_name': _nameController.text.trim(),
-                        'email': _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
-                      }));
-                    }
-                  },
-                  child: const Text('SAVE CHANGES'),
-                ),
-              ],
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  GestureDetector(
+                    onTap: _pickImage,
+                    child: Stack(
+                      children: [
+                        CircleAvatar(
+                          radius: 50,
+                          backgroundColor: AppColors.surface,
+                          backgroundImage: _avatarUrl != null && _avatarUrl!.isNotEmpty
+                              ? NetworkImage(_avatarUrl!)
+                              : null,
+                          child: _avatarUrl == null || _avatarUrl!.isEmpty
+                              ? const Icon(LucideIcons.user, size: 40, color: AppColors.textSecondary)
+                              : null,
+                        ),
+                        if (_isUploading)
+                          const Positioned.fill(
+                            child: CircularProgressIndicator(color: AppColors.primary),
+                          ),
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                            child: const Icon(LucideIcons.camera, size: 16, color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'Full Name', prefixIcon: Icon(LucideIcons.user)),
+                    validator: (v) => v == null || v.isEmpty ? 'Name required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _emailController,
+                    decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(LucideIcons.mail)),
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (v) {
+                      if (v != null && v.isNotEmpty && !v.contains('@')) return 'Invalid email';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  Builder(builder: (ctx) {
+                    final user = (ctx.read<AuthBloc>().state as AuthAuthenticated).user;
+                    final phone = user.phone.startsWith('+') ? user.phone : '+${user.phone}';
+                    return Column(
+                      children: [
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(LucideIcons.phone, color: AppColors.textSecondary),
+                          title: const Text('Phone Number', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          subtitle: Text(phone, style: const TextStyle(color: AppColors.textPrimary, fontSize: 16)),
+                        ),
+                        const Divider(color: AppColors.border),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(LucideIcons.shield, color: AppColors.textSecondary),
+                          title: const Text('Role', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          subtitle: Text(user.role.toUpperCase(), style: const TextStyle(color: AppColors.textPrimary, fontSize: 16)),
+                        ),
+                        const Divider(color: AppColors.border),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(LucideIcons.activity, color: AppColors.textSecondary),
+                          title: const Text('Account Status', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          subtitle: Text(user.status.toUpperCase(), style: const TextStyle(color: AppColors.success, fontSize: 16, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    );
+                  }),
+                  const SizedBox(height: 32),
+                  ElevatedButton(
+                    onPressed: () {
+                      if (_formKey.currentState?.validate() ?? false) {
+                        context.read<AuthBloc>().add(UpdateProfileRequested({
+                          'full_name': _nameController.text.trim(),
+                          'email': _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
+                        }));
+                      }
+                    },
+                    child: const Text('SAVE CHANGES'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _AddressListScreen extends StatefulWidget {
-  const _AddressListScreen();
-
-  @override
-  State<_AddressListScreen> createState() => _AddressListScreenState();
-}
-
-class _AddressListScreenState extends State<_AddressListScreen> {
-  @override
-  void initState() {
-    super.initState();
-    context.read<AddressBloc>().add(FetchAddresses());
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('MY ADDRESSES')),
-      body: BlocBuilder<AddressBloc, AddressState>(
-        builder: (context, state) {
-          if (state is AddressLoading) {
-            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-          }
-          if (state is AddressFailure) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(LucideIcons.alertCircle, size: 48, color: AppColors.error),
-                  const SizedBox(height: 16),
-                  Text(state.error, textAlign: TextAlign.center),
-                ],
-              ),
-            );
-          }
-          if (state is AddressesLoaded) {
-            final addresses = state.addresses;
-            if (addresses.isEmpty) {
-              return const Center(child: Text('No saved addresses'));
-            }
-            return ListView.builder(
-              padding: const EdgeInsets.all(20),
-              itemCount: addresses.length,
-              itemBuilder: (context, index) {
-                final addr = addresses[index];
-                final isDefault = addr['is_default'] == true;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.cardBg,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: isDefault ? AppColors.primary : AppColors.border),
-                  ),
-                  child: ListTile(
-                    leading: Icon(isDefault ? LucideIcons.home : LucideIcons.mapPin,
-                        color: isDefault ? AppColors.primary : AppColors.textSecondary),
-                    title: Text(addr['title'] ?? 'Address'),
-                    subtitle: Text('${addr['street'] ?? ""}, ${addr['city'] ?? ""}'),
-                    trailing: isDefault
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text('Default', style: TextStyle(fontSize: 11, color: AppColors.primary)),
-                          )
-                        : null,
-                  ),
-                );
-              },
-            );
-          }
-          return const SizedBox.shrink();
-        },
       ),
     );
   }

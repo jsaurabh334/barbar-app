@@ -19,6 +19,7 @@ class BookingConfirmationScreen extends StatelessWidget {
     for (final s in booking.services) {
       total += s.price;
     }
+    total += booking.travelCharge;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -72,6 +73,18 @@ class BookingConfirmationScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _detailRow(booking.isHomeService ? LucideIcons.home : LucideIcons.store, 'Type', booking.isHomeService ? 'Home Service' : 'Visit Shop'),
+                    const Divider(height: 24, color: AppColors.border),
+                    if (booking.isHomeService) ...[
+                      if (booking.homeServiceAddress != null)
+                        _detailRow(LucideIcons.mapPin, 'Address',
+                          '${booking.homeServiceAddress!['street'] ?? ""}, ${booking.homeServiceAddress!['city'] ?? ""}'),
+                      if (booking.travelDistanceKm > 0)
+                        _detailRow(LucideIcons.map, 'Distance', '${booking.travelDistanceKm.toStringAsFixed(1)} km'),
+                      if (booking.travelCharge > 0)
+                        _detailRow(LucideIcons.indianRupee, 'Travel', '₹${booking.travelCharge.toInt()}'),
+                      const Divider(height: 24, color: AppColors.border),
+                    ],
                     _detailRow(LucideIcons.store, 'Shop', shopName),
                     const Divider(height: 24, color: AppColors.border),
                     _detailRow(LucideIcons.calendar, 'Date', _formatDate(booking.scheduledStart)),
@@ -126,7 +139,6 @@ class BookingConfirmationScreen extends StatelessWidget {
                   ),
                   onPressed: () {
                     Navigator.pop(context);
-                    Navigator.pop(context);
                   },
                   child: const Text('Track Queue', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
@@ -140,8 +152,6 @@ class BookingConfirmationScreen extends StatelessWidget {
                   ),
                   onPressed: () {
                     Navigator.pop(context);
-                    Navigator.pop(context);
-                    Navigator.pushNamed(context, '/bookings');
                   },
                   child: const Text('My Bookings'),
                 ),

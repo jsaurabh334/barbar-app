@@ -346,11 +346,12 @@ class _ShopScreenState extends State<ShopScreen> {
                       
                       ElevatedButton(
                         onPressed: () async {
-                          final addressId = await Navigator.push<String>(
+                          final address = await Navigator.push<Map<String, dynamic>>(
                             context,
                             MaterialPageRoute(builder: (_) => const SelectAddressScreen()),
                           );
-                          if (addressId != null && context.mounted) {
+                          if (address != null && context.mounted) {
+                            final addressId = address['id'] as String;
                             context.read<MarketplaceBloc>().add(
                               PlaceOrder(
                                 vendorId: cartProducts.first.vendorId,

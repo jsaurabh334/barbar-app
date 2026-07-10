@@ -9,8 +9,10 @@ import '../bloc/booking/booking_bloc.dart';
 import '../bloc/booking/booking_event.dart';
 import '../bloc/booking/booking_state.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/amenities_widget.dart';
 import 'booking_confirmation_screen.dart';
 import 'review_list_screen.dart';
+import 'select_address_screen.dart';
 
 class BarberDetailScreen extends StatefulWidget {
   final BarberModel barber;
@@ -27,6 +29,9 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
   String? _selectedTimeSlot;
   int _galleryIndex = 0;
   List<ServiceModel> _allServices = [];
+  bool _isHomeService = false;
+  String? _homeServiceAddressId;
+  String? _homeServiceAddressLabel;
 
   @override
   void initState() {
@@ -249,6 +254,96 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
                       ),
                     ],
 
+                    // Amenities
+                    if (widget.barber.amenities != null && widget.barber.amenities!.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      AmenitiesWidget(amenities: widget.barber.amenities!),
+                    ],
+
+                    // Home Service Toggle
+                    if (widget.barber.isHomeServiceAvailable) ...[
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  _isHomeService ? LucideIcons.home : LucideIcons.store,
+                                  color: AppColors.primary,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _isHomeService ? 'Home Service' : 'Visit Shop',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                      ),
+                                      Text(
+                                        _isHomeService
+                                            ? 'We\'ll come to your address'
+                                            : 'Visit us at our shop',
+                                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Switch(
+                                  value: _isHomeService,
+                                  activeTrackColor: AppColors.primary,
+                                  onChanged: (val) => setState(() {
+                                    _isHomeService = val;
+                                    if (!val) {
+                                      _homeServiceAddressId = null;
+                                      _homeServiceAddressLabel = null;
+                                    }
+                                  }),
+                                ),
+                              ],
+                            ),
+                            if (_isHomeService) ...[
+                              const Divider(height: 24, color: AppColors.border),
+                              InkWell(
+                                onTap: _pickHomeServiceAddress,
+                                borderRadius: BorderRadius.circular(12),
+                                child: Row(
+                                  children: [
+                                    const Icon(LucideIcons.mapPin, size: 18, color: AppColors.primary),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        _homeServiceAddressLabel ?? 'Select delivery address',
+                                        style: TextStyle(
+                                          fontWeight: _homeServiceAddressLabel != null ? FontWeight.w500 : FontWeight.normal,
+                                          color: _homeServiceAddressLabel != null ? AppColors.textPrimary : AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                    const Icon(LucideIcons.chevronRight, size: 18, color: AppColors.textSecondary),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Radius: ${widget.barber.serviceRadiusKm} km • Base travel: ₹${widget.barber.baseTravelCharge.toInt()} + ₹${widget.barber.travelChargePerKm.toInt()}/km',
+                                style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+
                     const Divider(height: 32, color: AppColors.border),
 
                     // Working Hours
@@ -352,7 +447,7 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
                         }
                       },
                       builder: (context, state) {
-                        final canBook = _selectedServiceIds.isNotEmpty && _selectedTimeSlot != null;
+                        final canBook = _selectedServiceIds.isNotEmpty && _selectedTimeSlot != null && (!_isHomeService || _homeServiceAddressId != null);
 
                         return ElevatedButton(
                           onPressed: canBook && state is! BookingLoading ? _confirmBooking : null,
@@ -396,8 +491,23 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
             runSpacing: 8,
             children: state.slots.map((slot) {
               final time = slot['time'] as String;
-              final available = slot['available'] as bool;
+              bool available = slot['available'] as bool;
               final isSelected = _selectedTimeSlot == time;
+
+              // Frontend filter to prevent booking past slots today
+              final now = DateTime.now();
+              if (_selectedDate.year == now.year &&
+                  _selectedDate.month == now.month &&
+                  _selectedDate.day == now.day) {
+                final parts = time.split(':');
+                if (parts.length == 2) {
+                  final hour = int.tryParse(parts[0]) ?? 0;
+                  final min = int.tryParse(parts[1]) ?? 0;
+                  if (hour < now.hour || (hour == now.hour && min <= now.minute)) {
+                    available = false;
+                  }
+                }
+              }
 
               return InkWell(
                 onTap: available ? () => setState(() => _selectedTimeSlot = time) : null,
@@ -471,6 +581,8 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _summaryRow(_isHomeService ? LucideIcons.home : LucideIcons.store, 'Type', _isHomeService ? 'Home Service' : 'Visit Shop'),
+          const SizedBox(height: 8),
           _summaryRow(LucideIcons.store, 'Shop', widget.barber.shopName),
           const SizedBox(height: 8),
           _summaryRow(LucideIcons.calendar, 'Date', '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}'),
@@ -673,8 +785,25 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
     }
   }
 
+  Future<void> _pickHomeServiceAddress() async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(builder: (_) => const SelectAddressScreen()),
+    );
+    if (result != null && result['id'] is String) {
+      setState(() {
+        _homeServiceAddressId = result['id'] as String;
+        final label = result['label'] as String? ?? '';
+        final line1 = result['line_1'] as String? ?? '';
+        final city = result['city'] as String? ?? '';
+        _homeServiceAddressLabel = '$label, $line1, $city';
+      });
+    }
+  }
+
   void _confirmBooking() {
     if (_selectedTimeSlot == null) return;
+    if (_isHomeService && _homeServiceAddressId == null) return;
     final parts = _selectedTimeSlot!.split(':');
     final hour = int.parse(parts[0]);
     final minute = int.parse(parts[1]);
@@ -692,6 +821,8 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
             barberId: widget.barber.id,
             serviceIds: _selectedServiceIds,
             scheduledStart: dateStr,
+            isHomeService: _isHomeService,
+            homeServiceAddressId: _homeServiceAddressId,
           ),
         );
   }

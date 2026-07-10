@@ -18,11 +18,15 @@ class BookingRepositoryImpl implements BookingRepository {
     required String barberId,
     required List<String> serviceIds,
     required String scheduledStart,
+    bool isHomeService = false,
+    String? homeServiceAddressId,
   }) async {
     final data = await _remoteDataSource.createBooking(
       barberId: barberId,
       serviceIds: serviceIds,
       scheduledStart: scheduledStart,
+      isHomeService: isHomeService,
+      homeServiceAddressId: homeServiceAddressId,
     );
     return BookingModel.fromJson(data);
   }

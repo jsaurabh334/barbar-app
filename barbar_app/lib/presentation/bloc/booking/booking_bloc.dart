@@ -45,6 +45,8 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
         barberId: event.barberId,
         serviceIds: event.serviceIds,
         scheduledStart: event.scheduledStart,
+        isHomeService: event.isHomeService,
+        homeServiceAddressId: event.homeServiceAddressId,
       );
       emit(BookingCreatedSuccess(booking));
     } catch (e) {

@@ -8,14 +8,29 @@ import (
 type BookingStatus string
 
 const (
-	BookingStatusPending       BookingStatus = "pending"
-	BookingStatusConfirmed     BookingStatus = "confirmed"
-	BookingStatusInProgress    BookingStatus = "in_progress"
-	BookingStatusCompleted     BookingStatus = "completed"
-	BookingStatusCancelled     BookingStatus = "cancelled"
-	BookingStatusNoShow        BookingStatus = "no_show"
-	BookingStatusRescheduled   BookingStatus = "rescheduled"
+	BookingStatusPending             BookingStatus = "pending"
+	BookingStatusConfirmed           BookingStatus = "confirmed"
+	BookingStatusInProgress          BookingStatus = "in_progress"
+	BookingStatusCompleted           BookingStatus = "completed"
+	BookingStatusCancelled           BookingStatus = "cancelled"
+	BookingStatusNoShow              BookingStatus = "no_show"
+	BookingStatusRescheduled         BookingStatus = "rescheduled"
+	BookingStatusHomeServicePending  BookingStatus = "home_service_pending"
 )
+
+type ServiceMode string
+
+const (
+	ServiceModeShop ServiceMode = "SHOP"
+	ServiceModeHome ServiceMode = "HOME"
+)
+
+func (b *Booking) ServiceModeDisplay() ServiceMode {
+	if b.IsHomeService {
+		return ServiceModeHome
+	}
+	return ServiceModeShop
+}
 
 type Booking struct {
 	BaseModel
@@ -44,6 +59,11 @@ type Booking struct {
 	Source            string        `gorm:"size:50;default:app" json:"source"`
 	CheckInAt         *time.Time    `json:"check_in_at,omitempty"`
 	CompletedAt       *time.Time    `json:"completed_at,omitempty"`
+	IsHomeService     bool          `gorm:"default:false" json:"is_home_service"`
+	HomeServiceAddressID *uuid.UUID `gorm:"type:uuid" json:"home_service_address_id,omitempty"`
+	HomeServiceAddress string       `gorm:"type:text" json:"home_service_address,omitempty"`
+	TravelDistanceKm  float64       `gorm:"default:0" json:"travel_distance_km"`
+	TravelCharge      float64       `gorm:"default:0" json:"travel_charge"`
 
 	// Relations
 	Barber   *Barber          `gorm:"foreignKey:BarberID" json:"barber,omitempty"`

@@ -17,11 +17,13 @@ class AddressScreen extends StatefulWidget {
 
 class _AddressScreenState extends State<AddressScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _streetController = TextEditingController();
+  final _labelController = TextEditingController();
+  final _fullNameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _line1Controller = TextEditingController();
   final _cityController = TextEditingController();
   final _stateController = TextEditingController();
-  final _zipController = TextEditingController();
+  final _pincodeController = TextEditingController();
 
   @override
   void initState() {
@@ -31,11 +33,13 @@ class _AddressScreenState extends State<AddressScreen> {
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _streetController.dispose();
+    _labelController.dispose();
+    _fullNameController.dispose();
+    _phoneController.dispose();
+    _line1Controller.dispose();
     _cityController.dispose();
     _stateController.dispose();
-    _zipController.dispose();
+    _pincodeController.dispose();
     super.dispose();
   }
 
@@ -99,11 +103,11 @@ class _AddressScreenState extends State<AddressScreen> {
               itemCount: addresses.length,
               itemBuilder: (context, index) {
                 final addr = addresses[index];
-                final title = addr['title'] ?? 'Address';
-                final street = addr['street'] ?? '';
+                final label = addr['label'] ?? 'Address';
+                final line1 = addr['line_1'] ?? '';
                 final city = addr['city'] ?? '';
                 final state = addr['state'] ?? '';
-                final postalCode = addr['postal_code'] ?? '';
+                final pincode = addr['pincode'] ?? '';
                 final isDefault = addr['is_default'] == true;
                 return Container(
                   margin: const EdgeInsets.only(bottom: 16),
@@ -125,7 +129,7 @@ class _AddressScreenState extends State<AddressScreen> {
                     ),
                     title: Row(
                       children: [
-                        Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
                         if (isDefault) ...[
                           const SizedBox(width: 8),
                           Container(
@@ -139,7 +143,7 @@ class _AddressScreenState extends State<AddressScreen> {
                         ],
                       ],
                     ),
-                    subtitle: Text('$street, $city ${state.isNotEmpty ? ", $state" : ""} - $postalCode'),
+                    subtitle: Text([line1, city, state, pincode].where((e) => e.isNotEmpty).join(', ')),
                     onTap: () {
                       widget.onAddressSelected(addr);
                       Navigator.pop(context);
@@ -189,11 +193,13 @@ class _AddressScreenState extends State<AddressScreen> {
   }
 
   void _showAddAddressSheet(BuildContext context) {
-    _titleController.clear();
-    _streetController.clear();
+    _labelController.clear();
+    _fullNameController.clear();
+    _phoneController.clear();
+    _line1Controller.clear();
     _cityController.clear();
     _stateController.clear();
-    _zipController.clear();
+    _pincodeController.clear();
 
     showModalBottomSheet(
       context: context,
@@ -223,23 +229,42 @@ class _AddressScreenState extends State<AddressScreen> {
                   ),
                   const SizedBox(height: 20),
                   TextFormField(
-                    controller: _titleController,
+                    controller: _labelController,
                     decoration: const InputDecoration(
                       labelText: 'Address Label (e.g. Home, Office)',
                       prefixIcon: Icon(LucideIcons.tag),
                     ),
-                    validator: (v) => v == null || v.isEmpty ? 'Title required' : null,
+                    validator: (v) => v == null || v.isEmpty ? 'Label required' : null,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   TextFormField(
-                    controller: _streetController,
+                    controller: _fullNameController,
                     decoration: const InputDecoration(
-                      labelText: 'Street details',
+                      labelText: 'Full Name',
+                      prefixIcon: Icon(LucideIcons.user),
+                    ),
+                    validator: (v) => v == null || v.isEmpty ? 'Full name required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone Number',
+                      prefixIcon: Icon(LucideIcons.phone),
+                    ),
+                    validator: (v) => v == null || v.isEmpty ? 'Phone required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _line1Controller,
+                    decoration: const InputDecoration(
+                      labelText: 'Street / Area',
                       prefixIcon: Icon(LucideIcons.map),
                     ),
-                    validator: (v) => v == null || v.isEmpty ? 'Street required' : null,
+                    validator: (v) => v == null || v.isEmpty ? 'Address required' : null,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
@@ -258,23 +283,25 @@ class _AddressScreenState extends State<AddressScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   TextFormField(
-                    controller: _zipController,
+                    controller: _pincodeController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Zip Code'),
-                    validator: (v) => v == null || v.length < 5 ? 'Zip invalid' : null,
+                    decoration: const InputDecoration(labelText: 'Pincode'),
+                    validator: (v) => v == null || v.length < 6 ? 'Enter valid 6-digit pincode' : null,
                   ),
                   const SizedBox(height: 32),
                   ElevatedButton(
                     onPressed: () {
                       if (_formKey.currentState?.validate() ?? false) {
                         context.read<AddressBloc>().add(AddAddress({
-                          'title': _titleController.text.trim(),
-                          'street': _streetController.text.trim(),
+                          'label': _labelController.text.trim(),
+                          'full_name': _fullNameController.text.trim(),
+                          'phone': _phoneController.text.trim(),
+                          'line_1': _line1Controller.text.trim(),
                           'city': _cityController.text.trim(),
                           'state': _stateController.text.trim(),
-                          'postal_code': _zipController.text.trim(),
+                          'pincode': _pincodeController.text.trim(),
                           'country': 'IN',
                         }));
                         Navigator.pop(context);
@@ -292,11 +319,13 @@ class _AddressScreenState extends State<AddressScreen> {
   }
 
   void _showEditAddressSheet(BuildContext context, Map<String, dynamic> addr) {
-    _titleController.text = addr['title'] ?? '';
-    _streetController.text = addr['street'] ?? '';
+    _labelController.text = addr['label'] ?? '';
+    _fullNameController.text = addr['full_name'] ?? '';
+    _phoneController.text = addr['phone'] ?? '';
+    _line1Controller.text = addr['line_1'] ?? '';
     _cityController.text = addr['city'] ?? '';
     _stateController.text = addr['state'] ?? '';
-    _zipController.text = addr['postal_code'] ?? '';
+    _pincodeController.text = addr['pincode'] ?? '';
 
     showModalBottomSheet(
       context: context,
@@ -326,23 +355,42 @@ class _AddressScreenState extends State<AddressScreen> {
                   ),
                   const SizedBox(height: 20),
                   TextFormField(
-                    controller: _titleController,
+                    controller: _labelController,
                     decoration: const InputDecoration(
                       labelText: 'Address Label (e.g. Home, Office)',
                       prefixIcon: Icon(LucideIcons.tag),
                     ),
-                    validator: (v) => v == null || v.isEmpty ? 'Title required' : null,
+                    validator: (v) => v == null || v.isEmpty ? 'Label required' : null,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   TextFormField(
-                    controller: _streetController,
+                    controller: _fullNameController,
                     decoration: const InputDecoration(
-                      labelText: 'Street details',
+                      labelText: 'Full Name',
+                      prefixIcon: Icon(LucideIcons.user),
+                    ),
+                    validator: (v) => v == null || v.isEmpty ? 'Full name required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone Number',
+                      prefixIcon: Icon(LucideIcons.phone),
+                    ),
+                    validator: (v) => v == null || v.isEmpty ? 'Phone required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _line1Controller,
+                    decoration: const InputDecoration(
+                      labelText: 'Street / Area',
                       prefixIcon: Icon(LucideIcons.map),
                     ),
-                    validator: (v) => v == null || v.isEmpty ? 'Street required' : null,
+                    validator: (v) => v == null || v.isEmpty ? 'Address required' : null,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
@@ -361,23 +409,25 @@ class _AddressScreenState extends State<AddressScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   TextFormField(
-                    controller: _zipController,
+                    controller: _pincodeController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Zip Code'),
-                    validator: (v) => v == null || v.length < 5 ? 'Zip invalid' : null,
+                    decoration: const InputDecoration(labelText: 'Pincode'),
+                    validator: (v) => v == null || v.length < 6 ? 'Enter valid 6-digit pincode' : null,
                   ),
                   const SizedBox(height: 32),
                   ElevatedButton(
                     onPressed: () {
                       if (_formKey.currentState?.validate() ?? false) {
                         context.read<AddressBloc>().add(UpdateAddress(id: addr['id'] as String, address: {
-                          'title': _titleController.text.trim(),
-                          'street': _streetController.text.trim(),
+                          'label': _labelController.text.trim(),
+                          'full_name': _fullNameController.text.trim(),
+                          'phone': _phoneController.text.trim(),
+                          'line_1': _line1Controller.text.trim(),
                           'city': _cityController.text.trim(),
                           'state': _stateController.text.trim(),
-                          'postal_code': _zipController.text.trim(),
+                          'pincode': _pincodeController.text.trim(),
                         }));
                         Navigator.pop(context);
                       }

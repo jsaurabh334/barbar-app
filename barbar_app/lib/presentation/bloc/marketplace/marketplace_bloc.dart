@@ -62,6 +62,7 @@ class MarketplaceBloc extends Bloc<MarketplaceEvent, MarketplaceState> {
       );
       _cart.clear();
       emit(OrderCreatedSuccess(order));
+      emit(ProductsLoaded(products: List.from(_cachedProducts), cart: Map.from(_cart)));
     } catch (e) {
       emit(MarketplaceFailure(e.toString().replaceAll('Exception: ', '')));
     }

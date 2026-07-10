@@ -23,4 +23,6 @@ abstract class AuthRepository {
   Future<bool> isLoggedIn();
 
   Future<UserModel> updateProfile(Map<String, dynamic> data);
+
+  Future<String> uploadImage(String filePath);
 }

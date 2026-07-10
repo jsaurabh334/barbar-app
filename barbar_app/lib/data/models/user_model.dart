@@ -28,11 +28,12 @@ class UserModel {
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
+    final parsedName = json['full_name'] as String?;
     return UserModel(
       id: json['id'] as String,
       email: json['email'] as String?,
       phone: json['phone'] as String,
-      fullName: (json['full_name'] as String?) ?? 'User',
+      fullName: (parsedName != null && parsedName.trim().isNotEmpty) ? parsedName : 'User',
       avatar: json['avatar'] as String?,
       role: (json['role'] as String?) ?? 'customer',
       status: (json['status'] as String?) ?? 'active',

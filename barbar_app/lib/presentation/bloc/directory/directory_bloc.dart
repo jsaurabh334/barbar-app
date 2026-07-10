@@ -18,6 +18,13 @@ class DirectoryBloc extends Bloc<DirectoryEvent, DirectoryState> {
     FetchNearbyBarbers event,
     Emitter<DirectoryState> emit,
   ) async {
+    List<CategoryModel> prevCategories = [];
+    CategoryModel? prevSelectedCategory;
+    if (state is DirectoryLoaded) {
+      prevCategories = (state as DirectoryLoaded).categories;
+      prevSelectedCategory = (state as DirectoryLoaded).selectedCategory;
+    }
+
     emit(DirectoryLoading());
     try {
       final barbers = await _directoryRepository.getNearbyBarbers(
@@ -29,8 +36,7 @@ class DirectoryBloc extends Bloc<DirectoryEvent, DirectoryState> {
         openNow: event.openNow,
         categoryId: event.categoryId,
       );
-      final categories = _extractCategories();
-      emit(DirectoryLoaded(barbers, categories: categories));
+      emit(DirectoryLoaded(barbers, categories: prevCategories, selectedCategory: prevSelectedCategory));
     } catch (e) {
       emit(DirectoryFailure(e.toString().replaceAll('Exception: ', '')));
     }

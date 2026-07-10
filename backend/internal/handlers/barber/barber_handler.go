@@ -23,18 +23,22 @@ func NewBarberHandler(db *gorm.DB) *BarberHandler {
 }
 
 type RegisterBarberRequest struct {
-	ShopName        string   `json:"shop_name" binding:"required,min=2,max=255"`
-	ShopDescription string   `json:"shop_description"`
-	Address         string   `json:"address" binding:"required"`
-	City            string   `json:"city" binding:"required"`
-	State           string   `json:"state" binding:"required"`
-	Pincode         string   `json:"pincode" binding:"required"`
-	Latitude        float64  `json:"latitude"`
-	Longitude       float64  `json:"longitude"`
-	StartTime       string   `json:"start_time" binding:"required"`
-	EndTime         string   `json:"end_time" binding:"required"`
-	ExperienceYears int      `json:"experience_years"`
-	Services        []ServiceInput `json:"services"`
+	ShopName              string   `json:"shop_name" binding:"required,min=2,max=255"`
+	ShopDescription       string   `json:"shop_description"`
+	Address               string   `json:"address" binding:"required"`
+	City                  string   `json:"city" binding:"required"`
+	State                 string   `json:"state" binding:"required"`
+	Pincode               string   `json:"pincode" binding:"required"`
+	Latitude              float64  `json:"latitude"`
+	Longitude             float64  `json:"longitude"`
+	StartTime             string   `json:"start_time" binding:"required"`
+	EndTime               string   `json:"end_time" binding:"required"`
+	ExperienceYears       int      `json:"experience_years"`
+	Services              []ServiceInput `json:"services"`
+	IsHomeServiceAvailable bool   `json:"is_home_service_available"`
+	ServiceRadiusKm       float64  `json:"service_radius_km"`
+	TravelChargePerKm     float64  `json:"travel_charge_per_km"`
+	BaseTravelCharge      float64  `json:"base_travel_charge"`
 }
 
 type ServiceInput struct {
@@ -71,23 +75,27 @@ func (h *BarberHandler) Register(c *gin.Context) {
 	tx := h.db.Begin()
 
 	barber := models.Barber{
-		UserID:          userID,
-		ShopName:        req.ShopName,
-		ShopDescription: req.ShopDescription,
-		Address:         req.Address,
-		City:            req.City,
-		State:           req.State,
-		Pincode:         req.Pincode,
-		Latitude:        req.Latitude,
-		Longitude:       req.Longitude,
-		Status:          models.BarberStatusActive,
-		StartTime:       req.StartTime,
-		EndTime:         req.EndTime,
-		ExperienceYears: req.ExperienceYears,
-		SlotDuration:    30,
-		BufferBetweenSlots: 5,
-		MaxQueueSize:    50,
-		IsAvailable:     true,
+		UserID:                 userID,
+		ShopName:               req.ShopName,
+		ShopDescription:        req.ShopDescription,
+		Address:                req.Address,
+		City:                   req.City,
+		State:                  req.State,
+		Pincode:                req.Pincode,
+		Latitude:               req.Latitude,
+		Longitude:              req.Longitude,
+		Status:                 models.BarberStatusActive,
+		StartTime:              req.StartTime,
+		EndTime:                req.EndTime,
+		ExperienceYears:        req.ExperienceYears,
+		SlotDuration:           30,
+		BufferBetweenSlots:     5,
+		MaxQueueSize:           50,
+		IsAvailable:            true,
+		IsHomeServiceAvailable: req.IsHomeServiceAvailable,
+		ServiceRadiusKm:        req.ServiceRadiusKm,
+		TravelChargePerKm:      req.TravelChargePerKm,
+		BaseTravelCharge:       req.BaseTravelCharge,
 	}
 
 	if err := tx.Create(&barber).Error; err != nil {
@@ -159,7 +167,8 @@ func (h *BarberHandler) UpdateProfile(c *gin.Context) {
 
 	allowed := []string{"shop_name", "shop_description", "address", "city", "state", "pincode",
 		"latitude", "longitude", "start_time", "end_time", "break_start_time", "break_end_time",
-		"slot_duration", "max_queue_size", "experience_years", "shop_image", "tags", "phone", "email"}
+		"slot_duration", "max_queue_size", "experience_years", "shop_image", "tags", "phone", "email", "amenities",
+		"is_home_service_available", "service_radius_km", "travel_charge_per_km", "base_travel_charge"}
 	filtered := make(map[string]interface{})
 	for _, key := range allowed {
 		if val, ok := updates[key]; ok {
@@ -498,7 +507,7 @@ func (h *BarberHandler) ListNearby(c *gin.Context) {
 			Distinct("barbers.id")
 		dataQuery = dataQuery.Joins("JOIN barber_services ON barber_services.barber_id = barbers.id AND barber_services.deleted_at IS NULL").
 			Where("barber_services.category_id = ? AND barber_services.is_active = ?", categoryID, true).
-			Distinct("barbers.id")
+			Group("barbers.id")
 	}
 
 	countQuery.Count(&total)
@@ -509,7 +518,7 @@ func (h *BarberHandler) ListNearby(c *gin.Context) {
 			latF, lngF, latF, radius)
 	}
 
-	dataQuery.Offset((page - 1) * pageSize).Limit(pageSize).Order("is_featured DESC, rating DESC, created_at DESC").Find(&barbers)
+	dataQuery.Offset((page - 1) * pageSize).Limit(pageSize).Order("is_featured DESC, rating DESC, barbers.created_at DESC").Find(&barbers)
 
 	utils.PaginatedResponse(c, barbers, page, pageSize, total)
 }
