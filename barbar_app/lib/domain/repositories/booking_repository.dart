@@ -7,7 +7,8 @@ abstract class BookingRepository {
     required String barberId,
     required List<String> serviceIds,
     required String scheduledStart,
-    bool isHomeService,
+    String? staffId,
+    bool isHomeService = false,
     String? homeServiceAddressId,
   });
   Future<Map<String, dynamic>> getQueuePosition(String bookingId);
@@ -18,4 +19,7 @@ abstract class BookingRepository {
   Future<void> payBooking(String bookingId, String method, String status, String reference);
   Future<Map<String, dynamic>> getBookingInvoice(String bookingId);
   Future<List<Map<String, dynamic>>> getAvailableSlots(String barberId, String date);
+  Future<List<BookingModel>> getHomeServiceRequests();
+  Future<void> acceptHomeService(String bookingId);
+  Future<void> rejectHomeService(String bookingId, String reason);
 }

@@ -13,6 +13,7 @@ class ReviewBloc extends Bloc<ReviewEvent, ReviewState> {
     on<FetchPublicReviews>(_onFetchPublicReviews);
     on<FetchShopRatingSummary>(_onFetchShopRatingSummary);
     on<FetchMyReviews>(_onFetchMyReviews);
+    on<ReplyToReview>(_onReplyToReview);
   }
 
   Future<void> _onCreateReview(CreateReview event, Emitter<ReviewState> emit) async {
@@ -88,6 +89,16 @@ class ReviewBloc extends Bloc<ReviewEvent, ReviewState> {
     try {
       final reviews = await _reviewRepository.getMyReviews(page: event.page, limit: event.limit);
       emit(MyReviewsLoaded(reviews));
+    } catch (e) {
+      emit(ReviewFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onReplyToReview(ReplyToReview event, Emitter<ReviewState> emit) async {
+    emit(ReviewLoading());
+    try {
+      await _reviewRepository.replyToReview(event.reviewId, event.reply);
+      emit(ReviewSuccess('Reply posted'));
     } catch (e) {
       emit(ReviewFailure(e.toString().replaceAll('Exception: ', '')));
     }

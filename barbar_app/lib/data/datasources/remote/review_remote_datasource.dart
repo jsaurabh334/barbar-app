@@ -111,4 +111,14 @@ class ReviewRemoteDataSource {
       throw Exception(response.data?['error'] ?? 'Failed to report review');
     }
   }
+
+  Future<void> replyToReview(String reviewId, String reply) async {
+    final response = await _apiClient.dio.post(
+      '/barber/reviews/$reviewId/reply',
+      data: {'reply': reply},
+    );
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception(response.data?['error'] ?? 'Failed to reply to review');
+    }
+  }
 }

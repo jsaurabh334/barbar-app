@@ -34,4 +34,9 @@ class DirectoryRepositoryImpl implements DirectoryRepository {
   Future<List<CategoryModel>> getCategories() async {
     return _remoteDataSource.getCategories();
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> getBarberStaff(String barberId) async {
+    return await _remoteDataSource.getBarberStaff(barberId);
+  }
 }

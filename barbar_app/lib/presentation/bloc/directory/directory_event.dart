@@ -20,7 +20,7 @@ class FetchNearbyBarbers extends DirectoryEvent {
   const FetchNearbyBarbers({
     required this.latitude,
     required this.longitude,
-    this.radius = 5000,
+    this.radius = 50000000,
     this.search,
     this.minRating,
     this.openNow,

@@ -62,6 +62,16 @@ class FetchMyReviews extends ReviewEvent {
   List<Object?> get props => [page, limit];
 }
 
+class ReplyToReview extends ReviewEvent {
+  final String reviewId;
+  final String reply;
+
+  const ReplyToReview({required this.reviewId, required this.reply});
+
+  @override
+  List<Object?> get props => [reviewId, reply];
+}
+
 class UpdateReview extends ReviewEvent {
   final String reviewId;
   final int rating;

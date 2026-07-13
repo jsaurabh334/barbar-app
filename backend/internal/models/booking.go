@@ -63,10 +63,13 @@ type Booking struct {
 	HomeServiceAddressID *uuid.UUID `gorm:"type:uuid" json:"home_service_address_id,omitempty"`
 	HomeServiceAddress string       `gorm:"type:text" json:"home_service_address,omitempty"`
 	TravelDistanceKm  float64       `gorm:"default:0" json:"travel_distance_km"`
+	TravelTimeMin     int           `gorm:"default:0" json:"travel_time_minutes"`
 	TravelCharge      float64       `gorm:"default:0" json:"travel_charge"`
+	StaffID           *uuid.UUID    `gorm:"type:uuid;index" json:"staff_id,omitempty"`
 
 	// Relations
 	Barber   *Barber          `gorm:"foreignKey:BarberID" json:"barber,omitempty"`
+	Staff    *BarberStaff     `gorm:"foreignKey:StaffID" json:"staff,omitempty"`
 	Customer *User            `gorm:"foreignKey:CustomerID" json:"customer,omitempty"`
 	Services []BookingService `gorm:"foreignKey:BookingID" json:"services,omitempty"`
 	StatusLog []BookingStatusLog `gorm:"foreignKey:BookingID" json:"status_log,omitempty"`

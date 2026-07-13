@@ -21,6 +21,7 @@ class BookingRemoteDataSource {
     required String barberId,
     required List<String> serviceIds,
     required String scheduledStart,
+    String? staffId,
     bool isHomeService = false,
     String? homeServiceAddressId,
   }) async {
@@ -31,6 +32,9 @@ class BookingRemoteDataSource {
         'scheduled_start': scheduledStart,
         'is_home_service': isHomeService,
       };
+      if (staffId != null) {
+        data['staff_id'] = staffId;
+      }
       if (homeServiceAddressId != null) {
         data['home_service_address_id'] = homeServiceAddressId;
       }
@@ -122,5 +126,31 @@ class BookingRemoteDataSource {
       return data.cast<Map<String, dynamic>>();
     }
     throw Exception(response.data['error'] ?? 'Failed to fetch available slots');
+  }
+
+  Future<List<BookingModel>> getHomeServiceRequests() async {
+    final response = await _apiClient.dio.get('/barber/home-service-requests');
+    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+      final data = (response.data['data'] as List<dynamic>?) ?? [];
+      return data.map((e) => BookingModel.fromJson(e as Map<String, dynamic>)).toList();
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch home service requests');
+  }
+
+  Future<void> acceptHomeService(String bookingId) async {
+    final response = await _apiClient.dio.post('/barber/home-service-requests/$bookingId/accept');
+    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
+      throw Exception(response.data['error'] ?? 'Failed to accept request');
+    }
+  }
+
+  Future<void> rejectHomeService(String bookingId, String reason) async {
+    final response = await _apiClient.dio.post(
+      '/barber/home-service-requests/$bookingId/reject',
+      data: {'reason': reason},
+    );
+    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
+      throw Exception(response.data['error'] ?? 'Failed to reject request');
+    }
   }
 }

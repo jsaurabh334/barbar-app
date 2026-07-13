@@ -13,6 +13,7 @@ import '../widgets/amenities_widget.dart';
 import 'booking_confirmation_screen.dart';
 import 'review_list_screen.dart';
 import 'select_address_screen.dart';
+import '../../domain/repositories/directory_repository.dart';
 
 class BarberDetailScreen extends StatefulWidget {
   final BarberModel barber;
@@ -33,11 +34,35 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
   String? _homeServiceAddressId;
   String? _homeServiceAddressLabel;
 
+  List<Map<String, dynamic>> _staffList = [];
+  bool _isLoadingStaff = true;
+  String? _selectedStaffId;
+
   @override
   void initState() {
     super.initState();
     context.read<BookingBloc>().add(FetchServices(widget.barber.id));
     _fetchSlots();
+    _fetchStaff();
+  }
+
+  void _fetchStaff() async {
+    try {
+      final repo = context.read<DirectoryRepository>();
+      final staff = await repo.getBarberStaff(widget.barber.id);
+      if (mounted) {
+        setState(() {
+          _staffList = staff;
+          _isLoadingStaff = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isLoadingStaff = false;
+        });
+      }
+    }
   }
 
   void _fetchSlots() {
@@ -388,6 +413,14 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
                       },
                     ),
                     const Divider(height: 32, color: AppColors.border),
+
+                    // Staff Selection
+                    if (!_isLoadingStaff && _staffList.isNotEmpty) ...[
+                      Text('Select Professional', style: Theme.of(context).textTheme.titleLarge),
+                      const SizedBox(height: 12),
+                      _buildStaffSelection(),
+                      const Divider(height: 32, color: AppColors.border),
+                    ],
 
                     // Date
                     Text(
@@ -758,6 +791,83 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
     );
   }
 
+  Widget _buildStaffSelection() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _buildStaffCard(
+            id: null,
+            name: 'Any Available',
+            imageUrl: null,
+            isSelected: _selectedStaffId == null,
+          ),
+          ..._staffList.map((staff) {
+            final user = staff['User'] ?? {};
+            return _buildStaffCard(
+              id: staff['ID'],
+              name: user['first_name'] ?? 'Staff',
+              imageUrl: user['profile_image_url'],
+              isSelected: _selectedStaffId == staff['ID'],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStaffCard({
+    required String? id,
+    required String name,
+    required String? imageUrl,
+    required bool isSelected,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedStaffId = id;
+          _selectedTimeSlot = null;
+        });
+        _fetchSlots();
+      },
+      child: Container(
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary.withValues(alpha: 0.1) : AppColors.surface,
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.border,
+            width: 2,
+          ),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          children: [
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: AppColors.background,
+              backgroundImage: imageUrl != null && imageUrl.isNotEmpty
+                  ? CachedNetworkImageProvider(imageUrl)
+                  : null,
+              child: imageUrl == null || imageUrl.isEmpty
+                  ? const Icon(LucideIcons.user, color: AppColors.textSecondary)
+                  : null,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              name,
+              style: TextStyle(
+                color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -821,6 +931,7 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
             barberId: widget.barber.id,
             serviceIds: _selectedServiceIds,
             scheduledStart: dateStr,
+            staffId: _selectedStaffId,
             isHomeService: _isHomeService,
             homeServiceAddressId: _homeServiceAddressId,
           ),

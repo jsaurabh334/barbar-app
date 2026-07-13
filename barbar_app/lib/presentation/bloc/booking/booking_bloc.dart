@@ -15,7 +15,11 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     on<UpdateBookingStatus>(_onUpdateBookingStatus);
     on<StreamQueuePositionUpdate>(_onStreamQueuePositionUpdate);
     on<FetchAllBookings>(_onFetchAllBookings);
+    on<FetchBarberBookings>(_onFetchBarberBookings);
     on<PayBooking>(_onPayBooking);
+    on<FetchHomeServiceRequests>(_onFetchHomeServiceRequests);
+    on<AcceptHomeServiceRequest>(_onAcceptHomeServiceRequest);
+    on<RejectHomeServiceRequest>(_onRejectHomeServiceRequest);
   }
 
   Future<void> _onFetchServices(FetchServices event, Emitter<BookingState> emit) async {
@@ -45,6 +49,7 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
         barberId: event.barberId,
         serviceIds: event.serviceIds,
         scheduledStart: event.scheduledStart,
+        staffId: event.staffId,
         isHomeService: event.isHomeService,
         homeServiceAddressId: event.homeServiceAddressId,
       );
@@ -110,12 +115,54 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     }
   }
 
+  Future<void> _onFetchBarberBookings(FetchBarberBookings event, Emitter<BookingState> emit) async {
+    emit(BookingLoading());
+    try {
+      final bookings = await _bookingRepository.getBarberBookings();
+      emit(BookingsLoaded(bookings));
+    } catch (e) {
+      emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
   Future<void> _onPayBooking(PayBooking event, Emitter<BookingState> emit) async {
     emit(BookingLoading());
     try {
       await _bookingRepository.payBooking(event.bookingId, event.method, event.status, event.reference);
       final bookings = await _bookingRepository.getAllBookings();
       emit(BookingsLoaded(bookings));
+    } catch (e) {
+      emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onFetchHomeServiceRequests(FetchHomeServiceRequests event, Emitter<BookingState> emit) async {
+    emit(BookingLoading());
+    try {
+      final requests = await _bookingRepository.getHomeServiceRequests();
+      emit(BookingsLoaded(requests));
+    } catch (e) {
+      emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onAcceptHomeServiceRequest(AcceptHomeServiceRequest event, Emitter<BookingState> emit) async {
+    emit(BookingLoading());
+    try {
+      await _bookingRepository.acceptHomeService(event.bookingId);
+      final requests = await _bookingRepository.getHomeServiceRequests();
+      emit(BookingsLoaded(requests));
+    } catch (e) {
+      emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onRejectHomeServiceRequest(RejectHomeServiceRequest event, Emitter<BookingState> emit) async {
+    emit(BookingLoading());
+    try {
+      await _bookingRepository.rejectHomeService(event.bookingId, event.reason);
+      final requests = await _bookingRepository.getHomeServiceRequests();
+      emit(BookingsLoaded(requests));
     } catch (e) {
       emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
     }

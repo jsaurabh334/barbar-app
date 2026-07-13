@@ -10,7 +10,7 @@ class DirectoryRemoteDataSource {
   Future<List<BarberModel>> getNearbyBarbers({
     required double latitude,
     required double longitude,
-    int radius = 5000,
+    int radius = 50000000, // Increased to 50000km for easy testing globally
     String? search,
     double? minRating,
     bool? openNow,
@@ -42,5 +42,13 @@ class DirectoryRemoteDataSource {
       return data.map((e) => CategoryModel.fromJson(e as Map<String, dynamic>)).toList();
     }
     throw Exception(response.data['error'] ?? 'Failed to fetch categories');
+  }
+
+  Future<List<Map<String, dynamic>>> getBarberStaff(String barberId) async {
+    final response = await _apiClient.dio.get('/public/barbers/$barberId/staff');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return List<Map<String, dynamic>>.from(response.data['data'] ?? []);
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch staff');
   }
 }

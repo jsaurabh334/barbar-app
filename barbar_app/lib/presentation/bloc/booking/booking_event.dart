@@ -20,6 +20,7 @@ class CreateBooking extends BookingEvent {
   final String barberId;
   final List<String> serviceIds;
   final String scheduledStart;
+  final String? staffId;
   final bool isHomeService;
   final String? homeServiceAddressId;
 
@@ -27,12 +28,13 @@ class CreateBooking extends BookingEvent {
     required this.barberId,
     required this.serviceIds,
     required this.scheduledStart,
+    this.staffId,
     this.isHomeService = false,
     this.homeServiceAddressId,
   });
 
   @override
-  List<Object?> get props => [barberId, serviceIds, scheduledStart, isHomeService, homeServiceAddressId];
+  List<Object?> get props => [barberId, serviceIds, scheduledStart, staffId, isHomeService, homeServiceAddressId];
 }
 
 class CheckQueuePosition extends BookingEvent {
@@ -110,4 +112,25 @@ class FetchAvailableSlots extends BookingEvent {
 
   @override
   List<Object?> get props => [barberId, date];
+}
+
+class FetchHomeServiceRequests extends BookingEvent {}
+
+class AcceptHomeServiceRequest extends BookingEvent {
+  final String bookingId;
+
+  const AcceptHomeServiceRequest(this.bookingId);
+
+  @override
+  List<Object?> get props => [bookingId];
+}
+
+class RejectHomeServiceRequest extends BookingEvent {
+  final String bookingId;
+  final String reason;
+
+  const RejectHomeServiceRequest({required this.bookingId, required this.reason});
+
+  @override
+  List<Object?> get props => [bookingId, reason];
 }

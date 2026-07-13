@@ -6,6 +6,7 @@ import 'core/network/websocket_client.dart';
 import 'core/theme/app_theme.dart';
 import 'data/datasources/local/auth_local_datasource.dart';
 import 'data/datasources/remote/auth_remote_datasource.dart';
+import 'data/datasources/remote/barber_remote_datasource.dart';
 import 'data/datasources/admin_remote_data_source.dart';
 import 'data/datasources/remote/booking_remote_datasource.dart';
 import 'data/datasources/remote/directory_remote_datasource.dart';
@@ -14,11 +15,13 @@ import 'data/datasources/remote/wallet_remote_datasource.dart';
 import 'data/datasources/remote/address_remote_datasource.dart';
 import 'data/datasources/remote/review_remote_datasource.dart';
 import 'data/repositories/auth_repository_impl.dart';
+import 'data/repositories/barber_repository_impl.dart';
 import 'data/repositories/admin_repository_impl.dart';
 import 'data/repositories/booking_repository_impl.dart';
 import 'data/repositories/address_repository_impl.dart';
 import 'data/repositories/review_repository_impl.dart';
 import 'domain/repositories/admin_repository.dart';
+import 'domain/repositories/barber_repository.dart';
 import 'domain/repositories/booking_repository.dart';
 import 'domain/repositories/address_repository.dart';
 import 'domain/repositories/review_repository.dart';
@@ -30,6 +33,12 @@ import 'presentation/bloc/auth/auth_bloc.dart';
 import 'presentation/bloc/auth/auth_event.dart';
 import 'presentation/bloc/auth/auth_state.dart';
 import 'presentation/bloc/booking/booking_bloc.dart';
+import 'presentation/bloc/barber_staff/barber_staff_bloc.dart';
+import 'presentation/bloc/barber_profile/barber_profile_bloc.dart';
+import 'presentation/bloc/barber_services/barber_services_bloc.dart';
+import 'presentation/bloc/barber_documents/barber_documents_bloc.dart';
+import 'presentation/bloc/barber_availability/barber_availability_bloc.dart';
+import 'presentation/bloc/barber_earnings/barber_earnings_bloc.dart';
 import 'presentation/bloc/directory/directory_bloc.dart';
 import 'presentation/bloc/marketplace/marketplace_bloc.dart';
 import 'presentation/bloc/address/address_bloc.dart';
@@ -37,7 +46,7 @@ import 'presentation/bloc/review/review_bloc.dart';
 import 'presentation/bloc/wallet/wallet_bloc.dart';
 import 'presentation/screens/admin_console_screen.dart';
 import 'presentation/screens/auth_screen.dart';
-import 'presentation/screens/barber_dashboard_screen.dart';
+import 'presentation/screens/barber_dashboard_shell.dart';
 import 'presentation/screens/customer_dashboard_shell.dart';
 import 'presentation/screens/delivery_dashboard_screen.dart';
 import 'presentation/screens/vendor_dashboard_screen.dart';
@@ -64,10 +73,12 @@ void main() {
 
   final adminRemoteDataSource = AdminRemoteDataSource(apiClient);
   final reviewRemoteDataSource = ReviewRemoteDataSource(apiClient);
+  final barberRemoteDataSource = BarberRemoteDataSource(apiClient);
 
   // Repositories
   final authRepository = AuthRepositoryImpl(authRemoteDataSource, localDataSource);
   final bookingRepository = BookingRepositoryImpl(bookingRemoteDataSource);
+  final barberRepository = BarberRepositoryImpl(barberRemoteDataSource);
   final directoryRepository = DirectoryRepositoryImpl(directoryRemoteDataSource);
   final marketplaceRepository = MarketplaceRepositoryImpl(marketplaceRemoteDataSource);
   final walletRepository = WalletRepositoryImpl(walletRemoteDataSource);
@@ -79,6 +90,7 @@ void main() {
     MyApp(
       authRepository: authRepository,
       bookingRepository: bookingRepository,
+      barberRepository: barberRepository,
       directoryRepository: directoryRepository,
       marketplaceRepository: marketplaceRepository,
       walletRepository: walletRepository,
@@ -93,6 +105,7 @@ void main() {
 class MyApp extends StatelessWidget {
   final AuthRepositoryImpl authRepository;
   final BookingRepositoryImpl bookingRepository;
+  final BarberRepositoryImpl barberRepository;
   final DirectoryRepositoryImpl directoryRepository;
   final MarketplaceRepositoryImpl marketplaceRepository;
   final WalletRepositoryImpl walletRepository;
@@ -105,6 +118,7 @@ class MyApp extends StatelessWidget {
     super.key,
     required this.authRepository,
     required this.bookingRepository,
+    required this.barberRepository,
     required this.directoryRepository,
     required this.marketplaceRepository,
     required this.walletRepository,
@@ -123,6 +137,9 @@ class MyApp extends StatelessWidget {
         ),
         RepositoryProvider<BookingRepository>(
           create: (context) => bookingRepository,
+        ),
+        RepositoryProvider<BarberRepository>(
+          create: (context) => barberRepository,
         ),
         RepositoryProvider<AdminRepository>(
           create: (context) => adminRepository,
@@ -144,6 +161,24 @@ class MyApp extends StatelessWidget {
           ),
           BlocProvider<BookingBloc>(
             create: (context) => BookingBloc(bookingRepository),
+          ),
+          BlocProvider<BarberStaffBloc>(
+            create: (context) => BarberStaffBloc(barberRepository),
+          ),
+          BlocProvider<BarberProfileBloc>(
+            create: (context) => BarberProfileBloc(barberRepository),
+          ),
+          BlocProvider<BarberServicesBloc>(
+            create: (context) => BarberServicesBloc(barberRepository),
+          ),
+          BlocProvider<BarberDocumentsBloc>(
+            create: (context) => BarberDocumentsBloc(barberRepository),
+          ),
+          BlocProvider<BarberAvailabilityBloc>(
+            create: (context) => BarberAvailabilityBloc(barberRepository),
+          ),
+          BlocProvider<BarberEarningsBloc>(
+            create: (context) => BarberEarningsBloc(barberRepository),
           ),
           BlocProvider<MarketplaceBloc>(
             create: (context) => MarketplaceBloc(marketplaceRepository),
@@ -175,7 +210,10 @@ class MyApp extends StatelessWidget {
               } else if (state is AuthAuthenticated) {
                 final role = state.user.role.toLowerCase();
                 if (role == 'barber') {
-                  return BarberDashboardScreen(webSocketClient: webSocketClient);
+                  return BarberDashboardShell(
+                    webSocketClient: webSocketClient,
+                    barberRepository: barberRepository,
+                  );
                 } else if (role == 'vendor') {
                   return const VendorDashboardScreen();
                 } else if (role == 'delivery' || role == 'delivery_partner') {

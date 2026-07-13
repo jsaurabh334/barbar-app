@@ -76,6 +76,8 @@ func RunMigrations(db *gorm.DB) {
 
 		// Shop-level — FK → User, Category
 		&models.Barber{},
+		&models.BarberStaff{},
+		&models.StaffService{},
 		&models.BarberAvailability{},
 		&models.BarberHoliday{},
 		&models.BarberDocument{},

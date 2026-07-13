@@ -13,4 +13,6 @@ abstract class DirectoryRepository {
   });
 
   Future<List<CategoryModel>> getCategories();
+
+  Future<List<Map<String, dynamic>>> getBarberStaff(String barberId);
 }

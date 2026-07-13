@@ -138,7 +138,7 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
                         children: [
                           const Text('SALON PARTNER', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 4),
-                          Text('Barber Shop #${_activeBooking!.barberId.substring(0, 8)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          Text(_activeBooking!.shopName.isNotEmpty ? _activeBooking!.shopName : 'Barber Shop', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                         ],
                       ),
                       Column(

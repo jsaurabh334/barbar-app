@@ -76,6 +76,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 	// Initialize handlers
 	authH := authHandler.NewAuthHandler(db, jwtManager)
 	barberH := barberHandler.NewBarberHandler(db)
+	staffH := barberHandler.NewStaffHandler(db)
 	notifSvc := notifService.NewNotificationService(db, hub)
 	bookingH := bookingHandler.NewBookingHandler(db, notifSvc, hub)
 	vendorH := vendorHandler.NewVendorHandler(db)
@@ -130,6 +131,8 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			public.GET("/barbers/:id", barberH.GetProfile)
 			public.GET("/barbers/:id/services", barberH.ListServices)
 			public.GET("/barbers/:id/available-slots", barberH.ListAvailableSlots)
+			public.GET("/barbers/:id/available-staff", bookingH.ListAvailableStaff)
+			public.GET("/barbers/:id/staff", staffH.ListPublicStaff)
 
 			// Products
 			public.GET("/products", middleware.CacheMiddleware(300*time.Second), productH.List)
@@ -247,6 +250,14 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			barberRoutes.POST("/services", barberH.AddService)
 			barberRoutes.PUT("/services/:service_id", barberH.UpdateService)
 			barberRoutes.DELETE("/services/:service_id", barberH.DeleteService)
+
+			// Staff management
+			barberRoutes.POST("/staff", staffH.AddStaff)
+			barberRoutes.GET("/staff", staffH.GetStaff)
+			barberRoutes.PUT("/staff/:id", staffH.UpdateStaff)
+			barberRoutes.DELETE("/staff/:id", staffH.ArchiveStaff)
+			barberRoutes.POST("/staff/:id/services", staffH.AssignServices)
+			barberRoutes.GET("/staff/:id/services", staffH.GetStaffServices)
 
 			// Holidays
 			barberRoutes.POST("/holidays", barberH.AddHoliday)

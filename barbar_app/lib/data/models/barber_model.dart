@@ -8,10 +8,13 @@ class BarberModel {
   final String? shopImage;
   final String address;
   final String city;
+  final String? state;
+  final String? pincode;
   final double latitude;
   final double longitude;
   final double rating;
   final int reviewCount;
+  final int totalBookings;
   final bool isAvailable;
   final int currentQueueLength;
   final double averageWaitTime;
@@ -19,6 +22,16 @@ class BarberModel {
   final String? status;
   final String? ownerName;
   final String? phone;
+  final String? alternatePhone;
+  final String? email;
+  final int experienceYears;
+  final String? startTime;
+  final String? endTime;
+  final String? breakStartTime;
+  final String? breakEndTime;
+  final int slotDuration;
+  final int bufferBetweenSlots;
+  final int maxQueueSize;
   final List<dynamic>? services;
   final List<dynamic>? documents;
   final String? createdAt;
@@ -30,8 +43,6 @@ class BarberModel {
   final double serviceRadiusKm;
   final double travelChargePerKm;
   final double baseTravelCharge;
-  final String? startTime;
-  final String? endTime;
 
   BarberModel({
     required this.id,
@@ -41,10 +52,13 @@ class BarberModel {
     this.shopImage,
     required this.address,
     required this.city,
+    this.state,
+    this.pincode,
     required this.latitude,
     required this.longitude,
     required this.rating,
     required this.reviewCount,
+    this.totalBookings = 0,
     required this.isAvailable,
     required this.currentQueueLength,
     required this.averageWaitTime,
@@ -52,6 +66,16 @@ class BarberModel {
     this.status,
     this.ownerName,
     this.phone,
+    this.alternatePhone,
+    this.email,
+    this.experienceYears = 0,
+    this.startTime,
+    this.endTime,
+    this.breakStartTime,
+    this.breakEndTime,
+    this.slotDuration = 30,
+    this.bufferBetweenSlots = 5,
+    this.maxQueueSize = 50,
     this.services,
     this.documents,
     this.createdAt,
@@ -63,8 +87,6 @@ class BarberModel {
     this.serviceRadiusKm = 0,
     this.travelChargePerKm = 0,
     this.baseTravelCharge = 0,
-    this.startTime,
-    this.endTime,
   });
 
   factory BarberModel.fromJson(Map<String, dynamic> json) {
@@ -76,10 +98,13 @@ class BarberModel {
       shopImage: json['shop_image'] as String?,
       address: json['address'] as String,
       city: json['city'] as String,
+      state: json['state'] as String?,
+      pincode: json['pincode'] as String?,
       latitude: (json['latitude'] as num).toDouble(),
       longitude: (json['longitude'] as num).toDouble(),
       rating: (json['rating'] as num).toDouble(),
       reviewCount: (json['review_count'] as num?)?.toInt() ?? 0,
+      totalBookings: (json['total_bookings'] as num?)?.toInt() ?? 0,
       isAvailable: json['is_available'] as bool? ?? true,
       currentQueueLength: (json['current_queue_length'] as num?)?.toInt() ?? 0,
       averageWaitTime: (json['average_wait_time'] as num?)?.toDouble() ?? 0.0,
@@ -87,6 +112,16 @@ class BarberModel {
       status: json['status'] as String?,
       ownerName: json['user'] != null ? json['user']['full_name'] as String? : null,
       phone: json['user'] != null ? json['user']['phone'] as String? : json['phone'] as String?,
+      alternatePhone: json['alternate_phone'] as String?,
+      email: json['email'] as String?,
+      experienceYears: (json['experience_years'] as num?)?.toInt() ?? 0,
+      startTime: json['start_time'] as String?,
+      endTime: json['end_time'] as String?,
+      breakStartTime: json['break_start_time'] as String?,
+      breakEndTime: json['break_end_time'] as String?,
+      slotDuration: (json['slot_duration'] as num?)?.toInt() ?? 30,
+      bufferBetweenSlots: (json['buffer_between_slots'] as num?)?.toInt() ?? 5,
+      maxQueueSize: (json['max_queue_size'] as num?)?.toInt() ?? 50,
       services: json['services'] as List<dynamic>?,
       documents: json['documents'] as List<dynamic>?,
       createdAt: json['created_at'] as String?,
@@ -100,8 +135,6 @@ class BarberModel {
       amenities: json['amenities'] != null
           ? (json['amenities'] as List<dynamic>).cast<String>()
           : null,
-      startTime: json['start_time'] as String?,
-      endTime: json['end_time'] as String?,
       isHomeServiceAvailable: json['is_home_service_available'] as bool? ?? false,
       serviceRadiusKm: (json['service_radius_km'] as num?)?.toDouble() ?? 0,
       travelChargePerKm: (json['travel_charge_per_km'] as num?)?.toDouble() ?? 0,
@@ -117,15 +150,29 @@ class BarberModel {
       'shop_image': shopImage,
       'address': address,
       'city': city,
+      'state': state,
+      'pincode': pincode,
       'latitude': latitude,
       'longitude': longitude,
       'rating': rating,
       'review_count': reviewCount,
+      'total_bookings': totalBookings,
       'is_available': isAvailable,
       'current_queue_length': currentQueueLength,
       'average_wait_time': averageWaitTime,
       'verification_status': verificationStatus,
       'status': status,
+      'phone': phone,
+      'alternate_phone': alternatePhone,
+      'email': email,
+      'experience_years': experienceYears,
+      'start_time': startTime,
+      'end_time': endTime,
+      'break_start_time': breakStartTime,
+      'break_end_time': breakEndTime,
+      'slot_duration': slotDuration,
+      'buffer_between_slots': bufferBetweenSlots,
+      'max_queue_size': maxQueueSize,
       'services': services,
       'documents': documents,
       'created_at': createdAt,
@@ -137,8 +184,6 @@ class BarberModel {
       'service_radius_km': serviceRadiusKm,
       'travel_charge_per_km': travelChargePerKm,
       'base_travel_charge': baseTravelCharge,
-      'start_time': startTime,
-      'end_time': endTime,
     };
   }
 
@@ -169,10 +214,13 @@ class BarberModel {
     String? shopImage,
     String? address,
     String? city,
+    String? state,
+    String? pincode,
     double? latitude,
     double? longitude,
     double? rating,
     int? reviewCount,
+    int? totalBookings,
     bool? isAvailable,
     int? currentQueueLength,
     double? averageWaitTime,
@@ -180,6 +228,16 @@ class BarberModel {
     String? status,
     String? ownerName,
     String? phone,
+    String? alternatePhone,
+    String? email,
+    int? experienceYears,
+    String? startTime,
+    String? endTime,
+    String? breakStartTime,
+    String? breakEndTime,
+    int? slotDuration,
+    int? bufferBetweenSlots,
+    int? maxQueueSize,
     List<dynamic>? services,
     List<dynamic>? documents,
     String? createdAt,
@@ -191,8 +249,6 @@ class BarberModel {
     double? serviceRadiusKm,
     double? travelChargePerKm,
     double? baseTravelCharge,
-    String? startTime,
-    String? endTime,
   }) {
     return BarberModel(
       id: id ?? this.id,
@@ -201,10 +257,13 @@ class BarberModel {
       shopImage: shopImage ?? this.shopImage,
       address: address ?? this.address,
       city: city ?? this.city,
+      state: state ?? this.state,
+      pincode: pincode ?? this.pincode,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       rating: rating ?? this.rating,
       reviewCount: reviewCount ?? this.reviewCount,
+      totalBookings: totalBookings ?? this.totalBookings,
       isAvailable: isAvailable ?? this.isAvailable,
       currentQueueLength: currentQueueLength ?? this.currentQueueLength,
       averageWaitTime: averageWaitTime ?? this.averageWaitTime,
@@ -212,6 +271,16 @@ class BarberModel {
       status: status ?? this.status,
       ownerName: ownerName ?? this.ownerName,
       phone: phone ?? this.phone,
+      alternatePhone: alternatePhone ?? this.alternatePhone,
+      email: email ?? this.email,
+      experienceYears: experienceYears ?? this.experienceYears,
+      startTime: startTime ?? this.startTime,
+      endTime: endTime ?? this.endTime,
+      breakStartTime: breakStartTime ?? this.breakStartTime,
+      breakEndTime: breakEndTime ?? this.breakEndTime,
+      slotDuration: slotDuration ?? this.slotDuration,
+      bufferBetweenSlots: bufferBetweenSlots ?? this.bufferBetweenSlots,
+      maxQueueSize: maxQueueSize ?? this.maxQueueSize,
       services: services ?? this.services,
       documents: documents ?? this.documents,
       createdAt: createdAt ?? this.createdAt,
@@ -223,8 +292,6 @@ class BarberModel {
       serviceRadiusKm: serviceRadiusKm ?? this.serviceRadiusKm,
       travelChargePerKm: travelChargePerKm ?? this.travelChargePerKm,
       baseTravelCharge: baseTravelCharge ?? this.baseTravelCharge,
-      startTime: startTime ?? this.startTime,
-      endTime: endTime ?? this.endTime,
     );
   }
 }

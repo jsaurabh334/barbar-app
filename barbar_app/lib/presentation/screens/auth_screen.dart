@@ -227,11 +227,12 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
             runSpacing: 8,
             alignment: WrapAlignment.center,
             children: [
-              _buildDemoLoginBtn('Customer', '+919999999999'),
-              _buildDemoLoginBtn('Barber', '+918888888888'),
-              _buildDemoLoginBtn('Vendor', '+917777777777'),
-              _buildDemoLoginBtn('Delivery', '+916666666666'),
-              _buildDemoLoginBtn('Admin', '+915555555555'),
+              _buildDemoLoginBtn('Customer', '+919876543210'),
+              _buildDemoLoginBtn('Barber', '+919000000001'),
+              _buildDemoLoginBtn('Vendor', '+919876543212'),
+              // Delivery role doesn't exist in seed data yet
+              // _buildDemoLoginBtn('Delivery', '+916666666666'),
+              _buildDemoLoginBtn('Admin', '+919999999999'),
             ],
           ),
           const SizedBox(height: 16),

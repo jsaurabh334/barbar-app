@@ -18,6 +18,11 @@ class BookingModel {
   final Map<String, dynamic>? homeServiceAddress;
   final double travelDistanceKm;
   final double travelCharge;
+  final Map<String, dynamic>? customer;
+  final int travelTimeMin;
+  final String? customerNotes;
+  final String? staffId;
+  final Map<String, dynamic>? staff;
 
   BookingModel({
     required this.id,
@@ -37,6 +42,11 @@ class BookingModel {
     this.homeServiceAddress,
     this.travelDistanceKm = 0,
     this.travelCharge = 0,
+    this.customer,
+    this.travelTimeMin = 0,
+    this.customerNotes,
+    this.staffId,
+    this.staff,
   });
 
   factory BookingModel.fromJson(Map<String, dynamic> json) {
@@ -73,6 +83,11 @@ class BookingModel {
       homeServiceAddress: json['home_service_address'] as Map<String, dynamic>?,
       travelDistanceKm: (json['travel_distance_km'] as num?)?.toDouble() ?? 0,
       travelCharge: (json['travel_charge'] as num?)?.toDouble() ?? 0,
+      customer: json['customer'] as Map<String, dynamic>?,
+      travelTimeMin: (json['travel_time_min'] as num?)?.toInt() ?? 0,
+      customerNotes: json['customer_notes'] as String?,
+      staffId: json['staff_id'] as String?,
+      staff: json['staff'] as Map<String, dynamic>?,
     );
   }
 
@@ -95,6 +110,9 @@ class BookingModel {
       'home_service_address': homeServiceAddress,
       'travel_distance_km': travelDistanceKm,
       'travel_charge': travelCharge,
+      'customer': customer,
+      'travel_time_min': travelTimeMin,
+      'customer_notes': customerNotes,
     };
   }
 
@@ -116,6 +134,9 @@ class BookingModel {
     Map<String, dynamic>? homeServiceAddress,
     double? travelDistanceKm,
     double? travelCharge,
+    Map<String, dynamic>? customer,
+    int? travelTimeMin,
+    String? customerNotes,
   }) {
     return BookingModel(
       id: id ?? this.id,
@@ -135,6 +156,9 @@ class BookingModel {
       homeServiceAddress: homeServiceAddress ?? this.homeServiceAddress,
       travelDistanceKm: travelDistanceKm ?? this.travelDistanceKm,
       travelCharge: travelCharge ?? this.travelCharge,
+      customer: customer ?? this.customer,
+      travelTimeMin: travelTimeMin ?? this.travelTimeMin,
+      customerNotes: customerNotes ?? this.customerNotes,
     );
   }
 }

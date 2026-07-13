@@ -88,6 +88,9 @@ type BarberService struct {
 	Image          string    `gorm:"size:500" json:"image,omitempty"`
 	SortOrder      int       `gorm:"default:0" json:"sort_order"`
 	IsAddon        bool      `gorm:"default:false" json:"is_addon"`
+	DefaultPrice   float64   `gorm:"default:0" json:"default_price"`
+	DefaultDurationMin int       `gorm:"default:0" json:"default_duration_minutes"`
+	DefaultBufferMin   int       `gorm:"default:0" json:"default_buffer_minutes"`
 }
 
 type BarberAvailability struct {

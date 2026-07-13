@@ -18,6 +18,7 @@ class BookingRepositoryImpl implements BookingRepository {
     required String barberId,
     required List<String> serviceIds,
     required String scheduledStart,
+    String? staffId,
     bool isHomeService = false,
     String? homeServiceAddressId,
   }) async {
@@ -25,6 +26,7 @@ class BookingRepositoryImpl implements BookingRepository {
       barberId: barberId,
       serviceIds: serviceIds,
       scheduledStart: scheduledStart,
+      staffId: staffId,
       isHomeService: isHomeService,
       homeServiceAddressId: homeServiceAddressId,
     );
@@ -69,5 +71,20 @@ class BookingRepositoryImpl implements BookingRepository {
   @override
   Future<List<Map<String, dynamic>>> getAvailableSlots(String barberId, String date) async {
     return await _remoteDataSource.getAvailableSlots(barberId, date);
+  }
+
+  @override
+  Future<List<BookingModel>> getHomeServiceRequests() async {
+    return await _remoteDataSource.getHomeServiceRequests();
+  }
+
+  @override
+  Future<void> acceptHomeService(String bookingId) async {
+    await _remoteDataSource.acceptHomeService(bookingId);
+  }
+
+  @override
+  Future<void> rejectHomeService(String bookingId, String reason) async {
+    await _remoteDataSource.rejectHomeService(bookingId, reason);
   }
 }

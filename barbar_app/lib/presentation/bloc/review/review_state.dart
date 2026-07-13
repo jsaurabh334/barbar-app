@@ -75,3 +75,12 @@ class ReviewFailure extends ReviewState {
   @override
   List<Object?> get props => [error];
 }
+
+class ReviewSuccess extends ReviewState {
+  final String message;
+
+  const ReviewSuccess(this.message);
+
+  @override
+  List<Object?> get props => [message];
+}

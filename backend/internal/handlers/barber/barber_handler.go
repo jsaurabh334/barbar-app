@@ -155,8 +155,14 @@ func (h *BarberHandler) UpdateProfile(c *gin.Context) {
 
 	var barber models.Barber
 	if err := h.db.Where("user_id = ?", userID).First(&barber).Error; err != nil {
-		utils.NotFoundResponse(c, "Barber profile not found")
-		return
+		barber = models.Barber{
+			UserID: userID,
+			Status: models.BarberStatusActive,
+		}
+		if err := h.db.Create(&barber).Error; err != nil {
+			utils.InternalErrorResponse(c, "Failed to initialize barber profile")
+			return
+		}
 	}
 
 	var updates map[string]interface{}
@@ -167,7 +173,7 @@ func (h *BarberHandler) UpdateProfile(c *gin.Context) {
 
 	allowed := []string{"shop_name", "shop_description", "address", "city", "state", "pincode",
 		"latitude", "longitude", "start_time", "end_time", "break_start_time", "break_end_time",
-		"slot_duration", "max_queue_size", "experience_years", "shop_image", "tags", "phone", "email", "amenities",
+		"slot_duration", "max_queue_size", "experience_years", "shop_image", "shop_images", "tags", "phone", "alternate_phone", "email", "amenities",
 		"is_home_service_available", "service_radius_km", "travel_charge_per_km", "base_travel_charge"}
 	filtered := make(map[string]interface{})
 	for _, key := range allowed {
@@ -528,20 +534,29 @@ func (h *BarberHandler) GetDashboard(c *gin.Context) {
 
 	var barber models.Barber
 	if err := h.db.Where("user_id = ?", userID).First(&barber).Error; err != nil {
-		utils.NotFoundResponse(c, "Barber profile not found")
-		return
+		barber = models.Barber{
+			UserID: userID,
+			Status: models.BarberStatusActive,
+		}
+		if err := h.db.Create(&barber).Error; err != nil {
+			utils.InternalErrorResponse(c, "Failed to initialize barber profile")
+			return
+		}
 	}
 
 	today := time.Now().Truncate(24 * time.Hour)
 	tomorrow := today.Add(24 * time.Hour)
 
 	var (
-		todayBookings  int64
-		pendingCount   int64
-		inProgressCount int64
-		completedToday int64
-		totalEarnings  float64
-		queueBookings  []models.Booking
+		todayBookings        int64
+		pendingCount         int64
+		inProgressCount      int64
+		completedToday       int64
+		totalEarnings        float64
+		pendingHomeServices  int64
+		documentsTotal       int64
+		documentsVerified    int64
+		queueBookings        []models.Booking
 	)
 
 	h.db.Model(&models.Booking{}).Where("barber_id = ? AND scheduled_start >= ? AND scheduled_start < ?", barber.ID, today, tomorrow).Count(&todayBookings)
@@ -549,16 +564,23 @@ func (h *BarberHandler) GetDashboard(c *gin.Context) {
 	h.db.Model(&models.Booking{}).Where("barber_id = ? AND status = ?", barber.ID, models.BookingStatusInProgress).Count(&inProgressCount)
 	h.db.Model(&models.Booking{}).Where("barber_id = ? AND status = ? AND scheduled_start >= ? AND scheduled_start < ?", barber.ID, models.BookingStatusCompleted, today, tomorrow).Count(&completedToday)
 	h.db.Model(&models.Booking{}).Where("barber_id = ? AND status = ? AND scheduled_start >= ? AND scheduled_start < ?", barber.ID, models.BookingStatusCompleted, today, tomorrow).Select("COALESCE(SUM(final_price), 0)").Scan(&totalEarnings)
+	h.db.Model(&models.Booking{}).Where("barber_id = ? AND is_home_service = ? AND status = ?", barber.ID, true, models.BookingStatusPending).Count(&pendingHomeServices)
+	h.db.Model(&models.BarberDocument{}).Where("barber_id = ?", barber.ID).Count(&documentsTotal)
+	h.db.Model(&models.BarberDocument{}).Where("barber_id = ? AND status = ?", barber.ID, "approved").Count(&documentsVerified)
 	h.db.Where("barber_id = ? AND scheduled_start >= ? AND status IN ?", barber.ID, time.Now(), []models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress}).Order("scheduled_start ASC").Find(&queueBookings)
 
 	utils.SuccessResponse(c, gin.H{
-		"barber":          barber,
-		"today_bookings":  todayBookings,
-		"pending":         pendingCount,
-		"in_progress":     inProgressCount,
-		"completed_today": completedToday,
-		"total_earnings":  totalEarnings,
-		"queue":           queueBookings,
+		"barber":                barber,
+		"today_bookings":        todayBookings,
+		"pending":               pendingCount,
+		"in_progress":           inProgressCount,
+		"completed_today":       completedToday,
+		"total_earnings":        totalEarnings,
+		"pending_home_services": pendingHomeServices,
+		"documents_total":       documentsTotal,
+		"documents_verified":    documentsVerified,
+		"online":                barber.IsAvailable,
+		"queue":                 queueBookings,
 	})
 }
 
@@ -653,7 +675,7 @@ func (h *BarberHandler) SetWeeklySchedule(c *gin.Context) {
 	}
 
 	var req []struct {
-		DayOfWeek int    `json:"day_of_week" binding:"required,min=0,max=6"`
+		DayOfWeek int    `json:"day_of_week" binding:"min=0,max=6"`
 		StartTime string `json:"start_time" binding:"required"`
 		EndTime   string `json:"end_time" binding:"required"`
 		IsActive  *bool  `json:"is_active"`

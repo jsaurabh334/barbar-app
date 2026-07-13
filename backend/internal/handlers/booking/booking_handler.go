@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/barbar-app/backend/internal/auth"
@@ -124,6 +125,7 @@ type CreateBookingRequest struct {
 	CouponCode           string      `json:"coupon_code,omitempty"`
 	IsHomeService        bool        `json:"is_home_service"`
 	HomeServiceAddressID *uuid.UUID  `json:"home_service_address_id,omitempty"`
+	StaffID              *uuid.UUID  `json:"staff_id,omitempty"`
 }
 
 func (h *BookingHandler) Create(c *gin.Context) {
@@ -197,69 +199,19 @@ func (h *BookingHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Validate services and calculate totals
-	var services []models.BarberService
-	if err := h.db.Where("id IN ? AND barber_id = ? AND is_active = ?", req.ServiceIDs, req.BarberID, true).Find(&services).Error; err != nil {
-		utils.BadRequestResponse(c, "Services not found")
+	// Assign staff and calculate queue/wait times
+	assignment, err := h.findBestStaff(barber, req.StaffID, req.ServiceIDs, req.ScheduledStart, req.IsHomeService)
+	if err != nil {
+		utils.BadRequestResponse(c, err.Error())
 		return
 	}
 
-	if len(services) == 0 {
-		utils.BadRequestResponse(c, "No valid services found")
-		return
-	}
-
-	if len(services) != len(req.ServiceIDs) {
-		utils.BadRequestResponse(c, "One or more services do not belong to this barber")
-		return
-	}
-
-	var totalDuration int
-	var totalPrice float64
-	for _, svc := range services {
-		totalDuration += svc.DurationMin
-		totalPrice += svc.Price
-	}
-
-	// Calculate queue position and estimated wait (shop bookings only)
-	var estimatedWait int
-	var queuePosition int
-	if !req.IsHomeService {
-		var aheadBookings []models.Booking
-		h.db.Where("barber_id = ? AND status IN ? AND (scheduled_start < ? OR (scheduled_start = ? AND created_at < ?))",
-			req.BarberID,
-			[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
-			req.ScheduledStart, req.ScheduledStart, time.Now()).
-			Order("queue_position ASC, scheduled_start ASC").
-			Find(&aheadBookings)
-
-		estimatedWait = 0
-		for _, ab := range aheadBookings {
-			duration := ab.TotalDuration
-			if duration <= 0 {
-				duration = barber.SlotDuration
-			}
-			
-			if ab.Status == models.BookingStatusInProgress {
-				start := ab.CreatedAt
-				if ab.ActualStart != nil {
-					start = *ab.ActualStart
-				} else if !ab.ScheduledStart.IsZero() {
-					start = ab.ScheduledStart
-				}
-				elapsed := int(time.Since(start).Minutes())
-				remaining := duration - elapsed
-				if remaining < 0 {
-					remaining = 0
-				}
-				estimatedWait += remaining + barber.BufferBetweenSlots
-			} else {
-				estimatedWait += duration + barber.BufferBetweenSlots
-			}
-		}
-
-		queuePosition = len(aheadBookings) + 1
-	}
+	totalDuration := assignment.TotalDuration
+	totalPrice := assignment.TotalPrice
+	queuePosition := assignment.QueuePosition
+	estimatedWait := assignment.EstimatedWaitMin
+	services := assignment.Services
+	assignedStaffID := assignment.StaffID
 
 	// Apply coupon if provided
 	var discountAmount float64
@@ -296,6 +248,11 @@ func (h *BookingHandler) Create(c *gin.Context) {
 			return
 		}
 		travelCharge = barber.BaseTravelCharge + (travelDistance * barber.TravelChargePerKm)
+	}
+
+	travelTimeMin := 0
+	if req.IsHomeService {
+		travelTimeMin = int(travelDistance*2 + 5) // roughly 2 mins per km + 5 min buffer
 	}
 
 	finalPrice := totalPrice - discountAmount + travelCharge
@@ -342,6 +299,7 @@ func (h *BookingHandler) Create(c *gin.Context) {
 	}
 	booking := models.Booking{
 		BarberID:         req.BarberID,
+		StaffID:          &assignedStaffID,
 		CustomerID:       customerID,
 		Status:           bookingStatus,
 		ScheduledStart:   req.ScheduledStart,
@@ -356,6 +314,7 @@ func (h *BookingHandler) Create(c *gin.Context) {
 		Source:           "app",
 		IsHomeService:    req.IsHomeService,
 		TravelDistanceKm: travelDistance,
+		TravelTimeMin:    travelTimeMin,
 		TravelCharge:     travelCharge,
 	}
 	if req.IsHomeService && homeServiceAddress != nil {
@@ -736,11 +695,12 @@ func (h *BookingHandler) GetQueue(c *gin.Context) {
 	}
 
 	var bookings []models.Booking
-	h.db.Where("barber_id = ? AND status IN ? AND scheduled_start >= ?",
+	h.db.Preload("Staff").Preload("Services").
+		Where("barber_id = ? AND status IN ? AND scheduled_start >= ?",
 		barber.ID,
 		[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
 		time.Now()).
-		Order("queue_position ASC, scheduled_start ASC").
+		Order("staff_id ASC, queue_position ASC, scheduled_start ASC").
 		Find(&bookings)
 
 	utils.SuccessResponse(c, bookings)
@@ -768,8 +728,8 @@ func (h *BookingHandler) GetMyQueuePosition(c *gin.Context) {
 
 	// Calculate current queue position & wait time
 	var aheadBookings []models.Booking
-	h.db.Where("barber_id = ? AND status IN ? AND (queue_position < ? OR (queue_position = ? AND created_at < ?)) AND id != ?",
-		booking.BarberID,
+	h.db.Where("staff_id = ? AND status IN ? AND (queue_position < ? OR (queue_position = ? AND created_at < ?)) AND id != ?",
+		booking.StaffID,
 		[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
 		booking.QueuePosition, booking.QueuePosition, booking.CreatedAt, booking.ID).
 		Order("queue_position ASC, scheduled_start ASC").
@@ -915,7 +875,10 @@ func (h *BookingHandler) AcceptHomeService(c *gin.Context) {
 	}
 
 	// Travel buffer check — accounts for travel_to/travel_back of all bookings
-	travelTimeMin := int(booking.TravelDistanceKm*2 + 5)
+	travelTimeMin := booking.TravelTimeMin
+	if travelTimeMin <= 0 {
+		travelTimeMin = int(booking.TravelDistanceKm*2 + 5)
+	}
 	newBlockedStart := booking.ScheduledStart.Add(-time.Duration(travelTimeMin) * time.Minute)
 	newBlockedEnd := booking.ScheduledStart.Add(time.Duration(booking.TotalDuration+travelTimeMin) * time.Minute)
 
@@ -929,7 +892,10 @@ func (h *BookingHandler) AcceptHomeService(c *gin.Context) {
 		ebStart := eb.ScheduledStart
 		ebEnd := eb.ScheduledEnd
 		if eb.IsHomeService {
-			ebTravel := int(eb.TravelDistanceKm*2 + 5)
+			ebTravel := eb.TravelTimeMin
+			if ebTravel <= 0 {
+				ebTravel = int(eb.TravelDistanceKm*2 + 5)
+			}
 			ebStart = eb.ScheduledStart.Add(-time.Duration(ebTravel) * time.Minute)
 			ebEnd = eb.ScheduledEnd.Add(time.Duration(ebTravel) * time.Minute)
 		}
@@ -1179,4 +1145,141 @@ func haversineKm(lat1, lng1, lat2, lng2 float64) float64 {
 			math.Sin(dLng/2)*math.Sin(dLng/2)
 	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 	return R * c
+}
+
+// ListAvailableStaff returns available staff for a barber at a given time slot
+func (h *BookingHandler) ListAvailableStaff(c *gin.Context) {
+	barberID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid barber ID")
+		return
+	}
+
+	dateStr := c.Query("date")
+	timeStr := c.Query("time")
+	serviceIDsStr := c.Query("service_ids")
+
+	if dateStr == "" || timeStr == "" {
+		utils.BadRequestResponse(c, "date and time query parameters are required")
+		return
+	}
+
+	scheduledStart, err := time.Parse("2006-01-02 15:04", dateStr+" "+timeStr)
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid date or time format (use YYYY-MM-DD and HH:MM)")
+		return
+	}
+
+	var barber models.Barber
+	if err := h.db.First(&barber, barberID).Error; err != nil {
+		utils.NotFoundResponse(c, "Barber not found")
+		return
+	}
+
+	// Parse service IDs if provided
+	var serviceIDs []uuid.UUID
+	if serviceIDsStr != "" {
+		for _, s := range strings.Split(serviceIDsStr, ",") {
+			id, err := uuid.Parse(strings.TrimSpace(s))
+			if err == nil {
+				serviceIDs = append(serviceIDs, id)
+			}
+		}
+	}
+
+	// Fetch active staff with their services
+	var staffList []models.BarberStaff
+	h.db.Preload("Services.Service").Where("barber_id = ? AND is_active = ?", barberID, true).Find(&staffList)
+
+	tStr := scheduledStart.Format("15:04")
+	dayOfWeek := int(scheduledStart.Weekday())
+
+	type StaffAvailability struct {
+		StaffID     uuid.UUID `json:"staff_id"`
+		Name        string    `json:"name"`
+		Image       string    `json:"image,omitempty"`
+		Role        string    `json:"role"`
+		Rating      float64   `json:"rating"`
+		ReviewCount int       `json:"review_count"`
+		Available   bool      `json:"available"`
+		Reason      string    `json:"reason,omitempty"`
+	}
+
+	var results []StaffAvailability
+
+	for _, staff := range staffList {
+		result := StaffAvailability{
+			StaffID:     staff.ID,
+			Name:        staff.Name,
+			Image:       staff.Image,
+			Role:        string(staff.Role),
+			Rating:      staff.Rating,
+			ReviewCount: staff.ReviewCount,
+			Available:   true,
+		}
+
+		// Check day off
+		if staff.DayOff == dayOfWeek {
+			result.Available = false
+			result.Reason = "Staff is off today"
+			results = append(results, result)
+			continue
+		}
+
+		// Check working hours
+		startTime := staff.StartTime
+		endTime := staff.EndTime
+		if startTime == "" || endTime == "" {
+			startTime = barber.StartTime
+			endTime = barber.EndTime
+		}
+		if startTime != "" && endTime != "" {
+			if tStr < startTime || tStr >= endTime {
+				result.Available = false
+				result.Reason = "Outside working hours"
+				results = append(results, result)
+				continue
+			}
+		}
+
+		// Check service capability
+		if len(serviceIDs) > 0 {
+			staffServiceMap := make(map[uuid.UUID]bool)
+			for _, ss := range staff.Services {
+				if ss.IsActive {
+					staffServiceMap[ss.ServiceID] = true
+				}
+			}
+			canPerformAll := true
+			for _, sid := range serviceIDs {
+				if !staffServiceMap[sid] {
+					canPerformAll = false
+					break
+				}
+			}
+			if !canPerformAll {
+				result.Available = false
+				result.Reason = "Cannot perform requested services"
+				results = append(results, result)
+				continue
+			}
+		}
+
+		// Check queue capacity — count active bookings for this staff
+		var activeCount int64
+		h.db.Model(&models.Booking{}).Where("staff_id = ? AND status IN ? AND scheduled_start >= ?",
+			staff.ID,
+			[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
+			scheduledStart,
+		).Count(&activeCount)
+
+		if activeCount >= int64(barber.MaxQueueSize) {
+			result.Available = false
+			result.Reason = "Staff queue is full"
+		}
+
+		results = append(results, result)
+	}
+
+	utils.SuccessResponse(c, results)
 }

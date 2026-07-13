@@ -3,7 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../data/models/barber_model.dart';
+import '../../data/models/booking_model.dart';
 import '../../data/models/category_model.dart';
 import '../../core/network/websocket_client.dart';
 import '../../core/theme/app_theme.dart';
@@ -11,9 +13,13 @@ import 'barber_detail_screen.dart';
 import 'map_discovery_screen.dart';
 import 'shop_screen.dart';
 import 'wallet_screen.dart';
+import 'queue_tracker_screen.dart';
 import '../bloc/auth/auth_bloc.dart';
 import '../bloc/auth/auth_event.dart';
 import '../bloc/auth/auth_state.dart';
+import '../bloc/booking/booking_bloc.dart';
+import '../bloc/booking/booking_event.dart';
+import '../bloc/booking/booking_state.dart';
 import '../bloc/directory/directory_bloc.dart';
 import '../bloc/directory/directory_event.dart';
 import '../bloc/directory/directory_state.dart';
@@ -36,15 +42,18 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLiveSynced = false;
   double? _selectedMinRating;
   bool _openNow = false;
+  double _currentLat = 12.9716;
+  double _currentLng = 77.5946;
+  BookingModel? _activeBooking;
 
   @override
   void initState() {
     super.initState();
 
-    context.read<DirectoryBloc>().add(
-      const FetchNearbyBarbers(latitude: 12.9716, longitude: 77.5946),
-    );
+    _determinePosition();
+
     context.read<DirectoryBloc>().add(const FetchCategories());
+    context.read<BookingBloc>().add(FetchAllBookings());
 
     widget.webSocketClient.connect();
     widget.webSocketClient.connectionStatus.listen((connected) {
@@ -57,6 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     widget.webSocketClient.events.listen((event) {
       if (!mounted) return;
+      if (_activeBooking == null) return;
       if (event['type'] == 'queue_update') {
         final payload = event['payload'] as Map<String, dynamic>;
         final position = payload['current_position'] as int;
@@ -64,13 +74,50 @@ class _HomeScreenState extends State<HomeScreen> {
 
         context.read<DirectoryBloc>().add(
           UpdateBarberQueue(
-            barberId: 'c0a80101-8fc2-11eb-8dcd-0242ac130003',
+            barberId: _activeBooking!.barberId,
             currentQueueLength: position + 2,
             averageWaitTime: waitMin,
           ),
         );
       }
     });
+  }
+
+  Future<void> _determinePosition() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      _fetchBarbers();
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        _fetchBarbers();
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      _fetchBarbers();
+      return;
+    }
+
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      if (mounted) {
+        setState(() {
+          _currentLat = pos.latitude;
+          _currentLng = pos.longitude;
+        });
+        _fetchBarbers();
+      }
+    } catch (e) {
+      _fetchBarbers();
+    }
   }
 
   @override
@@ -89,8 +136,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     context.read<DirectoryBloc>().add(
       FetchNearbyBarbers(
-        latitude: 12.9716,
-        longitude: 77.5946,
+        latitude: _currentLat,
+        longitude: _currentLng,
         search: _searchController.text.isNotEmpty ? _searchController.text : null,
         minRating: _selectedMinRating,
         openNow: _openNow ? true : null,
@@ -548,98 +595,136 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildActiveQueueTrackerWidget() {
-    return GlassCard(
-      padding: const EdgeInsets.all(20),
-      opacity: 0.12,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'YOUR ACTIVE QUEUE',
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  letterSpacing: 1.5,
-                ),
+    return BlocConsumer<BookingBloc, BookingState>(
+      listener: (context, state) {
+        if (state is BookingsLoaded && state.bookings.isNotEmpty) {
+          final active = state.bookings.firstWhere(
+            (b) => b.status == 'pending' || b.status == 'confirmed' || b.status == 'in_progress',
+            orElse: () => state.bookings.first,
+          );
+          if (active.id != _activeBooking?.id) {
+            setState(() => _activeBooking = active);
+          }
+        } else if (state is BookingsLoaded && state.bookings.isEmpty) {
+          if (_activeBooking != null) {
+            setState(() => _activeBooking = null);
+          }
+        }
+      },
+      builder: (context, state) {
+        if (_activeBooking == null) return const SizedBox.shrink();
+
+        final booking = _activeBooking!;
+        final ahead = booking.queuePosition > 1 ? booking.queuePosition - 1 : 0;
+
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => QueueTrackerScreen(webSocketClient: widget.webSocketClient),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Text(
-                  'CONFIRMED',
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 10,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            );
+          },
+          child: GlassCard(
+            padding: const EdgeInsets.all(20),
+            opacity: 0.12,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Premium Barber Shop',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 18),
+                    const Text(
+                      'YOUR ACTIVE QUEUE',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        letterSpacing: 1.5,
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    const Text('Haircut & Hot Towel Shave'),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        booking.status.toUpperCase(),
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '#4',
-                    style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                      color: AppColors.primary,
-                      fontSize: 36,
-                      fontWeight: FontWeight.w900,
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            booking.shopName.isNotEmpty ? booking.shopName : 'Barber Shop',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 18),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            booking.services.map((s) => s.name).join(', '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const Text('Queue Spot', style: TextStyle(fontSize: 10)),
-                ],
-              ),
-            ],
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '#${booking.queuePosition}',
+                          style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                            color: AppColors.primary,
+                            fontSize: 36,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const Text('Queue Spot', style: TextStyle(fontSize: 10)),
+                      ],
+                    ),
+                  ],
+                ),
+                const Divider(height: 24, color: AppColors.border),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(LucideIcons.users, size: 16, color: AppColors.textSecondary),
+                        const SizedBox(width: 8),
+                        Text('$ahead clients ahead of you'),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        const Icon(LucideIcons.clock, size: 16, color: AppColors.primary),
+                        const SizedBox(width: 8),
+                        Text(
+                          '~${booking.estimatedWaitMinutes} Mins wait',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          const Divider(height: 24, color: AppColors.border),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Row(
-                children: [
-                  Icon(LucideIcons.users, size: 16, color: AppColors.textSecondary),
-                  SizedBox(width: 8),
-                  Text('3 clients ahead of you'),
-                ],
-              ),
-              Row(
-                children: [
-                  const Icon(LucideIcons.clock, size: 16, color: AppColors.primary),
-                  const SizedBox(width: 8),
-                  Text(
-                    '~45 Mins wait',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 

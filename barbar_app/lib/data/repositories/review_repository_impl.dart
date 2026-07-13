@@ -68,6 +68,11 @@ class ReviewRepositoryImpl implements ReviewRepository {
   }
 
   @override
+  Future<void> replyToReview(String reviewId, String reply) async {
+    return _remoteDataSource.replyToReview(reviewId, reply);
+  }
+
+  @override
   Future<Map<String, dynamic>> uploadImage(File file, {void Function(int, int)? onProgress}) async {
     return _remoteDataSource.uploadImage(file, onProgress: onProgress);
   }

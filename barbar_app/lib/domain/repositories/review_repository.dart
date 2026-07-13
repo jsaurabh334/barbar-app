@@ -31,5 +31,7 @@ abstract class ReviewRepository {
 
   Future<void> reportReview(String reviewId, String reason);
 
+  Future<void> replyToReview(String reviewId, String reply);
+
   Future<Map<String, dynamic>> uploadImage(File file, {void Function(int, int)? onProgress});
 }

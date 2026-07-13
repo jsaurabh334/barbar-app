@@ -24,12 +24,24 @@ func (s *QueueService) RecalculatePositions(barberID uuid.UUID) {
 	s.db.Where("barber_id = ? AND status IN ?",
 		barberID,
 		[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
-	).Order("queue_position ASC, scheduled_start ASC, created_at ASC").Find(&bookings)
+	).Order("staff_id ASC, queue_position ASC, scheduled_start ASC, created_at ASC").Find(&bookings)
 
-	for i, b := range bookings {
-		newPos := i + 1
-		if b.QueuePosition != newPos {
-			s.db.Model(&b).Update("queue_position", newPos)
+	// Group by staffID
+	staffQueues := make(map[string][]models.Booking)
+	for _, b := range bookings {
+		staffID := ""
+		if b.StaffID != nil {
+			staffID = b.StaffID.String()
+		}
+		staffQueues[staffID] = append(staffQueues[staffID], b)
+	}
+
+	for _, queue := range staffQueues {
+		for i, b := range queue {
+			newPos := i + 1
+			if b.QueuePosition != newPos {
+				s.db.Model(&b).Update("queue_position", newPos)
+			}
 		}
 	}
 }
@@ -39,45 +51,54 @@ func (s *QueueService) RecalculateWaitTimes(barberID uuid.UUID) {
 		return
 	}
 
-	accumulatedWait := 0
-	
-	// Fetch all active bookings in queue order (including in-progress, pending, confirmed)
 	var bookings []models.Booking
 	s.db.Where("barber_id = ? AND status IN ?",
 		barberID,
 		[]models.BookingStatus{models.BookingStatusInProgress, models.BookingStatusPending, models.BookingStatusConfirmed},
-	).Order("queue_position ASC, scheduled_start ASC, created_at ASC").Find(&bookings)
+	).Order("staff_id ASC, queue_position ASC, scheduled_start ASC, created_at ASC").Find(&bookings)
 
+	staffQueues := make(map[string][]models.Booking)
 	for _, b := range bookings {
-		if b.Status == models.BookingStatusInProgress {
-			duration := b.TotalDuration
-			if duration <= 0 {
-				duration = barber.SlotDuration
+		staffID := ""
+		if b.StaffID != nil {
+			staffID = b.StaffID.String()
+		}
+		staffQueues[staffID] = append(staffQueues[staffID], b)
+	}
+
+	for _, queue := range staffQueues {
+		accumulatedWait := 0
+		for _, b := range queue {
+			if b.Status == models.BookingStatusInProgress {
+				duration := b.TotalDuration
+				if duration <= 0 {
+					duration = barber.SlotDuration
+				}
+				
+				start := b.CreatedAt
+				if b.ActualStart != nil {
+					start = *b.ActualStart
+				} else if !b.ScheduledStart.IsZero() {
+					start = b.ScheduledStart
+				}
+				
+				elapsed := int(time.Since(start).Minutes())
+				remaining := duration - elapsed
+				if remaining < 0 {
+					remaining = 0
+				}
+				accumulatedWait = remaining + barber.BufferBetweenSlots
+			} else {
+				if b.EstimatedWaitMin != accumulatedWait {
+					s.db.Model(&b).Update("estimated_wait_minutes", accumulatedWait)
+				}
+				
+				duration := b.TotalDuration
+				if duration <= 0 {
+					duration = barber.SlotDuration
+				}
+				accumulatedWait += duration + barber.BufferBetweenSlots
 			}
-			
-			start := b.CreatedAt
-			if b.ActualStart != nil {
-				start = *b.ActualStart
-			} else if !b.ScheduledStart.IsZero() {
-				start = b.ScheduledStart
-			}
-			
-			elapsed := int(time.Since(start).Minutes())
-			remaining := duration - elapsed
-			if remaining < 0 {
-				remaining = 0
-			}
-			accumulatedWait = remaining + barber.BufferBetweenSlots
-		} else {
-			if b.EstimatedWaitMin != accumulatedWait {
-				s.db.Model(&b).Update("estimated_wait_min", accumulatedWait)
-			}
-			
-			duration := b.TotalDuration
-			if duration <= 0 {
-				duration = barber.SlotDuration
-			}
-			accumulatedWait += duration + barber.BufferBetweenSlots
 		}
 	}
 }
@@ -103,15 +124,16 @@ func (s *QueueService) GetQueueStatus(barberID uuid.UUID) *QueueStatus {
 	s.db.Where("barber_id = ? AND status IN ?",
 		barberID,
 		[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
-	).Preload("Customer").Order("queue_position ASC, scheduled_start ASC").Find(&bookings)
+	).Preload("Customer").Order("staff_id ASC, queue_position ASC, scheduled_start ASC").Find(&bookings)
 
-	slotTime := barber.SlotDuration + barber.BufferBetweenSlots
 	entries := make([]QueueEntry, len(bookings))
+	
+	// Just assigning raw positions for the broadcast payload
 	for i, b := range bookings {
 		entries[i] = QueueEntry{
 			Booking:         b,
-			Position:        i + 1,
-			EstimatedWaitMs: int64(i * slotTime * 60 * 1000),
+			Position:        b.QueuePosition,
+			EstimatedWaitMs: int64(b.EstimatedWaitMin * 60 * 1000),
 		}
 	}
 
