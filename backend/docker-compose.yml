@@ -45,6 +45,7 @@ services:
       - DEV_OTP_DEBUG=true
     volumes:
       - ./static:/app/static
+      - ./uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy

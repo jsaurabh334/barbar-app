@@ -1,6 +1,8 @@
 abstract class BarberRepository {
+  Future<Map<String, dynamic>> registerBarber(Map<String, dynamic> data);
+  Future<Map<String, dynamic>> getProfile();
   Future<Map<String, dynamic>> getDashboard();
-  Future<void> updateProfile(Map<String, dynamic> data);
+  Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> data);
   Future<void> updateAvailability({required bool isAvailable, String? status});
   Future<Map<String, dynamic>> getEarnings({String period = 'week'});
   Future<List<Map<String, dynamic>>> getWeeklySchedule();

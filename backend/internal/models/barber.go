@@ -62,6 +62,7 @@ type Barber struct {
 	Tags               JSONB                    `gorm:"type:jsonb" json:"tags,omitempty"`
 	BusinessDays       JSONB                    `gorm:"type:jsonb" json:"business_days,omitempty"`
 	Amenities          JSONB                    `gorm:"type:jsonb" json:"amenities,omitempty"`
+	Languages          JSONB                    `gorm:"type:jsonb" json:"languages,omitempty"`
 	IsHomeServiceAvailable bool                 `gorm:"default:false" json:"is_home_service_available"`
 	ServiceRadiusKm    float64                  `gorm:"default:0" json:"service_radius_km"`
 	TravelChargePerKm  float64                  `gorm:"default:0" json:"travel_charge_per_km"`
@@ -119,4 +120,22 @@ type BarberDocument struct {
 	VerifiedBy *uuid.UUID `gorm:"type:uuid" json:"verified_by,omitempty"`
 	VerifiedAt *time.Time `json:"verified_at,omitempty"`
 	Remarks    string    `gorm:"type:text" json:"remarks,omitempty"`
+}
+
+// IsProfileComplete checks whether the barber has filled all required fields
+// This checks fields that don't require DB queries. Caller must verify services & staff separately.
+func (b *Barber) IsProfileComplete() bool {
+	if b.ShopName == "" || b.Address == "" || b.City == "" {
+		return false
+	}
+	if b.Latitude == 0 || b.Longitude == 0 {
+		return false
+	}
+	if b.StartTime == "" || b.EndTime == "" {
+		return false
+	}
+	if b.ShopImage == "" {
+		return false
+	}
+	return true
 }

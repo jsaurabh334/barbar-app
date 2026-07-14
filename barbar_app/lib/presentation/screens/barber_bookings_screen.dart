@@ -33,54 +33,72 @@ class _BarberBookingsScreenState extends State<BarberBookingsScreen> with Single
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('BOOKINGS'),
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textSecondary,
-          indicatorColor: AppColors.primary,
-          tabs: const [
-            Tab(text: "Today's"),
-            Tab(text: "Upcoming"),
-            Tab(text: "Completed"),
-            Tab(text: "Cancelled"),
+      body: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 16),
+            const Text(
+              'BOOKINGS',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+                letterSpacing: 1.0,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.center,
+              labelColor: AppColors.primary,
+              unselectedLabelColor: AppColors.textSecondary,
+              indicatorColor: AppColors.primary,
+              dividerColor: AppColors.border,
+              tabs: const [
+                Tab(text: "Today's"),
+                Tab(text: "Upcoming"),
+                Tab(text: "Completed"),
+                Tab(text: "Cancelled"),
+              ],
+            ),
+            Expanded(
+              child: BlocBuilder<BookingBloc, BookingState>(
+                builder: (context, state) {
+                  if (state is BookingLoading) {
+                    return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+                  }
+                  if (state is BookingsLoaded) {
+                    final now = DateTime.now();
+                    final todayBookings = state.bookings.where((b) {
+                      final d = DateTime.tryParse(b.scheduledStart);
+                      return d != null && d.year == now.year && d.month == now.month && d.day == now.day && b.status != 'completed' && b.status != 'cancelled';
+                    }).toList();
+
+                    final upcomingBookings = state.bookings.where((b) {
+                      final d = DateTime.tryParse(b.scheduledStart);
+                      return d != null && d.isAfter(DateTime(now.year, now.month, now.day, 23, 59)) && b.status != 'completed' && b.status != 'cancelled';
+                    }).toList();
+
+                    final completedBookings = state.bookings.where((b) => b.status == 'completed').toList();
+                    final cancelledBookings = state.bookings.where((b) => b.status == 'cancelled').toList();
+
+                    return TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildList(todayBookings),
+                        _buildList(upcomingBookings),
+                        _buildList(completedBookings),
+                        _buildList(cancelledBookings),
+                      ],
+                    );
+                  }
+                  return const Center(child: Text('No bookings available'));
+                },
+              ),
+            ),
           ],
         ),
-      ),
-      body: BlocBuilder<BookingBloc, BookingState>(
-        builder: (context, state) {
-          if (state is BookingLoading) {
-            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-          }
-          if (state is BookingsLoaded) {
-            final now = DateTime.now();
-            final todayBookings = state.bookings.where((b) {
-              final d = DateTime.tryParse(b.scheduledStart);
-              return d != null && d.year == now.year && d.month == now.month && d.day == now.day && b.status != 'completed' && b.status != 'cancelled';
-            }).toList();
-
-            final upcomingBookings = state.bookings.where((b) {
-              final d = DateTime.tryParse(b.scheduledStart);
-              return d != null && d.isAfter(DateTime(now.year, now.month, now.day, 23, 59)) && b.status != 'completed' && b.status != 'cancelled';
-            }).toList();
-
-            final completedBookings = state.bookings.where((b) => b.status == 'completed').toList();
-            final cancelledBookings = state.bookings.where((b) => b.status == 'cancelled').toList();
-
-            return TabBarView(
-              controller: _tabController,
-              children: [
-                _buildList(todayBookings),
-                _buildList(upcomingBookings),
-                _buildList(completedBookings),
-                _buildList(cancelledBookings),
-              ],
-            );
-          }
-          return const Center(child: Text('No bookings available'));
-        },
       ),
     );
   }

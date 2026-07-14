@@ -1,7 +1,9 @@
 package barber
 
 import (
+	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/barbar-app/backend/internal/models"
@@ -38,10 +40,14 @@ func (h *StaffHandler) AddStaff(c *gin.Context) {
 	}
 
 	var req struct {
-		Name     string `json:"name" binding:"required"`
-		Image    string `json:"image"`
-		Phone    string `json:"phone"`
-		Role     string `json:"role" binding:"omitempty,oneof=staff manager"`
+		Name        string `json:"name" binding:"required"`
+		Image       string `json:"image"`
+		Phone       string `json:"phone"`
+		Role        string `json:"role" binding:"omitempty,oneof=staff manager"`
+		StartTime   string `json:"start_time"`
+		EndTime     string `json:"end_time"`
+		WorkingDays string `json:"working_days"`
+		DayOff      string `json:"day_off"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -54,15 +60,34 @@ func (h *StaffHandler) AddStaff(c *gin.Context) {
 		role = models.RoleManager
 	}
 
+	if req.StartTime == "" {
+		req.StartTime = "09:00"
+	}
+	if req.EndTime == "" {
+		req.EndTime = "21:00"
+	}
+	if req.WorkingDays == "" {
+		req.WorkingDays = "1,2,3,4,5,6"
+	}
+	dayOffInt := 0
+	if req.DayOff != "" {
+		// attempt to parse if they passed a number string
+		if d, err := strconv.Atoi(req.DayOff); err == nil {
+			dayOffInt = d
+		}
+	}
+
 	staff := models.BarberStaff{
-		BarberID:  barberID,
-		Name:      req.Name,
-		Image:     req.Image,
-		Phone:     req.Phone,
-		Role:      role,
-		IsActive:  true,
-		StartTime: "09:00",
-		EndTime:   "21:00",
+		BarberID:    barberID,
+		Name:        req.Name,
+		Image:       req.Image,
+		Phone:       req.Phone,
+		Role:        role,
+		IsActive:    true,
+		StartTime:   req.StartTime,
+		EndTime:     req.EndTime,
+		WorkingDays: req.WorkingDays,
+		DayOff:      dayOffInt,
 	}
 
 	if err := h.db.Create(&staff).Error; err != nil {
@@ -114,12 +139,14 @@ func (h *StaffHandler) UpdateStaff(c *gin.Context) {
 		Phone     *string `json:"phone"`
 		Role      *string `json:"role" binding:"omitempty,oneof=staff manager"`
 		IsActive  *bool   `json:"is_active"`
-		StartTime *string `json:"start_time"`
-		EndTime   *string `json:"end_time"`
-		DayOff    *int    `json:"day_off"`
+		StartTime   *string `json:"start_time"`
+		EndTime     *string `json:"end_time"`
+		WorkingDays *string `json:"working_days"`
+		DayOff      *string `json:"day_off"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Println("UpdateStaff BIND ERROR:", err.Error())
 		utils.ErrorResponse(c, http.StatusBadRequest, "Invalid request body: "+err.Error())
 		return
 	}
@@ -146,8 +173,16 @@ func (h *StaffHandler) UpdateStaff(c *gin.Context) {
 	if req.EndTime != nil {
 		updates["end_time"] = *req.EndTime
 	}
+	if req.WorkingDays != nil {
+		updates["working_days"] = *req.WorkingDays
+	}
 	if req.DayOff != nil {
-		updates["day_off"] = *req.DayOff
+		if d, err := strconv.Atoi(*req.DayOff); err == nil {
+			updates["day_off"] = d
+		} else {
+			// If it's a string like "Sun", map it roughly or ignore. For now, default to 0
+			updates["day_off"] = 0
+		}
 	}
 
 	if len(updates) > 0 {

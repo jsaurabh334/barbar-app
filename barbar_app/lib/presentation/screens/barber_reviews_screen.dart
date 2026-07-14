@@ -178,14 +178,14 @@ class _BarberReviewsScreenState extends State<BarberReviewsScreen> {
       child: Column(
         children: [
           Text(
-            summary.averageRating.toStringAsFixed(1),
+            summary.avgRating.toStringAsFixed(1),
             style: const TextStyle(fontSize: 48, fontWeight: FontWeight.w900, color: AppColors.primary),
           ),
           const SizedBox(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(5, (i) => Icon(
-              i < summary.averageRating.round() ? Icons.star : Icons.star_border,
+              i < summary.avgRating.round() ? Icons.star : Icons.star_border,
               color: Colors.amber,
               size: 24,
             )),
@@ -194,7 +194,12 @@ class _BarberReviewsScreenState extends State<BarberReviewsScreen> {
           Text('${summary.totalReviews} reviews', style: const TextStyle(color: AppColors.textSecondary)),
           const SizedBox(height: 16),
           ...[5, 4, 3, 2, 1].map((stars) {
-            final count = summary.distribution[stars] ?? 0;
+            int count = 0;
+            if (stars == 5) count = summary.distribution.star5;
+            else if (stars == 4) count = summary.distribution.star4;
+            else if (stars == 3) count = summary.distribution.star3;
+            else if (stars == 2) count = summary.distribution.star2;
+            else count = summary.distribution.star1;
             final pct = summary.totalReviews > 0 ? count / summary.totalReviews : 0.0;
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),

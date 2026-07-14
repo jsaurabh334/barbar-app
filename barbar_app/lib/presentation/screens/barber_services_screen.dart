@@ -5,6 +5,8 @@ import '../../core/theme/app_theme.dart';
 import '../bloc/barber_services/barber_services_bloc.dart';
 import '../bloc/barber_services/barber_services_event.dart';
 import '../bloc/barber_services/barber_services_state.dart';
+import '../../../domain/repositories/directory_repository.dart';
+import '../../../data/models/category_model.dart';
 import '../widgets/glass_card.dart';
 
 class BarberServicesScreen extends StatefulWidget {
@@ -21,17 +23,25 @@ class _BarberServicesScreenState extends State<BarberServicesScreen> {
     context.read<BarberServicesBloc>().add(FetchServices());
   }
 
+  Future<List<CategoryModel>> _fetchCategories() async {
+    try {
+      final repo = context.read<DirectoryRepository>();
+      return await repo.getCategories();
+    } catch (_) {
+      return [];
+    }
+  }
+
   void _showAddEditDialog([Map<String, dynamic>? service]) {
-    final nameController = TextEditingController(text: service?['name'] as String?);
-    final descController = TextEditingController(text: service?['description'] as String?);
-    final categoryController = TextEditingController(text: service?['category']?['name'] as String?);
-    final priceController = TextEditingController(text: service != null ? service['price'].toString() : '');
-    final defPriceController = TextEditingController(text: service?['default_price']?.toString() ?? '');
-    final durationController = TextEditingController(text: service != null ? service['duration_minutes'].toString() : '');
-    final defDurationController = TextEditingController(text: service?['default_duration_minutes']?.toString() ?? '');
-    final bufferController = TextEditingController(text: service?['default_buffer_minutes']?.toString() ?? '');
-    bool isAddon = service?['is_addon'] as bool? ?? false;
-    bool isActive = service?['is_active'] as bool? ?? true;
+    final nameController = TextEditingController(text: service?['name'] ?? '');
+    final descController = TextEditingController(text: service?['description'] ?? '');
+    final priceController = TextEditingController(text: service?['price']?.toString() ?? '');
+    final durationController = TextEditingController(text: service?['duration_minutes']?.toString() ?? '30');
+    bool isAddon = service?['is_addon'] ?? false;
+    bool isActive = service?['is_active'] ?? true;
+    String? categoryId = service?['category_id']?.toString();
+
+    final futureCategories = _fetchCategories();
 
     showDialog(
       context: context,
@@ -49,25 +59,24 @@ class _BarberServicesScreenState extends State<BarberServicesScreen> {
                     const SizedBox(height: 12),
                     TextField(controller: descController, decoration: const InputDecoration(labelText: 'Description')),
                     const SizedBox(height: 12),
-                    TextField(controller: categoryController, decoration: const InputDecoration(labelText: 'Category')),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(child: TextField(controller: priceController, decoration: const InputDecoration(labelText: 'Price'), keyboardType: TextInputType.number)),
-                        const SizedBox(width: 12),
-                        Expanded(child: TextField(controller: defPriceController, decoration: const InputDecoration(labelText: 'Default Price'), keyboardType: TextInputType.number)),
-                      ],
+                    FutureBuilder<List<CategoryModel>>(
+                      future: futureCategories,
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) return const CircularProgressIndicator();
+                        final cats = snapshot.data!;
+                        if (cats.isEmpty) return const Text('No categories available');
+                        return DropdownButtonFormField<String>(
+                          decoration: const InputDecoration(labelText: 'Category'),
+                          value: cats.any((c) => c.id == categoryId) ? categoryId : null,
+                          items: cats.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                          onChanged: (val) => setState(() => categoryId = val),
+                        );
+                      },
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(child: TextField(controller: durationController, decoration: const InputDecoration(labelText: 'Duration (min)'), keyboardType: TextInputType.number)),
-                        const SizedBox(width: 12),
-                        Expanded(child: TextField(controller: defDurationController, decoration: const InputDecoration(labelText: 'Default Duration'), keyboardType: TextInputType.number)),
-                      ],
-                    ),
+                    TextField(controller: priceController, decoration: const InputDecoration(labelText: 'Price'), keyboardType: TextInputType.number),
                     const SizedBox(height: 12),
-                    TextField(controller: bufferController, decoration: const InputDecoration(labelText: 'Default Buffer (min)'), keyboardType: TextInputType.number),
+                    TextField(controller: durationController, decoration: const InputDecoration(labelText: 'Duration (min)'), keyboardType: TextInputType.number),
                     const SizedBox(height: 12),
                     SwitchListTile(
                       title: const Text('Is Addon', style: TextStyle(fontSize: 14)),
@@ -87,16 +96,18 @@ class _BarberServicesScreenState extends State<BarberServicesScreen> {
                 ElevatedButton(
                   onPressed: () {
                     final data = {
-                      'name': nameController.text,
-                      'description': descController.text,
+                      'name': nameController.text.trim(),
+                      'description': descController.text.trim(),
+                      'category_id': categoryId,
                       'price': double.tryParse(priceController.text) ?? 0,
-                      'default_price': double.tryParse(defPriceController.text),
                       'duration_minutes': int.tryParse(durationController.text) ?? 30,
-                      'default_duration_minutes': int.tryParse(defDurationController.text),
-                      'default_buffer_minutes': int.tryParse(bufferController.text),
                       'is_addon': isAddon,
                       'is_active': isActive,
                     };
+                    if (categoryId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a category')));
+                      return;
+                    }
                     if (service == null) {
                       context.read<BarberServicesBloc>().add(AddService(data));
                     } else {

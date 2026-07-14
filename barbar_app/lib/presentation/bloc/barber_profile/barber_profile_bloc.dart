@@ -14,9 +14,10 @@ class BarberProfileBloc extends Bloc<BarberProfileEvent, BarberProfileState> {
   Future<void> _onFetchProfile(FetchBarberProfile event, Emitter<BarberProfileState> emit) async {
     emit(BarberProfileLoading());
     try {
-      final dashboard = await _barberRepository.getDashboard();
-      final barber = dashboard['barber'] as Map<String, dynamic>? ?? {};
-      emit(BarberProfileLoaded(barber));
+      final result = await _barberRepository.getProfile();
+      final barber = result['barber'] as Map<String, dynamic>? ?? {};
+      final profileCompleted = result['profile_completed'] as bool? ?? false;
+      emit(BarberProfileLoaded(barber, profileCompleted));
     } catch (e) {
       emit(BarberProfileFailure(e.toString().replaceAll('Exception: ', '')));
     }
@@ -25,11 +26,11 @@ class BarberProfileBloc extends Bloc<BarberProfileEvent, BarberProfileState> {
   Future<void> _onUpdateProfile(UpdateBarberProfile event, Emitter<BarberProfileState> emit) async {
     emit(BarberProfileLoading());
     try {
-      await _barberRepository.updateProfile(event.data);
+      final result = await _barberRepository.updateProfile(event.data);
+      final barber = result['barber'] as Map<String, dynamic>? ?? {};
+      final profileCompleted = result['profile_completed'] as bool? ?? false;
       emit(BarberProfileSuccess('Profile updated successfully'));
-      final dashboard = await _barberRepository.getDashboard();
-      final barber = dashboard['barber'] as Map<String, dynamic>? ?? {};
-      emit(BarberProfileLoaded(barber));
+      emit(BarberProfileLoaded(barber, profileCompleted));
     } catch (e) {
       emit(BarberProfileFailure(e.toString().replaceAll('Exception: ', '')));
     }

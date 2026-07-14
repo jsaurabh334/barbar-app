@@ -75,7 +75,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 
 	// Initialize handlers
 	authH := authHandler.NewAuthHandler(db, jwtManager)
-	barberH := barberHandler.NewBarberHandler(db)
+	barberH := barberHandler.NewBarberHandler(db, cfg)
 	staffH := barberHandler.NewStaffHandler(db)
 	notifSvc := notifService.NewNotificationService(db, hub)
 	bookingH := bookingHandler.NewBookingHandler(db, notifSvc, hub)
@@ -228,6 +228,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 		{
 			barberRoutes.POST("/register", barberH.Register)
 			barberRoutes.GET("/dashboard", barberH.GetDashboard)
+			barberRoutes.GET("/profile", barberH.GetProfile)
 			barberRoutes.PUT("/profile", barberH.UpdateProfile)
 			barberRoutes.PUT("/availability", barberH.UpdateAvailability)
 			barberRoutes.GET("/earnings", barberH.GetEarnings)

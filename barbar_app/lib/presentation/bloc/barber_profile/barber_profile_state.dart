@@ -13,11 +13,12 @@ class BarberProfileLoading extends BarberProfileState {}
 
 class BarberProfileLoaded extends BarberProfileState {
   final Map<String, dynamic> profile;
+  final bool profileCompleted;
 
-  const BarberProfileLoaded(this.profile);
+  const BarberProfileLoaded(this.profile, this.profileCompleted);
 
   @override
-  List<Object?> get props => [profile];
+  List<Object?> get props => [profile, profileCompleted];
 }
 
 class BarberProfileSuccess extends BarberProfileState {

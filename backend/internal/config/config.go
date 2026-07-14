@@ -123,6 +123,10 @@ type AppConfig struct {
 	Upload           UploadConfig
 }
 
+func (c *Config) IsDevMode() bool {
+	return c.Server.Mode != "release"
+}
+
 func Load() *Config {
 	loadOnce.Do(func() {
 		cachedConfig = &Config{

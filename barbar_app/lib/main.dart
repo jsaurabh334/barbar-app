@@ -42,11 +42,12 @@ import 'presentation/bloc/barber_earnings/barber_earnings_bloc.dart';
 import 'presentation/bloc/directory/directory_bloc.dart';
 import 'presentation/bloc/marketplace/marketplace_bloc.dart';
 import 'presentation/bloc/address/address_bloc.dart';
-import 'presentation/bloc/review/review_bloc.dart';
 import 'presentation/bloc/wallet/wallet_bloc.dart';
+import 'presentation/bloc/review/review_bloc.dart';
+import 'presentation/bloc/shop_setup/shop_setup_bloc.dart';
 import 'presentation/screens/admin_console_screen.dart';
 import 'presentation/screens/auth_screen.dart';
-import 'presentation/screens/barber_dashboard_shell.dart';
+import 'presentation/screens/barber_shell.dart';
 import 'presentation/screens/customer_dashboard_shell.dart';
 import 'presentation/screens/delivery_dashboard_screen.dart';
 import 'presentation/screens/vendor_dashboard_screen.dart';
@@ -192,6 +193,12 @@ class MyApp extends StatelessWidget {
           BlocProvider<ReviewBloc>(
             create: (context) => ReviewBloc(reviewRepository),
           ),
+          BlocProvider<ShopSetupBloc>(
+            create: (context) => ShopSetupBloc(
+              barberRepository: barberRepository,
+              directoryRepository: directoryRepository,
+            ),
+          ),
         ],
         child: MaterialApp(
           title: 'Barbar App',
@@ -210,10 +217,7 @@ class MyApp extends StatelessWidget {
               } else if (state is AuthAuthenticated) {
                 final role = state.user.role.toLowerCase();
                 if (role == 'barber') {
-                  return BarberDashboardShell(
-                    webSocketClient: webSocketClient,
-                    barberRepository: barberRepository,
-                  );
+                  return BarberShell(webSocketClient: webSocketClient);
                 } else if (role == 'vendor') {
                   return const VendorDashboardScreen();
                 } else if (role == 'delivery' || role == 'delivery_partner') {

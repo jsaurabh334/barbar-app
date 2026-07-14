@@ -40,10 +40,10 @@ class StaffModel {
       isActive: json['is_active'] as bool? ?? true,
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
       reviewCount: json['review_count'] as int? ?? 0,
-      workingDays: json['working_days'] as String?,
-      startTime: json['start_time'] as String?,
-      endTime: json['end_time'] as String?,
-      dayOff: json['day_off'] as String?,
+      workingDays: json['working_days']?.toString(),
+      startTime: json['start_time']?.toString(),
+      endTime: json['end_time']?.toString(),
+      dayOff: json['day_off']?.toString(),
     );
   }
 

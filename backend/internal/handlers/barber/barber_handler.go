@@ -1,11 +1,13 @@
 package barber
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/barbar-app/backend/internal/auth"
+	"github.com/barbar-app/backend/internal/config"
 	"github.com/barbar-app/backend/internal/middleware"
 	"github.com/barbar-app/backend/internal/models"
 	"github.com/barbar-app/backend/internal/utils"
@@ -15,11 +17,12 @@ import (
 )
 
 type BarberHandler struct {
-	db *gorm.DB
+	db  *gorm.DB
+	cfg *config.Config
 }
 
-func NewBarberHandler(db *gorm.DB) *BarberHandler {
-	return &BarberHandler{db: db}
+func NewBarberHandler(db *gorm.DB, cfg *config.Config) *BarberHandler {
+	return &BarberHandler{db: db, cfg: cfg}
 }
 
 type RegisterBarberRequest struct {
@@ -122,9 +125,72 @@ func (h *BarberHandler) Register(c *gin.Context) {
 		}
 	}
 
+	// Auto-create staff record for the owner
+	defaultStaff := models.BarberStaff{
+		BarberID:    barber.ID,
+		UserID:      &userID,
+		Name:        req.ShopName,
+		Role:        models.RoleManager,
+		IsActive:    true,
+		WorkingDays: "0,1,2,3,4,5,6",
+		StartTime:   req.StartTime,
+		EndTime:     req.EndTime,
+	}
+	if err := tx.Create(&defaultStaff).Error; err != nil {
+		tx.Rollback()
+		utils.InternalErrorResponse(c, "Failed to create default staff")
+		return
+	}
+
+	// Assign all services to the default staff
+	var createdServices []models.BarberService
+	if err := tx.Where("barber_id = ?", barber.ID).Find(&createdServices).Error; err == nil {
+		for _, svc := range createdServices {
+			staffSvc := models.StaffService{
+				StaffID:   defaultStaff.ID,
+				ServiceID: svc.ID,
+				IsActive:  true,
+			}
+			if err := tx.Create(&staffSvc).Error; err != nil {
+				tx.Rollback()
+				utils.InternalErrorResponse(c, "Failed to assign services to staff")
+				return
+			}
+		}
+	}
+
+	// Auto-approve in dev mode
+	if h.cfg.IsDevMode() {
+		tx.Model(&barber).Updates(map[string]interface{}{
+			"verification_status": models.BarberVerifApproved,
+			"is_verified":         true,
+		})
+		barber.VerificationStatus = models.BarberVerifApproved
+		barber.IsVerified = true
+	}
+
 	tx.Commit()
 
 	utils.CreatedResponse(c, barber)
+}
+
+func (h *BarberHandler) isProfileFullyComplete(barber models.Barber) bool {
+	if !barber.IsProfileComplete() {
+		return false
+	}
+	// Must have at least 1 service
+	var svcCount int64
+	h.db.Model(&models.BarberService{}).Where("barber_id = ? AND is_active = ?", barber.ID, true).Count(&svcCount)
+	if svcCount == 0 {
+		return false
+	}
+	// Must have at least 1 active staff
+	var staffCount int64
+	h.db.Model(&models.BarberStaff{}).Where("barber_id = ? AND is_active = ?", barber.ID, true).Count(&staffCount)
+	if staffCount == 0 {
+		return false
+	}
+	return true
 }
 
 func (h *BarberHandler) GetProfile(c *gin.Context) {
@@ -137,7 +203,10 @@ func (h *BarberHandler) GetProfile(c *gin.Context) {
 			utils.NotFoundResponse(c, "Barber profile not found")
 			return
 		}
-		utils.SuccessResponse(c, barber)
+		utils.SuccessResponse(c, gin.H{
+			"barber":            barber,
+			"profile_completed": h.isProfileFullyComplete(barber),
+		})
 		return
 	}
 
@@ -147,7 +216,10 @@ func (h *BarberHandler) GetProfile(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, barber)
+	utils.SuccessResponse(c, gin.H{
+		"barber":            barber,
+		"profile_completed": h.isProfileFullyComplete(barber),
+	})
 }
 
 func (h *BarberHandler) UpdateProfile(c *gin.Context) {
@@ -174,17 +246,39 @@ func (h *BarberHandler) UpdateProfile(c *gin.Context) {
 	allowed := []string{"shop_name", "shop_description", "address", "city", "state", "pincode",
 		"latitude", "longitude", "start_time", "end_time", "break_start_time", "break_end_time",
 		"slot_duration", "max_queue_size", "experience_years", "shop_image", "shop_images", "tags", "phone", "alternate_phone", "email", "amenities",
+		"languages",
 		"is_home_service_available", "service_radius_km", "travel_charge_per_km", "base_travel_charge"}
 	filtered := make(map[string]interface{})
 	for _, key := range allowed {
 		if val, ok := updates[key]; ok {
-			filtered[key] = val
+			// Convert slices/maps to JSON bytes for JSONB columns
+			if key == "languages" || key == "amenities" || key == "tags" || key == "shop_images" {
+				if bytes, err := json.Marshal(val); err == nil {
+					filtered[key] = bytes
+				}
+			} else {
+				filtered[key] = val
+			}
 		}
 	}
 
-	h.db.Model(&barber).Updates(filtered)
+	// Validate required fields when profile is being completed
+	if _, ok := filtered["shop_name"]; ok {
+		if name, ok := filtered["shop_name"].(string); ok && len(name) < 2 {
+			utils.BadRequestResponse(c, "Shop name must be at least 2 characters")
+			return
+		}
+	}
+
+	if err := h.db.Model(&barber).Updates(filtered).Error; err != nil {
+		utils.InternalErrorResponse(c, "Failed to update profile: "+err.Error())
+		return
+	}
 	h.db.Preload("Services").First(&barber, barber.ID)
-	utils.SuccessResponse(c, barber)
+	utils.SuccessResponse(c, gin.H{
+		"barber":            barber,
+		"profile_completed": h.isProfileFullyComplete(barber),
+	})
 }
 
 func (h *BarberHandler) UpdateAvailability(c *gin.Context) {
@@ -534,14 +628,8 @@ func (h *BarberHandler) GetDashboard(c *gin.Context) {
 
 	var barber models.Barber
 	if err := h.db.Where("user_id = ?", userID).First(&barber).Error; err != nil {
-		barber = models.Barber{
-			UserID: userID,
-			Status: models.BarberStatusActive,
-		}
-		if err := h.db.Create(&barber).Error; err != nil {
-			utils.InternalErrorResponse(c, "Failed to initialize barber profile")
-			return
-		}
+		utils.NotFoundResponse(c, "Barber profile not found. Please complete shop setup first.")
+		return
 	}
 
 	today := time.Now().Truncate(24 * time.Hour)

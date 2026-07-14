@@ -22,13 +22,24 @@ class _BarberStaffScreenState extends State<BarberStaffScreen> {
     context.read<BarberStaffBloc>().add(FetchStaff());
   }
 
+  String _mapDaysToText(String? days) {
+    if (days == null || days.isEmpty) return '';
+    final map = {'0': 'Sun', '1': 'Mon', '2': 'Tue', '3': 'Wed', '4': 'Thu', '5': 'Fri', '6': 'Sat'};
+    return days.split(',').map((e) => map[e.trim()] ?? e.trim()).join(',');
+  }
+
+  String _mapTextToDays(String text) {
+    final map = {'sun': '0', 'mon': '1', 'tue': '2', 'wed': '3', 'thu': '4', 'fri': '5', 'sat': '6'};
+    return text.split(',').map((e) => map[e.trim().toLowerCase()] ?? e.trim()).join(',');
+  }
+
   void _showAddEditStaffDialog({StaffModel? staff}) {
     final nameCtrl = TextEditingController(text: staff?.name ?? '');
     final phoneCtrl = TextEditingController(text: staff?.phone ?? '');
     final startTimeCtrl = TextEditingController(text: staff?.startTime ?? '09:00');
     final endTimeCtrl = TextEditingController(text: staff?.endTime ?? '18:00');
-    final workingDaysCtrl = TextEditingController(text: staff?.workingDays ?? 'Mon,Tue,Wed,Thu,Fri,Sat');
-    final dayOffCtrl = TextEditingController(text: staff?.dayOff ?? 'Sun');
+    final workingDaysCtrl = TextEditingController(text: staff != null && staff.workingDays != null ? _mapDaysToText(staff.workingDays) : 'Mon,Tue,Wed,Thu,Fri,Sat');
+    final dayOffCtrl = TextEditingController(text: staff != null && staff.dayOff != null ? _mapDaysToText(staff.dayOff) : 'Sun');
     String selectedRole = staff?.role ?? 'staff';
 
     showDialog(
@@ -109,8 +120,8 @@ class _BarberStaffScreenState extends State<BarberStaffScreen> {
                         'is_active': true,
                         'start_time': startTimeCtrl.text.trim(),
                         'end_time': endTimeCtrl.text.trim(),
-                        'working_days': workingDaysCtrl.text.trim(),
-                        'day_off': dayOffCtrl.text.trim(),
+                        'working_days': _mapTextToDays(workingDaysCtrl.text.trim()),
+                        'day_off': _mapTextToDays(dayOffCtrl.text.trim()),
                       }));
                     } else {
                       context.read<BarberStaffBloc>().add(UpdateStaff(staff.id, {
@@ -119,8 +130,8 @@ class _BarberStaffScreenState extends State<BarberStaffScreen> {
                         'role': selectedRole,
                         'start_time': startTimeCtrl.text.trim(),
                         'end_time': endTimeCtrl.text.trim(),
-                        'working_days': workingDaysCtrl.text.trim(),
-                        'day_off': dayOffCtrl.text.trim(),
+                        'working_days': _mapTextToDays(workingDaysCtrl.text.trim()),
+                        'day_off': _mapTextToDays(dayOffCtrl.text.trim()),
                       }));
                     }
                     Navigator.pop(context);

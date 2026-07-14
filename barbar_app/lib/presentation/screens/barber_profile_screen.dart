@@ -33,7 +33,14 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
   final _amenitiesController = TextEditingController();
   final _tagsController = TextEditingController();
   bool _isHomeServiceAvailable = false;
+  bool _profileCompleted = false;
   bool _isLoading = false;
+  // Timings
+  String _startTime = '09:00';
+  String _endTime = '21:00';
+  // Languages
+  final _languageController = TextEditingController();
+  List<String> _languages = [];
   // Multi-image management
   List<String> _shopImages = [];      // Already uploaded URLs
   List<File> _pendingImageFiles = []; // Files picked but not uploaded yet
@@ -65,10 +72,11 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
     _shopImageController.dispose();
     _amenitiesController.dispose();
     _tagsController.dispose();
+    _languageController.dispose();
     super.dispose();
   }
 
-  void _populateForm(Map<String, dynamic> profile) {
+  void _populateForm(Map<String, dynamic> profile, {bool profileCompleted = false}) {
     _nameController.text = (profile['shop_name'] as String?) ?? '';
     _descController.text = (profile['shop_description'] as String?) ?? '';
     _addressController.text = (profile['address'] as String?) ?? '';
@@ -85,14 +93,19 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
     _isHomeServiceAvailable = (profile['is_home_service_available'] as bool?) ?? false;
     _latitude = (profile['latitude'] as num?)?.toDouble();
     _longitude = (profile['longitude'] as num?)?.toDouble();
+    _startTime = (profile['start_time'] as String?) ?? '09:00';
+    _endTime = (profile['end_time'] as String?) ?? '21:00';
+    _profileCompleted = profileCompleted;
     // Load shop_images array
     final rawImages = (profile['shop_images'] as List<dynamic>?) ?? [];
     _shopImages = rawImages.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
-    // Also add shop_image (single) if not already in list
     final singleImg = (profile['shop_image'] as String?) ?? '';
     if (singleImg.isNotEmpty && !_shopImages.contains(singleImg)) {
       _shopImages.insert(0, singleImg);
     }
+    // Load languages
+    final rawLangs = (profile['languages'] as List<dynamic>?) ?? [];
+    _languages = rawLangs.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
   }
 
   void _save() {
@@ -111,6 +124,9 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
       'shop_images': _shopImages,
       if (_latitude != null) 'latitude': _latitude,
       if (_longitude != null) 'longitude': _longitude,
+      'start_time': _startTime,
+      'end_time': _endTime,
+      'languages': _languages,
       'amenities': _amenitiesController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
       'tags': _tagsController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
       'is_home_service_available': _isHomeServiceAvailable,
@@ -169,6 +185,19 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
       setState(() => _pendingImageFiles.clear());
     } finally {
       if (mounted) setState(() => _isUploadingImages = false);
+    }
+  }
+
+  Future<void> _pickTime(bool isStart) async {
+    final initialStr = isStart ? _startTime : _endTime;
+    final parts = initialStr.split(':');
+    final initial = TimeOfDay(hour: int.tryParse(parts[0]) ?? 9, minute: int.tryParse(parts[1]) ?? 0);
+    final picked = await showTimePicker(context: context, initialTime: initial);
+    if (picked != null) {
+      setState(() {
+        final str = '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+        if (isStart) _startTime = str; else _endTime = str;
+      });
     }
   }
 
@@ -241,7 +270,8 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
         listener: (context, state) {
           if (state is BarberProfileLoaded) {
             _isLoading = false;
-            _populateForm(state.profile);
+            _populateForm(state.profile, profileCompleted: state.profileCompleted);
+            setState(() {});
           } else if (state is BarberProfileLoading) {
             _isLoading = true;
           } else if (state is BarberProfileSuccess) {
@@ -265,6 +295,24 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                _buildProfileProgress(),
+                if (!_profileCompleted)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.error),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.warning_amber, color: AppColors.error, size: 20),
+                        SizedBox(width: 10),
+                        Expanded(child: Text('Complete your profile to appear on customer search', style: TextStyle(fontSize: 12, color: AppColors.error, fontWeight: FontWeight.w500))),
+                      ],
+                    ),
+                  ),
                 _buildSectionHeader('SHOP INFORMATION', Icons.store),
                 GlassCard(
                   padding: const EdgeInsets.all(20),
@@ -366,53 +414,139 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
+                _buildSectionHeader('TIMINGS', Icons.access_time),
+                GlassCard(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.toggle_on, size: 16, color: AppColors.primary),
+                          const SizedBox(width: 8),
+                          const Text('Open', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                          const Spacer(),
+                          Text(_startTime, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          IconButton(
+                            icon: const Icon(Icons.edit_calendar, size: 18),
+                            onPressed: () => _pickTime(true),
+                          ),
+                        ],
+                      ),
+                      const Divider(color: AppColors.border),
+                      Row(
+                        children: [
+                          const Icon(Icons.toggle_off, size: 16, color: AppColors.error),
+                          const SizedBox(width: 8),
+                          const Text('Close', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                          const Spacer(),
+                          Text(_endTime, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          IconButton(
+                            icon: const Icon(Icons.edit_calendar, size: 18),
+                            onPressed: () => _pickTime(false),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _buildSectionHeader('LANGUAGES', Icons.language),
                 GlassCard(
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildSectionHeader('EXTRA DETAILS', Icons.star),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _languageController,
+                              decoration: const InputDecoration(
+                                labelText: 'Add Language',
+                                hintText: 'e.g. Hindi, English',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.add_circle, color: AppColors.primary),
+                            onPressed: () {
+                              final lang = _languageController.text.trim();
+                              if (lang.isNotEmpty && !_languages.contains(lang)) {
+                                setState(() => _languages.add(lang));
+                                _languageController.clear();
+                              }
+                            },
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 8),
-
-                      // ---- Multi-image section ----
-                      const Text('Shop Photos', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: _languages.map((lang) => Chip(
+                          label: Text(lang, style: const TextStyle(fontSize: 12)),
+                          deleteIcon: const Icon(Icons.close, size: 16),
+                          onDeleted: () => setState(() => _languages.remove(lang)),
+                        )).toList(),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _buildSectionHeader('PORTFOLIO', Icons.photo_library),
+                GlassCard(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Cover Image & Gallery', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
                       const SizedBox(height: 10),
-                      // Uploaded images preview
                       if (_shopImages.isNotEmpty || _pendingImageFiles.isNotEmpty)
                         SizedBox(
-                          height: 120,
+                          height: 130,
                           child: ListView(
                             scrollDirection: Axis.horizontal,
                             children: [
-                              // Uploaded
                               ..._shopImages.asMap().entries.map((entry) {
                                 final index = entry.key;
                                 final url = entry.value;
+                                final isCover = index == 0;
                                 return Padding(
                                   padding: const EdgeInsets.only(right: 10),
                                   child: Stack(
                                     children: [
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(10),
-                                        child: Image.network(
-                                          url,
-                                          width: 110, height: 120, fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => Container(
-                                            width: 110, height: 120,
-                                            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
-                                            child: const Icon(Icons.image_not_supported, color: AppColors.textMuted),
+                                      GestureDetector(
+                                        onTap: isCover ? null : () {
+                                          setState(() {
+                                            _shopImages.removeAt(index);
+                                            _shopImages.insert(0, url);
+                                          });
+                                        },
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(10),
+                                          child: Image.network(
+                                            url,
+                                            width: 110, height: 130, fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => Container(
+                                              width: 110, height: 130,
+                                              decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
+                                              child: const Icon(Icons.image_not_supported, color: AppColors.textMuted),
+                                            ),
                                           ),
                                         ),
                                       ),
-                                      if (index == 0)
-                                        Positioned(
-                                          left: 4, top: 4,
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(4)),
-                                            child: const Text('Cover', style: TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
+                                      Positioned(
+                                        left: 4, top: 4,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: isCover ? AppColors.primary : AppColors.textSecondary,
+                                            borderRadius: BorderRadius.circular(4),
                                           ),
+                                          child: Text(isCover ? 'Cover' : 'Tap as Cover', style: const TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
                                         ),
+                                      ),
                                       Positioned(
                                         right: 4, top: 4,
                                         child: GestureDetector(
@@ -428,17 +562,16 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
                                   ),
                                 );
                               }),
-                              // Pending (uploading)
                               ..._pendingImageFiles.map((f) => Padding(
                                 padding: const EdgeInsets.only(right: 10),
                                 child: Stack(
                                   children: [
                                     ClipRRect(
                                       borderRadius: BorderRadius.circular(10),
-                                      child: Image.file(f, width: 110, height: 120, fit: BoxFit.cover),
+                                      child: Image.file(f, width: 110, height: 130, fit: BoxFit.cover),
                                     ),
                                     Container(
-                                      width: 110, height: 120,
+                                      width: 110, height: 130,
                                       decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(10)),
                                       child: const Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2)),
                                     ),
@@ -449,7 +582,6 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
                           ),
                         ),
                       const SizedBox(height: 12),
-                      // Buttons: Gallery + Camera
                       Row(
                         children: [
                           Expanded(
@@ -483,12 +615,19 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
                       ),
                       const SizedBox(height: 4),
                       const Text(
-                        'First photo is used as cover image on customer map.',
+                        'First photo = Cover image on customer map. Tap any photo to set as cover.',
                         style: TextStyle(fontSize: 11, color: AppColors.textMuted),
                       ),
-                      const SizedBox(height: 16),
-                      // ---- End multi-image section ----
-
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _buildSectionHeader('EXTRA DETAILS', Icons.star),
+                GlassCard(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       _buildField('Amenities (Comma separated)', _amenitiesController, Icons.wifi),
                       _buildField('Tags (Comma separated)', _tagsController, Icons.local_offer),
                       SwitchListTile(
@@ -515,6 +654,60 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  int _profileProgressPercent() {
+    final profile = {
+      'shop_name': _nameController.text.trim().isNotEmpty,
+      'shop_description': _descController.text.trim().isNotEmpty,
+      'address': _addressController.text.trim().isNotEmpty,
+      'city': _cityController.text.trim().isNotEmpty,
+      'state': _stateController.text.trim().isNotEmpty,
+      'pincode': _pincodeController.text.trim().isNotEmpty,
+      'latitude': _latitude != null && _latitude != 0,
+      'longitude': _longitude != null && _longitude != 0,
+      'start_time': _startTime.isNotEmpty,
+      'end_time': _endTime.isNotEmpty,
+      'phone': _phoneController.text.trim().isNotEmpty,
+      'experience': _expController.text.trim().isNotEmpty,
+    };
+    final completed = profile.values.where((v) => v).length;
+    return (completed * 100 ~/ profile.length);
+  }
+
+  Widget _buildProfileProgress() {
+    final pct = _profileProgressPercent();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('Profile $pct% complete', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const Spacer(),
+              Text('$pct%', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: pct / 100,
+              backgroundColor: AppColors.border,
+              color: pct >= 80 ? AppColors.success : AppColors.primary,
+              minHeight: 6,
+            ),
+          ),
+        ],
       ),
     );
   }

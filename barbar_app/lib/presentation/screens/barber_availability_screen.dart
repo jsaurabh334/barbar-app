@@ -78,7 +78,7 @@ class _BarberAvailabilityScreenState extends State<BarberAvailabilityScreen> {
     final currentStatus = loaded?.currentStatus ?? 'active';
     final statuses = [
       {'key': 'active', 'label': 'Online', 'icon': LucideIcons.globe, 'color': AppColors.success},
-      {'key': 'busy', 'label': 'Busy', 'icon': LucideIcons.clock, 'color': AppColors.warning},
+      {'key': 'inactive', 'label': 'Busy', 'icon': LucideIcons.clock, 'color': AppColors.warning},
       {'key': 'on_break', 'label': 'Break', 'icon': LucideIcons.coffee, 'color': AppColors.info},
       {'key': 'closed', 'label': 'Offline', 'icon': LucideIcons.xCircle, 'color': AppColors.error},
     ];
@@ -317,7 +317,7 @@ class _BarberAvailabilityScreenState extends State<BarberAvailabilityScreen> {
             onPressed: () {
               if (_holidayDateController.text.isNotEmpty && _holidayReasonController.text.isNotEmpty) {
                 context.read<BarberAvailabilityBloc>().add(
-                  AddHoliday(date: _holidayDateController.text, reason: _holidayReasonController.text),
+                  AddHoliday(date: '${_holidayDateController.text}T00:00:00Z', reason: _holidayReasonController.text),
                 );
                 _holidayDateController.clear();
                 _holidayReasonController.clear();

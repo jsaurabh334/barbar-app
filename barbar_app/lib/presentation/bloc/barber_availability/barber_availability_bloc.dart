@@ -55,6 +55,7 @@ class BarberAvailabilityBloc extends Bloc<BarberAvailabilityEvent, BarberAvailab
     try {
       await _barberRepository.updateAvailability(isAvailable: event.isAvailable, status: event.status);
       emit(BarberAvailabilitySuccess('Status updated to ${event.status}'));
+      add(FetchAvailability());
     } catch (e) {
       emit(BarberAvailabilityFailure(e.toString().replaceAll('Exception: ', '')));
     }
@@ -65,6 +66,7 @@ class BarberAvailabilityBloc extends Bloc<BarberAvailabilityEvent, BarberAvailab
     try {
       await _barberRepository.setWeeklySchedule(event.schedule);
       emit(BarberAvailabilitySuccess('Weekly schedule updated'));
+      add(FetchAvailability());
     } catch (e) {
       emit(BarberAvailabilityFailure(e.toString().replaceAll('Exception: ', '')));
     }
@@ -75,6 +77,7 @@ class BarberAvailabilityBloc extends Bloc<BarberAvailabilityEvent, BarberAvailab
     try {
       await _barberRepository.addHoliday(date: event.date, reason: event.reason);
       emit(BarberAvailabilitySuccess('Holiday added'));
+      add(FetchAvailability());
     } catch (e) {
       emit(BarberAvailabilityFailure(e.toString().replaceAll('Exception: ', '')));
     }
@@ -88,6 +91,7 @@ class BarberAvailabilityBloc extends Bloc<BarberAvailabilityEvent, BarberAvailab
         'break_end_time': event.endTime,
       });
       emit(BarberAvailabilitySuccess('Break time updated'));
+      add(FetchAvailability());
     } catch (e) {
       emit(BarberAvailabilityFailure(e.toString().replaceAll('Exception: ', '')));
     }

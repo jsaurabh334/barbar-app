@@ -8,13 +8,23 @@ class BarberRepositoryImpl implements BarberRepository {
   BarberRepositoryImpl(this._remoteDataSource);
 
   @override
+  Future<Map<String, dynamic>> registerBarber(Map<String, dynamic> data) async {
+    return await _remoteDataSource.registerBarber(data);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getProfile() async {
+    return await _remoteDataSource.getProfile();
+  }
+
+  @override
   Future<Map<String, dynamic>> getDashboard() async {
     return await _remoteDataSource.getDashboard();
   }
 
   @override
-  Future<void> updateProfile(Map<String, dynamic> data) async {
-    await _remoteDataSource.updateProfile(data);
+  Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> data) async {
+    return await _remoteDataSource.updateProfile(data);
   }
 
   @override

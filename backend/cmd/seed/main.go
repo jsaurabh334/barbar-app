@@ -626,7 +626,35 @@ func seedAllData(db *gorm.DB) {
 				log.Fatalf("Failed to create service %s: %v", svc.Name, err)
 			}
 		}
-		log.Printf("  Created barber: %s (rating %.1f, %d services)", sd.ShopName, sd.Rating, len(sd.Services))
+		// Auto-create staff record for the owner
+		staff := models.BarberStaff{
+			BarberID:    barber.ID,
+			UserID:      &user.ID,
+			Name:        sd.ShopName + " Staff",
+			Role:        models.RoleManager,
+			IsActive:    true,
+			WorkingDays: "0,1,2,3,4,5,6",
+			StartTime:   sd.StartTime,
+			EndTime:     sd.EndTime,
+		}
+		if err := db.Create(&staff).Error; err != nil {
+			log.Fatalf("Failed to create staff for %s: %v", sd.ShopName, err)
+		}
+		// Assign all services to the default staff
+		var createdServices []models.BarberService
+		if err := db.Where("barber_id = ?", barber.ID).Find(&createdServices).Error; err == nil {
+			for _, svc := range createdServices {
+				staffSvc := models.StaffService{
+					StaffID:   staff.ID,
+					ServiceID: svc.ID,
+					IsActive:  true,
+				}
+				if err := db.Create(&staffSvc).Error; err != nil {
+					log.Fatalf("Failed to assign service to staff: %v", err)
+				}
+			}
+		}
+		log.Printf("  Created barber: %s (rating %.1f, %d services, staff created)", sd.ShopName, sd.Rating, len(sd.Services))
 	}
 
 	// 4. Products

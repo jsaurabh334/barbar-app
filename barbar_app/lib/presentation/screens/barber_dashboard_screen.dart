@@ -4,8 +4,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/network/websocket_client.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/repositories/barber_repository.dart';
-import '../bloc/auth/auth_bloc.dart';
-import '../bloc/auth/auth_event.dart';
 import '../bloc/booking/booking_bloc.dart';
 import '../bloc/booking/booking_event.dart';
 import '../bloc/booking/booking_state.dart';
@@ -55,11 +53,14 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
     });
   }
 
+    Map<String, dynamic>? _barberData;
+
   Future<void> _loadDashboard() async {
     try {
       final dashboard = await widget.barberRepository.getDashboard();
       if (mounted) {
         setState(() {
+          _barberData = dashboard['barber'] as Map<String, dynamic>?;
           _barberStatus = dashboard['barber']['status'] as String? ?? 'inactive';
           _todayBookings = dashboard['today_bookings'] as int? ?? 0;
           _earningsToday = (dashboard['earnings_today'] as num?)?.toDouble() ?? 0;
@@ -71,6 +72,24 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
         });
       }
     } catch (_) {}
+  }
+
+  int _getProfileCompletionPercent() {
+    final b = _barberData;
+    if (b == null) return 0;
+    int total = 0;
+    int filled = 0;
+    final checks = ['shop_name', 'address', 'city', 'start_time', 'end_time'];
+    for (final key in checks) {
+      total++;
+      final val = b[key];
+      if (val != null && val is String && val.trim().isNotEmpty) filled++;
+    }
+    final lat = (b['latitude'] as num?)?.toDouble() ?? 0;
+    final lng = (b['longitude'] as num?)?.toDouble() ?? 0;
+    total++;
+    if (lat != 0 && lng != 0) filled++;
+    return (filled / total * 100).round();
   }
 
   @override
@@ -101,6 +120,8 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
             children: [
               _buildStatusBanner(),
               const SizedBox(height: 16),
+              _buildProfileCompletionCard(),
+              const SizedBox(height: 16),
               _buildShiftOverview(),
               const SizedBox(height: 20),
               _buildQuickStats(),
@@ -110,6 +131,33 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
               _buildActiveQueue(),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileCompletionCard() {
+    final pct = _getProfileCompletionPercent();
+    if (pct >= 100) return const SizedBox.shrink();
+    final color = pct < 50 ? AppColors.error : Colors.orange;
+    return GlassCard(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Icon(LucideIcons.alertTriangle, color: color, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Profile ${pct}% complete', style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 13)),
+                  const SizedBox(height: 4),
+                  const Text('Complete your shop details in Settings', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

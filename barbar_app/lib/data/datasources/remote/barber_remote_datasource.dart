@@ -7,6 +7,30 @@ class BarberRemoteDataSource {
 
   BarberRemoteDataSource(this._apiClient);
 
+  Future<Map<String, dynamic>> registerBarber(Map<String, dynamic> data) async {
+    try {
+      final response = await _apiClient.dio.post('/barber/register', data: data);
+      if (response.statusCode == 201 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        return response.data['data'] as Map<String, dynamic>;
+      }
+      throw Exception(response.data['error'] ?? 'Failed to register barber shop');
+    } on DioException catch (e) {
+      throw Exception(e.response?.data?['error'] ?? e.message ?? 'Unknown error');
+    }
+  }
+
+  Future<Map<String, dynamic>> getProfile() async {
+    try {
+      final response = await _apiClient.dio.get('/barber/profile');
+      if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        return response.data['data'] as Map<String, dynamic>;
+      }
+      throw Exception(response.data['error'] ?? 'Failed to fetch profile');
+    } on DioException catch (e) {
+      throw Exception(e.response?.data?['error'] ?? e.message ?? 'Unknown error');
+    }
+  }
+
   Future<Map<String, dynamic>> getDashboard() async {
     final response = await _apiClient.dio.get('/barber/dashboard');
     if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
@@ -15,30 +39,40 @@ class BarberRemoteDataSource {
     throw Exception(response.data['error'] ?? 'Failed to fetch dashboard');
   }
 
-  Future<void> updateProfile(Map<String, dynamic> data) async {
-    final response = await _apiClient.dio.put('/barber/profile', data: data);
-    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
+  Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> data) async {
+    try {
+      final response = await _apiClient.dio.put('/barber/profile', data: data);
+      if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        return response.data['data'] as Map<String, dynamic>;
+      }
       throw Exception(response.data['error'] ?? 'Failed to update profile');
+    } on DioException catch (e) {
+      throw Exception(e.response?.data?['error'] ?? e.message ?? 'Unknown error');
     }
   }
 
-  /// Upload multiple shop images and return list of public URLs
   Future<List<String>> uploadShopImages(List<File> files) async {
-    final formData = FormData.fromMap({
-      'files': await Future.wait(
-        files.map((f) => MultipartFile.fromFile(f.path, filename: f.path.split('/').last)),
-      ),
-    });
-    final response = await _apiClient.dio.post(
-      '/upload/images?dir=shop_images',
-      data: formData,
-    );
-    if ((response.statusCode == 200 || response.statusCode == 201) &&
-        (response.data['status'] == 'success' || response.data['status'] == 'created')) {
-      final list = response.data['data'] as List<dynamic>;
-      return list.map((e) => e['url'] as String).toList();
+    final formData = FormData();
+    for (var f in files) {
+      formData.files.add(MapEntry(
+        'files',
+        await MultipartFile.fromFile(f.path, filename: f.path.split('/').last),
+      ));
     }
-    throw Exception(response.data['error'] ?? 'Failed to upload images');
+    try {
+      final response = await _apiClient.dio.post(
+        '/upload/images?dir=shop_images',
+        data: formData,
+      );
+      if ((response.statusCode == 200 || response.statusCode == 201) &&
+          (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        final list = response.data['data'] as List<dynamic>;
+        return list.map((e) => e['url'] as String).toList();
+      }
+      throw Exception(response.data['error'] ?? 'Failed to upload images');
+    } on DioException catch (e) {
+      throw Exception(e.response?.data?['error'] ?? e.message ?? 'Unknown error');
+    }
   }
 
   Future<void> updateAvailability({required bool isAvailable, String? status}) async {
