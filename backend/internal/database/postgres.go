@@ -128,8 +128,8 @@ func RunMigrations(db *gorm.DB) {
 
 		// Notifications — FK → User
 		&models.Notification{},
-
-		// Dispute — FK → User, Order, Booking
+		&models.NotificationLog{},
+		&models.NotificationPreference{},
 		&models.Dispute{},
 		&models.DisputeMessage{},
 

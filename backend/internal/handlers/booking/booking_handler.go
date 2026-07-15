@@ -1,6 +1,7 @@
 package booking
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -20,16 +21,16 @@ import (
 
 type BookingHandler struct {
 	db       *gorm.DB
-	notifSvc *notifService.NotificationService
+	notifSvc notifService.Dispatcher
 	hub      *websocket.Hub
 }
 
-func NewBookingHandler(db *gorm.DB, notifSvc *notifService.NotificationService, hub *websocket.Hub) *BookingHandler {
-	return &BookingHandler{db: db, notifSvc: notifSvc, hub: hub}
+func NewBookingHandler(db *gorm.DB, dispatcher notifService.Dispatcher, hub *websocket.Hub) *BookingHandler {
+	return &BookingHandler{db: db, notifSvc: dispatcher, hub: hub}
 }
 
 func (h *BookingHandler) refreshQueue(barberID uuid.UUID) {
-	qSvc := queue.NewQueueService(h.db, h.hub)
+	qSvc := queue.NewQueueService(h.db, h.hub, h.notifSvc)
 	qSvc.RecalculatePositions(barberID)
 	qSvc.RecalculateWaitTimes(barberID)
 	qSvc.BroadcastQueueUpdate(barberID)
@@ -39,80 +40,92 @@ func (h *BookingHandler) sendBookingNotifications(booking *models.Booking) {
 	if h.notifSvc == nil {
 		return
 	}
-	h.notifSvc.SendBookingConfirmation(booking)
+
+	// Notify barber of new booking request
+	var barber models.Barber
+	h.db.First(&barber, booking.BarberID)
+	h.notifSvc.Dispatch(context.Background(), notifService.NotificationEvent{
+		Type:       models.NotifBookingRequest,
+		ReceiverID: barber.UserID,
+		Role:       notifService.RoleBarber,
+		Data:       map[string]interface{}{"booking_id": booking.ID.String()},
+	})
+
+	// Notify customer that their booking request was submitted
+	h.notifSvc.Dispatch(context.Background(), notifService.NotificationEvent{
+		Type:       models.NotifBookingRequest,
+		ReceiverID: booking.CustomerID,
+		Role:       notifService.RoleCustomer,
+		Data:       map[string]interface{}{"booking_id": booking.ID.String()},
+	})
 }
 
 func (h *BookingHandler) sendCancellationNotifications(booking *models.Booking) {
 	if h.notifSvc == nil {
 		return
 	}
-	customerNotif := notifService.SendNotificationInput{
-		UserID: booking.CustomerID,
-		Title:  "Booking Cancelled",
-		Body:   "Your booking has been cancelled",
-		Type:   models.NotifBookingCancelled,
+	// Customer notification
+	h.notifSvc.Dispatch(context.Background(), notifService.NotificationEvent{
+		Type:       models.NotifBookingCancelled,
+		ReceiverID: booking.CustomerID,
+		Role:       notifService.RoleCustomer,
 		Data: map[string]interface{}{
 			"booking_id": booking.ID.String(),
 			"reason":     booking.CancellationReason,
 		},
-	}
-	h.notifSvc.Send(customerNotif)
+	})
 
+	// Barber notification
 	var barber models.Barber
 	h.db.First(&barber, booking.BarberID)
-	barberNotif := notifService.SendNotificationInput{
-		UserID: barber.UserID,
-		Title:  "Booking Cancelled",
-		Body:   "A booking has been cancelled",
-		Type:   models.NotifBookingCancelled,
+	h.notifSvc.Dispatch(context.Background(), notifService.NotificationEvent{
+		Type:       models.NotifBookingCancelled,
+		ReceiverID: barber.UserID,
+		Role:       notifService.RoleBarber,
 		Data: map[string]interface{}{
 			"booking_id": booking.ID.String(),
 		},
-	}
-	h.notifSvc.Send(barberNotif)
+	})
 }
 
 func (h *BookingHandler) sendStatusUpdateNotifications(booking *models.Booking) {
 	if h.notifSvc == nil {
 		return
 	}
-	title := "Booking Updated"
+	
+	notifType := models.NotifBookingConfirmed
 	switch booking.Status {
 	case models.BookingStatusInProgress:
-		title = "Service Started"
+		notifType = models.NotifBarberStarted
 	case models.BookingStatusCompleted:
-		title = "Service Completed"
+		notifType = models.NotifBarberCompleted
 	case models.BookingStatusNoShow:
-		title = "Missed Appointment"
+		notifType = models.NotifBookingRejected // Or a separate NoShow type
 	}
 
-	notif := notifService.SendNotificationInput{
-		UserID: booking.CustomerID,
-		Title:  title,
-		Body:   "Your booking status: " + string(booking.Status),
-		Type:   models.NotifBookingConfirmed,
+	h.notifSvc.Dispatch(context.Background(), notifService.NotificationEvent{
+		Type:       notifType,
+		ReceiverID: booking.CustomerID,
+		Role:       notifService.RoleCustomer,
 		Data: map[string]interface{}{
 			"booking_id": booking.ID.String(),
 			"status":     booking.Status,
 		},
-	}
-	h.notifSvc.Send(notif)
+	})
 }
 
 func (h *BookingHandler) sendModificationNotifications(booking *models.Booking) {
 	if h.notifSvc == nil {
 		return
 	}
-	notif := notifService.SendNotificationInput{
-		UserID: booking.CustomerID,
-		Title:  "Booking Modified",
-		Body:   "Your booking services have been modified",
-		Type:   models.NotifBookingModified,
+	h.notifSvc.Dispatch(context.Background(), notifService.NotificationEvent{
+		Type:       models.NotifBookingModified,
+		ReceiverID: booking.CustomerID,
+		Role:       notifService.RoleCustomer,
 		Data: map[string]interface{}{
 			"booking_id": booking.ID.String(),
 		},
-	}
-	h.notifSvc.Send(notif)
+	})
 }
 
 // (existing methods below)
@@ -377,7 +390,7 @@ func (h *BookingHandler) Create(c *gin.Context) {
 	h.refreshQueue(booking.BarberID)
 
 	// Reload with relations
-	h.db.Preload("Services").Preload("Barber").Preload("Customer").First(&booking, booking.ID)
+	h.db.Preload("Services").Preload("Staff").Preload("Barber").Preload("Customer").First(&booking, booking.ID)
 
 	// Send notifications
 	go h.sendBookingNotifications(&booking)
@@ -463,7 +476,7 @@ func (h *BookingHandler) Cancel(c *gin.Context) {
 	h.refreshQueue(booking.BarberID)
 
 	// Refund if paid
-	if booking.PaymentStatus == "paid" || booking.PaymentStatus == "success" {
+	if booking.PaymentStatus == "paid" {
 		go h.processRefund(&booking)
 	}
 
@@ -647,7 +660,7 @@ func (h *BookingHandler) ListCustomerBookings(c *gin.Context) {
 	}
 
 	query.Model(&models.Booking{}).Count(&total)
-	query.Preload("Barber").Preload("Services").
+	query.Preload("Barber").Preload("Staff").Preload("Services").
 		Offset((page - 1) * pageSize).Limit(pageSize).
 		Order("scheduled_start DESC").Find(&bookings)
 
@@ -679,7 +692,7 @@ func (h *BookingHandler) ListBarberBookings(c *gin.Context) {
 	}
 
 	query.Model(&models.Booking{}).Count(&total)
-	query.Preload("Customer").Preload("Services").
+	query.Preload("Customer").Preload("Staff").Preload("Services").
 		Offset((page-1)*pageSize).Limit(pageSize).
 		Order("scheduled_start ASC").Find(&bookings)
 
@@ -811,7 +824,7 @@ func (h *BookingHandler) ReorderQueue(c *gin.Context) {
 
 	tx.Commit()
 
-	qSvc := queue.NewQueueService(h.db, h.hub)
+	qSvc := queue.NewQueueService(h.db, h.hub, h.notifSvc)
 	qSvc.RecalculateWaitTimes(barber.ID)
 	qSvc.BroadcastQueueUpdate(barber.ID)
 
@@ -1064,17 +1077,18 @@ func (h *BookingHandler) processRefund(booking *models.Booking) {
 	payment.RefundedAt = &now
 	h.db.Save(&payment)
 
-	h.db.Model(booking).Update("payment_status", "refunded")
+	h.db.Model(&models.Booking{}).Where("id = ?", booking.ID).Update("payment_status", "refunded")
 }
 
 type PayBookingRequest struct {
-	Method    string `json:"method" binding:"required,oneof=cash upi"`
-	Status    string `json:"status" binding:"required,oneof=pending initiated success failed"`
+	Method    string `json:"method" binding:"required,oneof=cash upi card wallet"`
+	Status    string `json:"status" binding:"required,oneof=pending paid"`
 	Reference string `json:"reference"`
 }
 
 func (h *BookingHandler) PayBooking(c *gin.Context) {
 	userID := c.MustGet("user").(uuid.UUID)
+	claims := c.MustGet("claims").(*auth.Claims)
 
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -1085,6 +1099,13 @@ func (h *BookingHandler) PayBooking(c *gin.Context) {
 	var req PayBookingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequestResponse(c, "Invalid input: "+err.Error())
+		return
+	}
+
+	// Reject direct UPI/Card/Wallet payment attempts from this endpoint
+	// Online payments must go through POST /api/v1/payments/initiate
+	if req.Method != "cash" && req.Status == "paid" {
+		utils.BadRequestResponse(c, "Online payments must be processed via the payment gateway endpoint")
 		return
 	}
 
@@ -1108,29 +1129,55 @@ func (h *BookingHandler) PayBooking(c *gin.Context) {
 		return
 	}
 
-	booking.PaymentStatus = req.Status
-	booking.PaymentID = req.Method + ":" + req.Reference
+	// Security: Only barber can mark cash as paid.
+	if req.Status == "paid" {
+		if req.Method != "cash" {
+			utils.BadRequestResponse(c, "Only cash payments can be marked as paid directly")
+			return
+		}
+		if !isBarber {
+			utils.ForbiddenResponse(c, "Only the barber can mark cash as paid")
+			return
+		}
+	}
+
+	now := time.Now()
+	booking.PaymentMethod = req.Method
+
+	if req.Status == "paid" {
+		booking.PaymentStatus = "paid"
+		booking.PaymentID = req.Method + ":" + req.Reference
+	}
 
 	if err := h.db.Save(&booking).Error; err != nil {
-		utils.InternalErrorResponse(c, "Failed to update payment status")
+		utils.InternalErrorResponse(c, "Failed to update booking payment info")
 		return
 	}
 
-	// If payment is successful, log it in BookingStatusLog
-	if req.Status == "success" {
-		role := "customer"
-		if isBarber {
-			role = "barber"
+	// Create Payment record only for confirmed payments (status == "paid")
+	if req.Status == "paid" {
+		payment := models.Payment{
+			OrderID:       booking.ID,
+			UserID:        booking.CustomerID,
+			Amount:        booking.FinalPrice,
+			Gateway:       models.GatewayCash,
+			Currency:      "INR",
+			Status:        models.PayStatusSuccess,
+			PaymentMethod: req.Method,
 		}
-		h.db.Create(&models.BookingStatusLog{
-			BookingID:      booking.ID,
-			FromStatus:     booking.Status,
-			ToStatus:       booking.Status,
-			ChangedBy:      userID,
-			ChangedByRole:  role,
-			Reason:         "Payment successful via " + req.Method,
-		})
+		payment.PaidAt = &now
+		h.db.Create(&payment)
 	}
+
+	// Log payment event
+	h.db.Create(&models.BookingStatusLog{
+		BookingID:      booking.ID,
+		FromStatus:     booking.Status,
+		ToStatus:       booking.Status,
+		ChangedBy:      userID,
+		ChangedByRole:  claims.Role,
+		Reason:         "Payment " + req.Status + " via " + req.Method + " by " + claims.Role,
+	})
 
 	utils.SuccessResponse(c, booking)
 }

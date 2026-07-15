@@ -59,6 +59,34 @@ class BookingRepositoryImpl implements BookingRepository {
   }
 
   @override
+  Future<Map<String, dynamic>> initiateBookingPayment({
+    required String bookingId,
+    required String gateway,
+  }) async {
+    return await _remoteDataSource.initiateBookingPayment(
+      bookingId: bookingId,
+      gateway: gateway,
+    );
+  }
+
+  @override
+  Future<void> verifyBookingPayment({
+    required String paymentId,
+    required String gateway,
+    required String razorpayOrderId,
+    required String razorpayPaymentId,
+    required String razorpaySignature,
+  }) async {
+    await _remoteDataSource.verifyBookingPayment(
+      paymentId: paymentId,
+      gateway: gateway,
+      razorpayOrderId: razorpayOrderId,
+      razorpayPaymentId: razorpayPaymentId,
+      razorpaySignature: razorpaySignature,
+    );
+  }
+
+  @override
   Future<void> payBooking(String bookingId, String method, String status, String reference) async {
     await _remoteDataSource.payBooking(bookingId, method, status, reference);
   }

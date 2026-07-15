@@ -375,21 +375,37 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
   }
 
   Widget _buildDetailsCard(int wait, int ahead, String status, String currentlyServing, int remainingTime) {
+    final staffName = _activeBooking?.staff?['name'] as String?;
+
     return GlassCard(
       padding: const EdgeInsets.all(20),
       opacity: 0.1,
       child: Column(
         children: [
+          if (staffName != null && staffName.isNotEmpty) ...[
+            Row(
+              children: [
+                const Icon(LucideIcons.user, size: 14, color: AppColors.primary),
+                const SizedBox(width: 8),
+                const Text('Professional', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                const Spacer(),
+                Text(staffName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(height: 1, color: AppColors.border),
+            const SizedBox(height: 12),
+          ],
           Row(
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('ESTIMATED DELAY', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                    const Text('QUEUE POSITION', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
                     Text(
-                      '~$wait MINS',
+                      '#$ahead',
                       style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 22),
                     ),
                   ],
@@ -401,10 +417,10 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('STATUS INDEX', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                    const Text('ESTIMATED WAIT', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
                     Text(
-                      status.toUpperCase(),
+                      '~$wait MIN',
                       style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20),
                     ),
                   ],

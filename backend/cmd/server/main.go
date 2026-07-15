@@ -13,6 +13,7 @@ import (
 	"github.com/barbar-app/backend/internal/auth"
 	"github.com/barbar-app/backend/internal/config"
 	"github.com/barbar-app/backend/internal/database"
+	"github.com/barbar-app/backend/internal/firebase"
 	"github.com/barbar-app/backend/internal/routes"
 	"github.com/barbar-app/backend/internal/utils"
 	"github.com/barbar-app/backend/internal/websocket"
@@ -25,6 +26,9 @@ func main() {
 
 	// Load configuration
 	cfg := config.Load()
+
+	// Initialize Firebase Admin SDK
+	firebase.InitFirebase("firebase-service-account.json")
 
 	// Initialize database
 	db := database.InitPostgres(&cfg.Database)

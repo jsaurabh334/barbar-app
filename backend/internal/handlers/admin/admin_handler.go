@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/barbar-app/backend/internal/models"
+	"github.com/barbar-app/backend/internal/services/notification"
 	"github.com/barbar-app/backend/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -12,11 +13,12 @@ import (
 )
 
 type AdminHandler struct {
-	db *gorm.DB
+	db         *gorm.DB
+	dispatcher notification.Dispatcher
 }
 
-func NewAdminHandler(db *gorm.DB) *AdminHandler {
-	return &AdminHandler{db: db}
+func NewAdminHandler(db *gorm.DB, dispatcher notification.Dispatcher) *AdminHandler {
+	return &AdminHandler{db: db, dispatcher: dispatcher}
 }
 
 // ================ Dashboard ================
@@ -371,6 +373,15 @@ func (h *AdminHandler) ApproveVendor(c *gin.Context) {
 
 	if req.Status == "approved" {
 		h.db.Model(&models.User{}).Where("id = ?", vendor.UserID).Update("role", models.RoleVendor)
+		
+		if h.dispatcher != nil {
+			h.dispatcher.Dispatch(c.Request.Context(), notification.NotificationEvent{
+				Type:       models.NotifVendorApproved,
+				ReceiverID: vendor.UserID,
+				Role:       notification.RoleVendor,
+				Data:       map[string]interface{}{"vendor_id": vendor.ID.String()},
+			})
+		}
 	}
 
 	utils.SuccessResponse(c, gin.H{"message": "Vendor " + req.Status})
@@ -496,6 +507,31 @@ func (h *AdminHandler) ProcessWithdrawal(c *gin.Context) {
 	}
 
 	h.db.Model(&withdrawal).Updates(updates)
+
+	if h.dispatcher != nil {
+		var vendor models.Vendor
+		if err := h.db.First(&vendor, withdrawal.VendorID).Error; err == nil {
+			var notifType models.NotificationType
+			switch req.Status {
+			case "approved":
+				notifType = models.NotifWithdrawalApproved
+			case "processed":
+				notifType = models.NotifWithdrawalProcessed
+			case "rejected":
+				notifType = models.NotifWithdrawalRejected
+			}
+			
+			if notifType != "" {
+				h.dispatcher.Dispatch(c.Request.Context(), notification.NotificationEvent{
+					Type:       notifType,
+					ReceiverID: vendor.UserID,
+					Role:       notification.RoleVendor,
+					Data:       map[string]interface{}{"withdrawal_id": withdrawal.ID.String()},
+				})
+			}
+		}
+	}
+
 	utils.SuccessResponse(c, gin.H{"message": "Withdrawal " + req.Status})
 }
 
@@ -1213,6 +1249,21 @@ func (h *AdminHandler) VerifyKYCDocument(c *gin.Context) {
 	}
 
 	h.db.Model(&doc).Updates(updates)
+
+	if req.Status == "approved" && h.dispatcher != nil {
+		var user models.User
+		if err := h.db.First(&user, doc.UserID).Error; err == nil {
+			// Find Role for the dispatcher
+			roleStr := string(user.Role)
+			h.dispatcher.Dispatch(c.Request.Context(), notification.NotificationEvent{
+				Type:       models.NotifAccountVerified,
+				ReceiverID: doc.UserID,
+				Role:       roleStr,
+				Data:       map[string]interface{}{"kyc_id": doc.ID.String()},
+			})
+		}
+	}
+
 	utils.SuccessResponse(c, gin.H{"message": "KYC document " + req.Status})
 }
 

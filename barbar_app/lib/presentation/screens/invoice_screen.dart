@@ -132,7 +132,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text('Date:', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                                Text(_invoiceData!['date'].toString().substring(0, 10), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                Text(() { final d = (_invoiceData!['date'] ?? '').toString(); return d.length >= 10 ? d.substring(0, 10) : d; }(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               ],
                             ),
                             const SizedBox(height: 8),
@@ -147,7 +147,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
-                                    _invoiceData!['status'].toString().toUpperCase(),
+                                    (_invoiceData!['status'] ?? 'paid').toString().toUpperCase(),
                                     style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 10),
                                   ),
                                 ),
@@ -174,22 +174,22 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
                             ),
                             const Divider(height: 24, color: AppColors.border),
-                            ...(_invoiceData!['items'] as List).map((item) => Padding(
+                            ...((_invoiceData!['items'] as List? ?? []).map((item) => Padding(
                               padding: const EdgeInsets.only(bottom: 12.0),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  Text('₹${(item['price'] as num).toInt()}', style: const TextStyle(color: AppColors.textSecondary)),
+                                  Text(item['name']?.toString() ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  Text('₹${(item['price'] as num? ?? 0).toInt()}', style: const TextStyle(color: AppColors.textSecondary)),
                                 ],
                               ),
-                            )),
+                            ))),
                             const Divider(height: 24, color: AppColors.border),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text('Subtotal:', style: TextStyle(color: AppColors.textSecondary)),
-                                Text('₹${(_invoiceData!['subtotal'] as num).toInt()}'),
+                                Text('₹${(_invoiceData!['subtotal'] as num? ?? 0).toInt()}'),
                               ],
                             ),
                             const SizedBox(height: 8),
@@ -197,7 +197,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text('GST Tax (18%):', style: TextStyle(color: AppColors.textSecondary)),
-                                Text('₹${(_invoiceData!['tax'] as num).toInt()}'),
+                                Text('₹${(_invoiceData!['tax'] as num? ?? 0).toInt()}'),
                               ],
                             ),
                             const SizedBox(height: 8),
@@ -205,7 +205,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text('Discount:', style: TextStyle(color: AppColors.textSecondary)),
-                                Text('₹${(_invoiceData!['discount'] as num).toInt()}', style: const TextStyle(color: AppColors.success)),
+                                Text('₹${(_invoiceData!['discount'] as num? ?? 0).toInt()}', style: const TextStyle(color: AppColors.success)),
                               ],
                             ),
                             const Divider(height: 24, color: AppColors.border),
@@ -214,7 +214,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               children: [
                                 const Text('Grand Total:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                                 Text(
-                                  '₹${(_invoiceData!['total'] as num).toInt()}',
+                                  '₹${(_invoiceData!['total'] as num? ?? 0).toInt()}',
                                   style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.primary, fontSize: 18),
                                 ),
                               ],

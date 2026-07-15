@@ -8,10 +8,16 @@ class StaffModel {
   final bool isActive;
   final double rating;
   final int reviewCount;
+  final String? bio;
+  final int experienceYears;
+  final List<String> languages;
+  final String? specializations;
+  final String? instagram;
   final String? workingDays;
   final String? startTime;
   final String? endTime;
   final String? dayOff;
+  final List<Map<String, dynamic>>? services;
 
   StaffModel({
     required this.id,
@@ -23,13 +29,35 @@ class StaffModel {
     required this.isActive,
     required this.rating,
     required this.reviewCount,
+    this.bio,
+    this.experienceYears = 0,
+    this.languages = const [],
+    this.specializations,
+    this.instagram,
     this.workingDays,
     this.startTime,
     this.endTime,
     this.dayOff,
+    this.services,
   });
 
+  String get roleLabel => role == 'manager' ? 'Manager' : 'Specialist';
+
+  String get ratingDisplay => rating > 0 ? rating.toStringAsFixed(1) : 'New';
+
   factory StaffModel.fromJson(Map<String, dynamic> json) {
+    List<String> parsedLanguages = [];
+    final rawLangs = json['languages'];
+    if (rawLangs is List) {
+      parsedLanguages = rawLangs.map((e) => e.toString()).toList();
+    }
+
+    List<Map<String, dynamic>>? parsedServices;
+    final rawServices = json['services'];
+    if (rawServices is List) {
+      parsedServices = rawServices.cast<Map<String, dynamic>>();
+    }
+
     return StaffModel(
       id: json['id'] as String,
       barberId: json['barber_id'] as String,
@@ -40,10 +68,16 @@ class StaffModel {
       isActive: json['is_active'] as bool? ?? true,
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
       reviewCount: json['review_count'] as int? ?? 0,
+      bio: json['bio'] as String?,
+      experienceYears: (json['experience_years'] as num?)?.toInt() ?? 0,
+      languages: parsedLanguages,
+      specializations: json['specializations'] as String?,
+      instagram: json['instagram'] as String?,
       workingDays: json['working_days']?.toString(),
       startTime: json['start_time']?.toString(),
       endTime: json['end_time']?.toString(),
       dayOff: json['day_off']?.toString(),
+      services: parsedServices,
     );
   }
 
@@ -58,6 +92,11 @@ class StaffModel {
       'is_active': isActive,
       'rating': rating,
       'review_count': reviewCount,
+      'bio': bio,
+      'experience_years': experienceYears,
+      'languages': languages,
+      'specializations': specializations,
+      'instagram': instagram,
       'working_days': workingDays,
       'start_time': startTime,
       'end_time': endTime,
@@ -71,6 +110,11 @@ class StaffModel {
     String? phone,
     String? role,
     bool? isActive,
+    String? bio,
+    int? experienceYears,
+    List<String>? languages,
+    String? specializations,
+    String? instagram,
     String? workingDays,
     String? startTime,
     String? endTime,
@@ -86,6 +130,11 @@ class StaffModel {
       isActive: isActive ?? this.isActive,
       rating: rating,
       reviewCount: reviewCount,
+      bio: bio ?? this.bio,
+      experienceYears: experienceYears ?? this.experienceYears,
+      languages: languages ?? this.languages,
+      specializations: specializations ?? this.specializations,
+      instagram: instagram ?? this.instagram,
       workingDays: workingDays ?? this.workingDays,
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,

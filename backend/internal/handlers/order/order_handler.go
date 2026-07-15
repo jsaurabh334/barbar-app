@@ -1,12 +1,14 @@
 package order
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/barbar-app/backend/internal/auth"
 	"github.com/barbar-app/backend/internal/models"
+	"github.com/barbar-app/backend/internal/services/notification"
 	"github.com/barbar-app/backend/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -14,11 +16,12 @@ import (
 )
 
 type OrderHandler struct {
-	db *gorm.DB
+	db         *gorm.DB
+	dispatcher notification.Dispatcher
 }
 
-func NewOrderHandler(db *gorm.DB) *OrderHandler {
-	return &OrderHandler{db: db}
+func NewOrderHandler(db *gorm.DB, dispatcher notification.Dispatcher) *OrderHandler {
+	return &OrderHandler{db: db, dispatcher: dispatcher}
 }
 
 type PlaceOrderRequest struct {
@@ -281,6 +284,10 @@ func (h *OrderHandler) PlaceOrder(c *gin.Context) {
 
 	tx.Commit()
 
+	for _, o := range orders {
+		h.dispatchOrderEvent(c.Request.Context(), o, models.NotifOrderPlaced)
+	}
+
 	// Update coupon usage
 	if couponCode != "" {
 		h.db.Model(&models.Coupon{}).Where("code = ?", couponCode).Update("used_count", gorm.Expr("used_count + 1"))
@@ -437,6 +444,17 @@ func (h *OrderHandler) UpdateStatus(c *gin.Context) {
 		Note:       req.Note,
 	})
 
+	switch req.Status {
+	case "confirmed":
+		h.dispatchOrderEvent(c.Request.Context(), order, models.NotifOrderConfirmed)
+	case "shipped":
+		h.dispatchOrderEvent(c.Request.Context(), order, models.NotifOrderShipped)
+	case "delivered":
+		h.dispatchOrderEvent(c.Request.Context(), order, models.NotifOrderDelivered)
+	case "cancelled":
+		h.dispatchOrderEvent(c.Request.Context(), order, models.NotifOrderCancelled)
+	}
+
 	utils.SuccessResponse(c, order)
 }
 
@@ -488,6 +506,8 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 		Role:       "customer",
 		Note:       req.Reason,
 	})
+
+	h.dispatchOrderEvent(c.Request.Context(), order, models.NotifOrderCancelled)
 
 	utils.SuccessResponse(c, gin.H{"message": "Order cancelled"})
 }
@@ -608,4 +628,48 @@ func getShippingCharge(amount float64) float64 {
 		return 0
 	}
 	return 49
+}
+
+func (h *OrderHandler) dispatchOrderEvent(ctx context.Context, order models.Order, event models.NotificationType) {
+	if h.dispatcher == nil {
+		return
+	}
+	
+	switch event {
+	case models.NotifOrderPlaced:
+		var vendor models.Vendor
+		if err := h.db.First(&vendor, order.VendorID).Error; err == nil {
+			h.dispatcher.Dispatch(ctx, notification.NotificationEvent{
+				Type:       event,
+				ReceiverID: vendor.UserID,
+				Role:       notification.RoleVendor,
+				Data:       map[string]interface{}{"order_id": order.ID.String()},
+			})
+		}
+	case models.NotifOrderConfirmed, models.NotifOrderShipped, models.NotifOrderDelivered:
+		h.dispatcher.Dispatch(ctx, notification.NotificationEvent{
+			Type:       event,
+			ReceiverID: order.CustomerID,
+			Role:       notification.RoleCustomer,
+			Data:       map[string]interface{}{"order_id": order.ID.String()},
+		})
+	case models.NotifOrderCancelled:
+		// Notify Customer
+		h.dispatcher.Dispatch(ctx, notification.NotificationEvent{
+			Type:       event,
+			ReceiverID: order.CustomerID,
+			Role:       notification.RoleCustomer,
+			Data:       map[string]interface{}{"order_id": order.ID.String()},
+		})
+		// Notify Vendor
+		var vendor models.Vendor
+		if err := h.db.First(&vendor, order.VendorID).Error; err == nil {
+			h.dispatcher.Dispatch(ctx, notification.NotificationEvent{
+				Type:       event,
+				ReceiverID: vendor.UserID,
+				Role:       notification.RoleVendor,
+				Data:       map[string]interface{}{"order_id": order.ID.String()},
+			})
+		}
+	}
 }

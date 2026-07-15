@@ -48,6 +48,7 @@ type Booking struct {
 	DiscountAmount    float64       `gorm:"default:0" json:"discount_amount"`
 	FinalPrice        float64       `gorm:"default:0" json:"final_price"`
 	PaymentStatus     string        `gorm:"size:50;default:pending" json:"payment_status"`
+	PaymentMethod     string        `gorm:"size:50" json:"payment_method,omitempty"`
 	PaymentID         string        `gorm:"size:255" json:"payment_id,omitempty"`
 	CancellationReason string       `gorm:"type:text" json:"cancellation_reason,omitempty"`
 	CancelledBy       *uuid.UUID    `gorm:"type:uuid" json:"cancelled_by,omitempty"`

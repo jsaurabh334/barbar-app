@@ -14,6 +14,8 @@ import 'booking_confirmation_screen.dart';
 import 'review_list_screen.dart';
 import 'select_address_screen.dart';
 import '../../domain/repositories/directory_repository.dart';
+import '../../data/models/staff_model.dart';
+import 'staff_detail_screen.dart';
 
 class BarberDetailScreen extends StatefulWidget {
   final BarberModel barber;
@@ -37,6 +39,16 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
   List<Map<String, dynamic>> _staffList = [];
   bool _isLoadingStaff = true;
   String? _selectedStaffId;
+
+  String? get _selectedStaffName {
+    if (_selectedStaffId == null) return null;
+    for (final s in _staffList) {
+      if (s['id'] == _selectedStaffId) {
+        return (s['name'] as String?) ?? 'Selected staff';
+      }
+    }
+    return null;
+  }
 
   @override
   void initState() {
@@ -471,10 +483,26 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
                             ),
                           );
                         } else if (state is BookingFailure) {
+                          final errMsg = state.error.replaceAll('Exception: ', '');
+                          final isStaffIssue = errMsg.toLowerCase().contains('staff') || errMsg.toLowerCase().contains('available');
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(state.error.replaceAll('Exception: ', '')),
+                              content: Text(errMsg),
                               backgroundColor: Colors.red,
+                              duration: const Duration(seconds: 5),
+                              action: isStaffIssue && _selectedStaffId != null
+                                  ? SnackBarAction(
+                                      label: 'Try Any Available',
+                                      textColor: Colors.white,
+                                      onPressed: () {
+                                        setState(() {
+                                          _selectedStaffId = null;
+                                          _selectedTimeSlot = null;
+                                        });
+                                        _fetchSlots();
+                                      },
+                                    )
+                                  : null,
                             ),
                           );
                         }
@@ -517,6 +545,59 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
           );
         } else if (state is AvailableSlotsLoaded) {
           if (state.slots.isEmpty) {
+            if (_selectedStaffId != null && _selectedStaffName != null) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(LucideIcons.alertCircle, size: 18, color: AppColors.warning),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '$_selectedStaffName has no available slots today.',
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Try "Any Available" for the earliest appointment.',
+                          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _selectedStaffId = null;
+                              _selectedTimeSlot = null;
+                            });
+                            _fetchSlots();
+                          },
+                          icon: const Icon(LucideIcons.refreshCw, size: 16),
+                          label: const Text('Switch to Any Available'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.warning,
+                            side: const BorderSide(color: AppColors.warning),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }
             return const Text('No slots available for this date.', style: TextStyle(color: AppColors.textMuted));
           }
           return Wrap(
@@ -803,12 +884,20 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
             isSelected: _selectedStaffId == null,
           ),
           ..._staffList.map((staff) {
-            final user = staff['User'] ?? {};
+            final user = staff['user'] ?? {};
+            final staffName = staff['name'] ?? user['first_name'] ?? 'Staff';
+            final staffImage = staff['image'] ?? user['profile_image_url'];
+            final rating = (staff['rating'] as num?)?.toDouble() ?? 0;
+            final reviewCount = staff['review_count'] as int? ?? 0;
+            final role = staff['role'] as String? ?? 'staff';
             return _buildStaffCard(
-              id: staff['ID'],
-              name: user['first_name'] ?? 'Staff',
-              imageUrl: user['profile_image_url'],
-              isSelected: _selectedStaffId == staff['ID'],
+              id: staff['id'],
+              name: staffName,
+              imageUrl: staffImage,
+              isSelected: _selectedStaffId == staff['id'],
+              rating: rating,
+              reviewCount: reviewCount,
+              role: role,
             );
           }),
         ],
@@ -821,7 +910,12 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
     required String name,
     required String? imageUrl,
     required bool isSelected,
+    double rating = 0,
+    int reviewCount = 0,
+    String role = 'staff',
   }) {
+    final roleLabel = role == 'manager' ? 'Manager' : id == null ? 'Auto-assign' : 'Specialist';
+
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -842,16 +936,37 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: AppColors.background,
-              backgroundImage: imageUrl != null && imageUrl.isNotEmpty
-                  ? CachedNetworkImageProvider(imageUrl)
-                  : null,
-              child: imageUrl == null || imageUrl.isEmpty
-                  ? const Icon(LucideIcons.user, color: AppColors.textSecondary)
-                  : null,
+            Stack(
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor: AppColors.background,
+                  backgroundImage: imageUrl != null && imageUrl.isNotEmpty
+                      ? CachedNetworkImageProvider(imageUrl)
+                      : null,
+                  child: imageUrl == null || imageUrl.isEmpty
+                      ? const Icon(LucideIcons.user, color: AppColors.textSecondary)
+                      : null,
+                ),
+                if (id != null)
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: GestureDetector(
+                      onTap: () => _openStaffProfile(id),
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(LucideIcons.eye, size: 12, color: Colors.white),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 8),
             Text(
@@ -861,11 +976,60 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                 fontSize: 14,
               ),
+              textAlign: TextAlign.center,
+            ),
+            if (id != null && rating > 0) ...[
+              const SizedBox(height: 2),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(LucideIcons.star, size: 12, color: AppColors.warning),
+                  const SizedBox(width: 2),
+                  Text(
+                    rating.toStringAsFixed(1),
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                  Text(
+                    ' ($reviewCount)',
+                    style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 2),
+            Text(
+              roleLabel,
+              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
             ),
           ],
         ),
       ),
     );
+  }
+
+  void _openStaffProfile(String? staffId) {
+    if (staffId == null) return;
+    final staffData = _staffList.cast<Map<String, dynamic>?>().firstWhere(
+      (s) => s?['id'] == staffId,
+      orElse: () => null,
+    );
+    if (staffData == null) return;
+
+    final staff = StaffModel.fromJson(staffData);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StaffDetailScreen(staff: staff, barber: widget.barber),
+      ),
+    ).then((selectedId) {
+      if (selectedId != null && selectedId is String) {
+        setState(() {
+          _selectedStaffId = selectedId;
+          _selectedTimeSlot = null;
+        });
+        _fetchSlots();
+      }
+    });
   }
 
   Future<void> _pickDate() async {

@@ -11,6 +11,7 @@ class BookingModel {
   final int estimatedWaitMinutes;
   final double finalPrice;
   final String paymentStatus;
+  final String paymentMethod;
   final String customerName;
   final String shopName;
   final List<ServiceModel> services;
@@ -35,6 +36,7 @@ class BookingModel {
     required this.estimatedWaitMinutes,
     required this.finalPrice,
     required this.paymentStatus,
+    this.paymentMethod = '',
     this.customerName = 'Guest Customer',
     this.shopName = '',
     this.services = const [],
@@ -76,6 +78,7 @@ class BookingModel {
       estimatedWaitMinutes: (json['estimated_wait_minutes'] as num?)?.toInt() ?? 0,
       finalPrice: (json['final_price'] as num?)?.toDouble() ?? 0.0,
       paymentStatus: (json['payment_status'] as String?) ?? 'pending',
+      paymentMethod: (json['payment_method'] as String?) ?? '',
       customerName: parsedCustomerName,
       shopName: parsedShopName,
       services: serviceList,
@@ -103,6 +106,7 @@ class BookingModel {
       'estimated_wait_minutes': estimatedWaitMinutes,
       'final_price': finalPrice,
       'payment_status': paymentStatus,
+      'payment_method': paymentMethod,
       'customer_name': customerName,
       'shop_name': shopName,
       'services': services.map((e) => e.toJson()).toList(),
@@ -127,6 +131,7 @@ class BookingModel {
     int? estimatedWaitMinutes,
     double? finalPrice,
     String? paymentStatus,
+    String? paymentMethod,
     String? customerName,
     String? shopName,
     List<ServiceModel>? services,
@@ -149,6 +154,7 @@ class BookingModel {
       estimatedWaitMinutes: estimatedWaitMinutes ?? this.estimatedWaitMinutes,
       finalPrice: finalPrice ?? this.finalPrice,
       paymentStatus: paymentStatus ?? this.paymentStatus,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
       customerName: customerName ?? this.customerName,
       shopName: shopName ?? this.shopName,
       services: services ?? this.services,

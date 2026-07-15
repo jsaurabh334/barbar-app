@@ -17,30 +17,30 @@ type InvoiceService struct {
 }
 
 type InvoiceData struct {
-	InvoiceNo    string
-	Date         string
-	DueDate      string
-	CustomerName string
-	CustomerAddr string
-	CustomerPhone string
-	CustomerEmail string
-	Items        []InvoiceItem
-	Subtotal     float64
-	Tax          float64
-	Discount     float64
-	Shipping     float64
-	Total        float64
-	PlatformName string
-	Currency     string
-	Status       string
-	Notes        string
+	InvoiceNo     string        `json:"invoice_no"`
+	Date          string        `json:"date"`
+	DueDate       string        `json:"due_date"`
+	CustomerName  string        `json:"customer_name"`
+	CustomerAddr  string        `json:"customer_addr"`
+	CustomerPhone string        `json:"customer_phone"`
+	CustomerEmail string        `json:"customer_email"`
+	Items         []InvoiceItem `json:"items"`
+	Subtotal      float64       `json:"subtotal"`
+	Tax           float64       `json:"tax"`
+	Discount      float64       `json:"discount"`
+	Shipping      float64       `json:"shipping"`
+	Total         float64       `json:"total"`
+	PlatformName  string        `json:"platform_name"`
+	Currency      string        `json:"currency"`
+	Status        string        `json:"status"`
+	Notes         string        `json:"notes"`
 }
 
 type InvoiceItem struct {
-	Name     string
-	Quantity int
-	Price    float64
-	Total    float64
+	Name     string  `json:"name"`
+	Quantity int     `json:"quantity"`
+	Price    float64 `json:"price"`
+	Total    float64 `json:"total"`
 }
 
 func NewInvoiceService(db *gorm.DB, baseURL string) *InvoiceService {
@@ -139,7 +139,7 @@ func (s *InvoiceService) GetBookingInvoiceData(bookingID string) (*InvoiceData, 
 
 	subtotal := booking.TotalPrice
 	discount := booking.DiscountAmount
-	tax := subtotal * 0.18
+	tax := 0.0
 	total := booking.FinalPrice
 
 	data := InvoiceData{

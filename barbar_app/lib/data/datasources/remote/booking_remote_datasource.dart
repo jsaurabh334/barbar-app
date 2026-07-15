@@ -79,6 +79,45 @@ class BookingRemoteDataSource {
     }
   }
 
+  Future<Map<String, dynamic>> initiateBookingPayment({
+    required String bookingId,
+    required String gateway,
+  }) async {
+    final response = await _apiClient.dio.post(
+      '/payments/initiate',
+      data: {
+        'booking_id': bookingId,
+        'gateway': gateway,
+      },
+    );
+    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Payment initiation failed');
+  }
+
+  Future<void> verifyBookingPayment({
+    required String paymentId,
+    required String gateway,
+    required String razorpayOrderId,
+    required String razorpayPaymentId,
+    required String razorpaySignature,
+  }) async {
+    final response = await _apiClient.dio.post(
+      '/payments/verify',
+      data: {
+        'payment_id': paymentId,
+        'gateway': gateway,
+        'razorpay_order_id': razorpayOrderId,
+        'razorpay_payment_id': razorpayPaymentId,
+        'razorpay_signature': razorpaySignature,
+      },
+    );
+    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
+      throw Exception(response.data['error'] ?? 'Payment verification failed');
+    }
+  }
+
   Future<void> payBooking(String bookingId, String method, String status, String reference) async {
     final response = await _apiClient.dio.post(
       '/bookings/$bookingId/payment',

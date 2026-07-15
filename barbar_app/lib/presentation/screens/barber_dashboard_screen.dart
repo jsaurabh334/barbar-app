@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/network/websocket_client.dart';
 import '../../core/theme/app_theme.dart';
+import '../../data/models/booking_model.dart';
 import '../../domain/repositories/barber_repository.dart';
 import '../bloc/booking/booking_bloc.dart';
 import '../bloc/booking/booking_event.dart';
@@ -10,8 +11,11 @@ import '../bloc/booking/booking_state.dart';
 import '../bloc/barber_availability/barber_availability_bloc.dart';
 import '../bloc/barber_availability/barber_availability_event.dart';
 import '../bloc/barber_availability/barber_availability_state.dart';
+import '../bloc/notification/notification_bloc.dart';
+import '../bloc/notification/notification_event.dart';
 import '../widgets/glass_card.dart';
-import 'barber_notifications_screen.dart';
+import '../widgets/notification_bell.dart';
+import 'barber/booking_detail_screen.dart';
 
 class BarberDashboardScreen extends StatefulWidget {
   final WebSocketClient webSocketClient;
@@ -36,21 +40,41 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
   String _shopName = '';
   String _shiftStart = '--:--';
   String _shiftEnd = '--:--';
-  List<dynamic> _bookings = [];
+  List<BookingModel> _bookings = [];
+  List<Map<String, dynamic>> _staffList = [];
+  String? _selectedStaffFilter;
 
   @override
   void initState() {
     super.initState();
     context.read<BookingBloc>().add(FetchBarberBookings());
     _loadDashboard();
+    _fetchStaff();
 
     widget.webSocketClient.events.listen((event) {
       if (!mounted) return;
-      if (event['type'] == 'queue_update') {
+      final type = event['type'] as String?;
+      if (type == 'notification') {
+        final payload = event['payload'] as Map<String, dynamic>?;
+        if (payload != null) {
+          context.read<NotificationBloc>().add(NewWebSocketNotification(payload));
+        }
+        return;
+      }
+      if (type == 'queue_update') {
         context.read<BookingBloc>().add(FetchBarberBookings());
         _loadDashboard();
       }
     });
+  }
+
+  Future<void> _fetchStaff() async {
+    try {
+      final staff = await widget.barberRepository.getStaff();
+      if (mounted) {
+        setState(() => _staffList = staff);
+      }
+    } catch (_) {}
   }
 
     Map<String, dynamic>? _barberData;
@@ -99,15 +123,21 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
       appBar: AppBar(
         title: Text(_shopName.isEmpty ? 'DASHBOARD' : _shopName.toUpperCase()),
         actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.bell),
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const BarberNotificationsScreen()));
-            },
-          ),
+          const NotificationBellIcon(),
         ],
       ),
-      body: RefreshIndicator(
+      body: BlocListener<BookingBloc, BookingState>(
+        listener: (context, state) {
+          if (state is BookingFailure) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.error),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+        },
+        child: RefreshIndicator(
         onRefresh: () async {
           _loadDashboard();
           context.read<BookingBloc>().add(FetchBarberBookings());
@@ -128,10 +158,27 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
               const SizedBox(height: 24),
               const Text('TODAY\'S QUEUE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary)),
               const SizedBox(height: 12),
+              if (_staffList.isNotEmpty) ...[
+                SizedBox(
+                  height: 40,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      _buildFilterChip('All', null, _selectedStaffFilter == null),
+                      ..._staffList.map((staff) {
+                        final name = staff['name'] as String? ?? 'Staff';
+                        return _buildFilterChip(name, staff['id'] as String?, _selectedStaffFilter == staff['id']);
+                      }),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               _buildActiveQueue(),
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -347,6 +394,11 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
   }
 
 
+  List<BookingModel> _filteredBookings() {
+    if (_selectedStaffFilter == null) return _bookings;
+    return _bookings.where((b) => b.staffId == _selectedStaffFilter).toList();
+  }
+
   Widget _buildActiveQueue() {
     return BlocConsumer<BookingBloc, BookingState>(
       listener: (context, state) {
@@ -359,29 +411,54 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
           return const Center(child: CircularProgressIndicator(color: AppColors.primary));
         }
 
-        if (_bookings.isEmpty) {
+        final displayBookings = _filteredBookings();
+
+        if (displayBookings.isEmpty) {
+          final label = _selectedStaffFilter != null ? ' for this staff' : '';
           return GlassCard(
             padding: const EdgeInsets.all(32),
             child: Column(
               children: [
                 const Icon(LucideIcons.calendarCheck, size: 48, color: AppColors.textMuted),
                 const SizedBox(height: 12),
-                const Text('No bookings today', style: TextStyle(color: AppColors.textSecondary)),
+                Text('No bookings$label today', style: const TextStyle(color: AppColors.textSecondary)),
               ],
             ),
           );
         }
 
         return Column(
-          children: _bookings.take(5).map((booking) => _buildBookingCard(booking)).toList(),
+          children: displayBookings.take(5).map((booking) => _buildBookingCard(booking)).toList(),
         );
       },
     );
   }
 
-  Widget _buildBookingCard(dynamic booking) {
+  void _showCustomerDetails(BookingModel booking) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BarberBookingDetailScreen(booking: booking),
+      ),
+    );
+  }
+
+  void _startOrAcceptBooking(BookingModel booking) {
+    if (booking.status == 'pending') {
+      context.read<BookingBloc>().add(
+        UpdateBookingStatus(bookingId: booking.id, status: 'confirmed'),
+      );
+    } else {
+      context.read<BookingBloc>().add(
+        UpdateBookingStatus(bookingId: booking.id, status: 'in_progress'),
+      );
+    }
+  }
+
+  Widget _buildBookingCard(BookingModel booking) {
     final isInProgress = booking.status == 'in_progress';
-    final isPending = booking.status == 'pending' || booking.status == 'confirmed';
+    final isPending = booking.status == 'pending';
+    final isConfirmed = booking.status == 'confirmed';
     final isCompleted = booking.status == 'completed';
     final isCancelled = booking.status == 'cancelled';
 
@@ -389,106 +466,166 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
     if (isInProgress) statusColor = AppColors.success;
     else if (isCompleted) statusColor = AppColors.info;
     else if (isCancelled) statusColor = AppColors.error;
+    else if (isPending) statusColor = AppColors.warning;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: AppColors.cardBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isInProgress ? AppColors.success.withValues(alpha: 0.5) : AppColors.border,
-          width: isInProgress ? 1.5 : 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: AppColors.surface,
-                  child: const Icon(LucideIcons.user, color: AppColors.textSecondary, size: 18),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        booking.customerName,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${booking.scheduledStart.split('T').last.substring(0, 5)}  •  ${booking.services.map((s) => s.name).join(', ')}',
-                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    isInProgress ? 'IN PROGRESS' : booking.status.toUpperCase(),
-                    style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10),
-                  ),
-                ),
-              ],
-            ),
+    return GestureDetector(
+      onTap: () => _showCustomerDetails(booking),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isInProgress ? AppColors.success.withValues(alpha: 0.5) : AppColors.border,
+            width: isInProgress ? 1.5 : 1,
           ),
-          if (!isCompleted && !isCancelled)
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
               child: Row(
                 children: [
-                  if (isInProgress)
-                    Expanded(
-                      child: _actionButton(
-                        label: 'FINISH SERVICE',
-                        color: AppColors.success,
-                        onTap: () {
-                          context.read<BookingBloc>().add(
-                            UpdateBookingStatus(bookingId: booking.id, status: 'completed'),
-                          );
-                        },
-                      ),
+                  CircleAvatar(
+                    backgroundColor: AppColors.surface,
+                    child: const Icon(LucideIcons.user, color: AppColors.textSecondary, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          booking.customerName,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${booking.scheduledStart.split('T').last.length >= 5 ? booking.scheduledStart.split('T').last.substring(0, 5) : booking.scheduledStart.split('T').last}  •  ${booking.services.map((s) => s.name).join(', ')}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                        if (booking.staff != null) ...[
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              const Icon(LucideIcons.user, size: 10, color: AppColors.textMuted),
+                              const SizedBox(width: 4),
+                              Text(
+                                booking.staff!['name'] ?? 'Staff',
+                                style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
                     ),
-                  if (isPending) ...[
-                    Expanded(
-                      child: _actionButton(
-                        label: 'START SERVICE',
-                        color: AppColors.primary,
-                        onTap: () {
-                          context.read<BookingBloc>().add(
-                            UpdateBookingStatus(bookingId: booking.id, status: 'in_progress'),
-                          );
-                        },
-                      ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _actionButton(
-                        label: 'NO SHOW',
-                        color: AppColors.error,
-                        outlined: true,
-                        onTap: () {
-                          context.read<BookingBloc>().add(
-                            UpdateBookingStatus(bookingId: booking.id, status: 'cancelled'),
-                          );
-                        },
-                      ),
+                    child: Text(
+                      isInProgress ? 'IN PROGRESS' : booking.status.toUpperCase(),
+                      style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10),
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
-        ],
+            if (!isCompleted && !isCancelled)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                child: Row(
+                  children: [
+                    if (isInProgress)
+                      Expanded(
+                        child: _actionButton(
+                          label: 'FINISH SERVICE',
+                          color: AppColors.success,
+                          onTap: () {
+                            context.read<BookingBloc>().add(
+                              UpdateBookingStatus(bookingId: booking.id, status: 'completed'),
+                            );
+                          },
+                        ),
+                      ),
+                    if (isPending) ...[
+                      Expanded(
+                        child: _actionButton(
+                          label: 'ACCEPT',
+                          color: AppColors.primary,
+                          onTap: () => _startOrAcceptBooking(booking),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _actionButton(
+                          label: 'DECLINE',
+                          color: AppColors.error,
+                          outlined: true,
+                          onTap: () {
+                            context.read<BookingBloc>().add(
+                              UpdateBookingStatus(bookingId: booking.id, status: 'cancelled'),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                    if (isConfirmed) ...[
+                      Expanded(
+                        child: _actionButton(
+                          label: 'START SERVICE',
+                          color: AppColors.primary,
+                          onTap: () => _startOrAcceptBooking(booking),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _actionButton(
+                          label: 'NO SHOW',
+                          color: AppColors.error,
+                          outlined: true,
+                          onTap: () {
+                            context.read<BookingBloc>().add(
+                              UpdateBookingStatus(bookingId: booking.id, status: 'cancelled'),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, String? id, bool isSelected) {
+    return GestureDetector(
+      onTap: () {
+        setState(() => _selectedStaffFilter = id);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isSelected ? AppColors.primary : AppColors.border),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AppColors.textPrimary,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            fontSize: 13,
+          ),
+        ),
       ),
     );
   }

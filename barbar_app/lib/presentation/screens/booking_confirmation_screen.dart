@@ -21,6 +21,8 @@ class BookingConfirmationScreen extends StatelessWidget {
     }
     total += booking.travelCharge;
 
+    final isPending = booking.status == 'pending' || booking.status == 'home_service_pending';
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -33,31 +35,27 @@ class BookingConfirmationScreen extends StatelessWidget {
                 width: 80,
                 height: 80,
                 decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha: 0.12),
+                  color: (isPending ? AppColors.warning : AppColors.success).withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(LucideIcons.checkCircle, size: 48, color: AppColors.success),
+                child: Icon(
+                  isPending ? LucideIcons.clock : LucideIcons.checkCircle,
+                  size: 48,
+                  color: isPending ? AppColors.warning : AppColors.success,
+                ),
               ),
               const SizedBox(height: 20),
-              const Text(
-                'Booking Confirmed!',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+              Text(
+                isPending ? 'Booking Requested' : 'Booking Confirmed!',
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  'Queue #${booking.queuePosition} • Est. ${booking.estimatedWaitMinutes} min',
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
+              Text(
+                isPending
+                    ? 'Your request has been sent to the shop.\nWe\'ll notify you once the barber accepts it.'
+                    : 'Your booking is confirmed.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
               ),
               const SizedBox(height: 32),
 
@@ -87,6 +85,9 @@ class BookingConfirmationScreen extends StatelessWidget {
                     ],
                     _detailRow(LucideIcons.store, 'Shop', shopName),
                     const Divider(height: 24, color: AppColors.border),
+                    if (booking.staff != null)
+                      _detailRow(LucideIcons.user, 'Professional', booking.staff!['name'] ?? 'Assigned'),
+                    if (booking.staff != null) const Divider(height: 24, color: AppColors.border),
                     _detailRow(LucideIcons.calendar, 'Date', _formatDate(booking.scheduledStart)),
                     const Divider(height: 24, color: AppColors.border),
                     _detailRow(LucideIcons.clock, 'Time', _formatTime(booking.scheduledStart)),
@@ -130,7 +131,7 @@ class BookingConfirmationScreen extends StatelessWidget {
               ),
               const SizedBox(height: 32),
 
-              // Track Queue Button
+              // Main Button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -138,9 +139,12 @@ class BookingConfirmationScreen extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                   onPressed: () {
-                    Navigator.pop(context);
+                    Navigator.popUntil(context, (route) => route.isFirst);
                   },
-                  child: const Text('Track Queue', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: Text(
+                    isPending ? 'View Booking Status' : 'Track Queue',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),

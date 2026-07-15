@@ -1,6 +1,7 @@
 package review
 
 import (
+	"context"
 	"fmt"
 	"slices"
 
@@ -16,12 +17,12 @@ import (
 
 type ReviewHandler struct {
 	db        *gorm.DB
-	notifSvc  *notifService.NotificationService
+	notifSvc  notifService.Dispatcher
 	hub       *websocket.Hub
 	ratingSvc *reviewSvc.RatingService
 }
 
-func NewReviewHandler(db *gorm.DB, notifSvc *notifService.NotificationService, hub *websocket.Hub) *ReviewHandler {
+func NewReviewHandler(db *gorm.DB, notifSvc notifService.Dispatcher, hub *websocket.Hub) *ReviewHandler {
 	return &ReviewHandler{
 		db:        db,
 		notifSvc:  notifSvc,
@@ -258,9 +259,10 @@ func (h *ReviewHandler) Moderate(c *gin.Context) {
 
 	h.ratingSvc.RecalculateShopRating(review.ShopID)
 
-	if toStatus == models.ReviewStatusApproved {
+	switch toStatus {
+	case models.ReviewStatusApproved:
 		h.sendModerationNotification(review.CustomerID, review.ID, "Your review has been approved and is now live.")
-	} else if toStatus == models.ReviewStatusRejected {
+	case models.ReviewStatusRejected:
 		reason := req.Reason
 		if reason == "" {
 			reason = "It did not meet our guidelines."
@@ -515,6 +517,19 @@ func (h *ReviewHandler) CreateReply(c *gin.Context) {
 		return
 	}
 
+	// review is already fetched above
+
+	if h.notifSvc != nil {
+		h.notifSvc.Dispatch(context.Background(), notifService.NotificationEvent{
+			Type:       models.NotifReviewReply,
+			ReceiverID: review.CustomerID,
+			Role:       notifService.RoleCustomer,
+			Data: map[string]interface{}{
+				"review_id": reviewID.String(),
+			},
+		})
+	}
+
 	utils.CreatedResponse(c, reply)
 }
 
@@ -531,14 +546,13 @@ func (h *ReviewHandler) sendReviewNotifications(review *models.Review) {
 	}
 
 	ratingLabel := ratingLabel(review.Rating)
-	title := fmt.Sprintf("New Review: %s", ratingLabel)
-	body := fmt.Sprintf("Rating: %d/5 ★ | %s", review.Rating, truncate(review.Comment, 100))
+	_ = fmt.Sprintf("New Review: %s", ratingLabel)
+	_ = fmt.Sprintf("Rating: %d/5 ★ | %s", review.Rating, truncate(review.Comment, 100))
 
-	h.notifSvc.Send(notifService.SendNotificationInput{
-		UserID: barber.UserID,
-		Title:  title,
-		Body:   body,
-		Type:   models.NotifReviewReceived,
+	h.notifSvc.Dispatch(context.Background(), notifService.NotificationEvent{
+		Type:       models.NotifReviewReceived,
+		ReceiverID: barber.UserID,
+		Role:       notifService.RoleBarber,
 		Data: map[string]interface{}{
 			"review_id": review.ID.String(),
 			"shop_id":   review.ShopID.String(),
@@ -551,13 +565,13 @@ func (h *ReviewHandler) sendModerationNotification(userID uuid.UUID, reviewID uu
 	if h.notifSvc == nil {
 		return
 	}
-	h.notifSvc.Send(notifService.SendNotificationInput{
-		UserID: userID,
-		Title:  "Review Update",
-		Body:   message,
-		Type:   models.NotifReviewModerated,
+	h.notifSvc.Dispatch(context.Background(), notifService.NotificationEvent{
+		Type:       models.NotifReviewModerated,
+		ReceiverID: userID,
+		Role:       notifService.RoleCustomer,
 		Data: map[string]interface{}{
 			"review_id": reviewID.String(),
+			"message":   message,
 		},
 	})
 }

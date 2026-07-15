@@ -23,7 +23,10 @@ import '../bloc/booking/booking_state.dart';
 import '../bloc/directory/directory_bloc.dart';
 import '../bloc/directory/directory_event.dart';
 import '../bloc/directory/directory_state.dart';
+import '../bloc/notification/notification_bloc.dart';
+import '../bloc/notification/notification_event.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/notification_bell.dart';
 
 class HomeScreen extends StatefulWidget {
   final WebSocketClient webSocketClient;
@@ -66,8 +69,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
     widget.webSocketClient.events.listen((event) {
       if (!mounted) return;
+      final type = event['type'] as String?;
+      if (type == 'notification') {
+        final payload = event['payload'] as Map<String, dynamic>?;
+        if (payload != null) {
+          context.read<NotificationBloc>().add(NewWebSocketNotification(payload));
+        }
+        return;
+      }
       if (_activeBooking == null) return;
-      if (event['type'] == 'queue_update') {
+      if (type == 'queue_update') {
         final payload = event['payload'] as Map<String, dynamic>;
         final position = payload['current_position'] as int;
         final waitMin = (payload['estimated_wait_min'] as num).toDouble();
@@ -180,14 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.bell),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('No new notifications')),
-              );
-            },
-          ),
+          const NotificationBellIcon(),
         ],
       ),
       drawer: Drawer(
@@ -597,17 +601,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildActiveQueueTrackerWidget() {
     return BlocConsumer<BookingBloc, BookingState>(
       listener: (context, state) {
-        if (state is BookingsLoaded && state.bookings.isNotEmpty) {
-          final active = state.bookings.firstWhere(
-            (b) => b.status == 'pending' || b.status == 'confirmed' || b.status == 'in_progress',
-            orElse: () => state.bookings.first,
+        if (state is BookingsLoaded) {
+          final active = state.bookings.cast<BookingModel?>().firstWhere(
+            (b) => b!.status == 'confirmed' || b!.status == 'in_progress',
+            orElse: () => null,
           );
-          if (active.id != _activeBooking?.id) {
+          if (active?.id != _activeBooking?.id) {
             setState(() => _activeBooking = active);
-          }
-        } else if (state is BookingsLoaded && state.bookings.isEmpty) {
-          if (_activeBooking != null) {
-            setState(() => _activeBooking = null);
           }
         }
       },

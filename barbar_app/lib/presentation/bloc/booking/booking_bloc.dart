@@ -16,6 +16,8 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     on<StreamQueuePositionUpdate>(_onStreamQueuePositionUpdate);
     on<FetchAllBookings>(_onFetchAllBookings);
     on<FetchBarberBookings>(_onFetchBarberBookings);
+    on<InitiateBookingPayment>(_onInitiateBookingPayment);
+    on<VerifyBookingPayment>(_onVerifyBookingPayment);
     on<PayBooking>(_onPayBooking);
     on<FetchHomeServiceRequests>(_onFetchHomeServiceRequests);
     on<AcceptHomeServiceRequest>(_onAcceptHomeServiceRequest);
@@ -120,6 +122,35 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     try {
       final bookings = await _bookingRepository.getBarberBookings();
       emit(BookingsLoaded(bookings));
+    } catch (e) {
+      emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onInitiateBookingPayment(InitiateBookingPayment event, Emitter<BookingState> emit) async {
+    emit(BookingLoading());
+    try {
+      final data = await _bookingRepository.initiateBookingPayment(
+        bookingId: event.bookingId,
+        gateway: event.gateway,
+      );
+      emit(BookingPaymentInitiated(data));
+    } catch (e) {
+      emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onVerifyBookingPayment(VerifyBookingPayment event, Emitter<BookingState> emit) async {
+    emit(BookingLoading());
+    try {
+      await _bookingRepository.verifyBookingPayment(
+        paymentId: event.paymentId,
+        gateway: event.gateway,
+        razorpayOrderId: event.razorpayOrderId,
+        razorpayPaymentId: event.razorpayPaymentId,
+        razorpaySignature: event.razorpaySignature,
+      );
+      emit(BookingPaymentVerified());
     } catch (e) {
       emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
     }

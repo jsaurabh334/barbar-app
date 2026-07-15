@@ -14,17 +14,21 @@ import 'data/datasources/remote/marketplace_remote_datasource.dart';
 import 'data/datasources/remote/wallet_remote_datasource.dart';
 import 'data/datasources/remote/address_remote_datasource.dart';
 import 'data/datasources/remote/review_remote_datasource.dart';
+import 'data/datasources/remote/notification_remote_datasource.dart';
 import 'data/repositories/auth_repository_impl.dart';
 import 'data/repositories/barber_repository_impl.dart';
 import 'data/repositories/admin_repository_impl.dart';
 import 'data/repositories/booking_repository_impl.dart';
 import 'data/repositories/address_repository_impl.dart';
 import 'data/repositories/review_repository_impl.dart';
+import 'data/repositories/notification_repository_impl.dart';
 import 'domain/repositories/admin_repository.dart';
 import 'domain/repositories/barber_repository.dart';
 import 'domain/repositories/booking_repository.dart';
 import 'domain/repositories/address_repository.dart';
 import 'domain/repositories/review_repository.dart';
+import 'domain/repositories/notification_repository.dart';
+import 'domain/repositories/directory_repository.dart';
 import 'data/repositories/directory_repository_impl.dart';
 import 'data/repositories/marketplace_repository_impl.dart';
 import 'data/repositories/wallet_repository_impl.dart';
@@ -45,6 +49,8 @@ import 'presentation/bloc/address/address_bloc.dart';
 import 'presentation/bloc/wallet/wallet_bloc.dart';
 import 'presentation/bloc/review/review_bloc.dart';
 import 'presentation/bloc/shop_setup/shop_setup_bloc.dart';
+import 'presentation/bloc/notification/notification_bloc.dart';
+import 'presentation/bloc/notification/notification_event.dart';
 import 'presentation/screens/admin_console_screen.dart';
 import 'presentation/screens/auth_screen.dart';
 import 'presentation/screens/barber_shell.dart';
@@ -52,8 +58,14 @@ import 'presentation/screens/customer_dashboard_shell.dart';
 import 'presentation/screens/delivery_dashboard_screen.dart';
 import 'presentation/screens/vendor_dashboard_screen.dart';
 
-void main() {
+import 'core/navigation/navigation_service.dart';
+import 'core/notification/fcm_service.dart';
+import 'core/notification/local_notification_service.dart';
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  await LocalNotificationService.initialize();
 
   // Initialize Core Networking & Data Sources
   final localDataSource = AuthLocalDataSource(
@@ -74,6 +86,7 @@ void main() {
 
   final adminRemoteDataSource = AdminRemoteDataSource(apiClient);
   final reviewRemoteDataSource = ReviewRemoteDataSource(apiClient);
+  final notificationRemoteDataSource = NotificationRemoteDataSource(apiClient);
   final barberRemoteDataSource = BarberRemoteDataSource(apiClient);
 
   // Repositories
@@ -86,6 +99,9 @@ void main() {
   final addressRepository = AddressRepositoryImpl(addressRemoteDataSource);
   final adminRepository = AdminRepositoryImpl(adminRemoteDataSource);
   final reviewRepository = ReviewRepositoryImpl(reviewRemoteDataSource);
+  final notificationRepository = NotificationRepositoryImpl(notificationRemoteDataSource);
+
+  await FCMService.initialize(notificationRepository);
 
   runApp(
     MyApp(
@@ -98,6 +114,7 @@ void main() {
       addressRepository: addressRepository,
       adminRepository: adminRepository,
       reviewRepository: reviewRepository,
+      notificationRepository: notificationRepository,
       webSocketClient: webSocketClient,
     ),
   );
@@ -113,6 +130,7 @@ class MyApp extends StatelessWidget {
   final AddressRepositoryImpl addressRepository;
   final AdminRepositoryImpl adminRepository;
   final ReviewRepository reviewRepository;
+  final NotificationRepository notificationRepository;
   final WebSocketClient webSocketClient;
 
   const MyApp({
@@ -126,6 +144,7 @@ class MyApp extends StatelessWidget {
     required this.addressRepository,
     required this.adminRepository,
     required this.reviewRepository,
+    required this.notificationRepository,
     required this.webSocketClient,
   });
 
@@ -142,6 +161,9 @@ class MyApp extends StatelessWidget {
         RepositoryProvider<BarberRepository>(
           create: (context) => barberRepository,
         ),
+        RepositoryProvider<DirectoryRepository>(
+          create: (context) => directoryRepository,
+        ),
         RepositoryProvider<AdminRepository>(
           create: (context) => adminRepository,
         ),
@@ -150,6 +172,9 @@ class MyApp extends StatelessWidget {
         ),
         RepositoryProvider<ReviewRepository>(
           create: (context) => reviewRepository,
+        ),
+        RepositoryProvider<NotificationRepository>(
+          create: (context) => notificationRepository,
         ),
       ],
       child: MultiBlocProvider(
@@ -199,10 +224,16 @@ class MyApp extends StatelessWidget {
               directoryRepository: directoryRepository,
             ),
           ),
+          BlocProvider<NotificationBloc>(
+            create: (context) => NotificationBloc(
+              notificationRepository,
+            )..add(const FetchNotifications(refresh: true)),
+          ),
         ],
         child: MaterialApp(
           title: 'Barbar App',
           theme: AppTheme.darkTheme,
+          navigatorKey: NavigationService.navigatorKey,
           debugShowCheckedModeBanner: false,
           home: BlocBuilder<AuthBloc, AuthState>(
             builder: (context, state) {

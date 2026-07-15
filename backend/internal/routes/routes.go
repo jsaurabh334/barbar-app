@@ -78,17 +78,19 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 	barberH := barberHandler.NewBarberHandler(db, cfg)
 	staffH := barberHandler.NewStaffHandler(db)
 	notifSvc := notifService.NewNotificationService(db, hub)
-	bookingH := bookingHandler.NewBookingHandler(db, notifSvc, hub)
+	tmplSvc := notifService.NewTemplateService(db)
+	dispatcher := notifService.NewDispatcher(db, hub, tmplSvc)
+	bookingH := bookingHandler.NewBookingHandler(db, dispatcher, hub)
 	vendorH := vendorHandler.NewVendorHandler(db)
 	deliveryPartnerH := deliveryPartnerHandler.NewDeliveryPartnerHandler(db)
 	productH := productHandler.NewProductHandler(db)
-	orderH := orderHandler.NewOrderHandler(db)
-	paymentH := paymentHandler.NewPaymentHandler(db, cfg)
+	orderH := orderHandler.NewOrderHandler(db, dispatcher)
+	paymentH := paymentHandler.NewPaymentHandler(db, cfg, dispatcher)
 	walletH := walletHandler.NewWalletHandler(db)
 	cartH := cartHandler.NewCartHandler(db)
 	wishlistH := wishlistHandler.NewWishlistHandler(db)
 	couponH := couponHandler.NewCouponHandler(db)
-	adminH := adminHandler.NewAdminHandler(db)
+	adminH := adminHandler.NewAdminHandler(db, dispatcher)
 	adminCustomerH := adminHandler.NewAdminCustomerHandler(db)
 	addressH := addressHandler.NewAddressHandler(db)
 	kycH := kycHandler.NewKYCHandler(db)
@@ -109,10 +111,10 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 
 	invoiceService := invoiceSvc.NewInvoiceService(db, cfg.App.BaseURL)
 	invoiceH := invoiceHandler.NewInvoiceHandler(invoiceService)
-	reviewH := reviewHandler.NewReviewHandler(db, notifSvc, hub)
+	reviewH := reviewHandler.NewReviewHandler(db, dispatcher, hub)
 
 	// Initialize queue service and start no-show scheduler
-	queueSvc := queueService.NewQueueService(db, hub)
+	queueSvc := queueService.NewQueueService(db, hub, dispatcher)
 	queueSvc.StartNoShowScheduler(5*time.Minute, 15)
 
 	// Middleware
@@ -255,6 +257,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			// Staff management
 			barberRoutes.POST("/staff", staffH.AddStaff)
 			barberRoutes.GET("/staff", staffH.GetStaff)
+			barberRoutes.GET("/staff/:id", staffH.GetStaffByID)
 			barberRoutes.PUT("/staff/:id", staffH.UpdateStaff)
 			barberRoutes.DELETE("/staff/:id", staffH.ArchiveStaff)
 			barberRoutes.POST("/staff/:id/services", staffH.AssignServices)

@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../core/notification/fcm_service.dart';
 import '../../../domain/repositories/auth_repository.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
@@ -23,6 +24,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         final user = await _authRepository.getCachedUser();
         if (user != null) {
           emit(AuthAuthenticated(user));
+          await FCMService.registerDeviceToken();
           return;
         }
       }
@@ -54,6 +56,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         otp: event.otp,
       );
       emit(AuthAuthenticated(user));
+      await FCMService.registerDeviceToken();
     } catch (e) {
       emit(AuthFailure(e.toString().replaceAll('Exception: ', '')));
     }
@@ -69,7 +72,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         role: event.role,
         email: event.email,
       );
-      // After registration, we prompt user to verify with OTP
       final success = await _authRepository.sendOtp(event.phone);
       if (success) {
         emit(OtpSentSuccess(event.phone));
@@ -84,6 +86,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onLogoutRequested(LogoutRequested event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
     try {
+      await FCMService.unregisterDeviceToken();
       await _authRepository.logout();
       emit(AuthUnauthenticated());
     } catch (e) {

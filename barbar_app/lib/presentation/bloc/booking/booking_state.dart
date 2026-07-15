@@ -68,6 +68,17 @@ class BookingsLoaded extends BookingState {
   List<Object?> get props => [bookings];
 }
 
+class BookingPaymentInitiated extends BookingState {
+  final Map<String, dynamic> paymentData;
+
+  const BookingPaymentInitiated(this.paymentData);
+
+  @override
+  List<Object?> get props => [paymentData];
+}
+
+class BookingPaymentVerified extends BookingState {}
+
 class BookingFailure extends BookingState {
   final String error;
 

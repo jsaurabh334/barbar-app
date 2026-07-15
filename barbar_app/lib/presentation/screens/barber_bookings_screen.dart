@@ -143,7 +143,7 @@ class _BarberBookingsScreenState extends State<BarberBookingsScreen> with Single
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    booking.scheduledStart.split('T').last.substring(0, 5),
+                    booking.scheduledStart.split('T').last.length >= 5 ? booking.scheduledStart.split('T').last.substring(0, 5) : booking.scheduledStart.split('T').last,
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   const SizedBox(height: 4),

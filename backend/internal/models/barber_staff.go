@@ -23,6 +23,13 @@ type BarberStaff struct {
 	Rating   float64    `gorm:"default:0" json:"rating"`
 	ReviewCount int     `gorm:"default:0" json:"review_count"`
 
+	// Profile details
+	Bio             string `gorm:"size:1000" json:"bio,omitempty"`
+	ExperienceYears int    `gorm:"default:0" json:"experience_years"`
+	Languages       JSONB  `gorm:"type:jsonb;default:'[]'" json:"languages,omitempty"`
+	Specializations string `gorm:"size:500" json:"specializations,omitempty"`
+	Instagram       string `gorm:"size:255" json:"instagram,omitempty"`
+
 	// Schedule
 	WorkingDays string  `gorm:"size:255;default:'1,2,3,4,5,6'" json:"working_days"` // comma separated days, 0=Sun
 	StartTime   string  `gorm:"size:5;default:'09:00'" json:"start_time"`

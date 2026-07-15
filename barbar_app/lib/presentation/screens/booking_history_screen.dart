@@ -192,6 +192,16 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
                             style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                           ),
                         ],
+                        if (booking.paymentMethod.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            '${booking.paymentMethod.toUpperCase()} • ${booking.paymentStatus == 'paid' ? 'Paid' : booking.paymentStatus == 'initiated' ? 'Processing' : 'Pending'}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: booking.paymentStatus == 'paid' ? AppColors.success : AppColors.textMuted,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

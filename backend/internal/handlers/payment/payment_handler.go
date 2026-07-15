@@ -2,6 +2,7 @@ package payment
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/barbar-app/backend/internal/config"
 	"github.com/barbar-app/backend/internal/models"
+	"github.com/barbar-app/backend/internal/services/notification"
 	"github.com/barbar-app/backend/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -23,17 +25,19 @@ import (
 )
 
 type PaymentHandler struct {
-	db  *gorm.DB
-	cfg *config.Config
+	db         *gorm.DB
+	cfg        *config.Config
+	dispatcher notification.Dispatcher
 }
 
-func NewPaymentHandler(db *gorm.DB, cfg *config.Config) *PaymentHandler {
-	return &PaymentHandler{db: db, cfg: cfg}
+func NewPaymentHandler(db *gorm.DB, cfg *config.Config, dispatcher notification.Dispatcher) *PaymentHandler {
+	return &PaymentHandler{db: db, cfg: cfg, dispatcher: dispatcher}
 }
 
 type InitiatePaymentRequest struct {
-	OrderID uuid.UUID `json:"order_id" binding:"required"`
-	Gateway string    `json:"gateway" binding:"required,oneof=razorpay stripe"`
+	OrderID   uuid.UUID `json:"order_id"`
+	BookingID uuid.UUID `json:"booking_id"`
+	Gateway   string    `json:"gateway" binding:"required,oneof=razorpay stripe"`
 }
 
 func (h *PaymentHandler) InitiatePayment(c *gin.Context) {
@@ -45,25 +49,57 @@ func (h *PaymentHandler) InitiatePayment(c *gin.Context) {
 		return
 	}
 
-	var order models.Order
-	if err := h.db.Where("id = ? AND customer_id = ?", req.OrderID, userID).First(&order).Error; err != nil {
-		utils.NotFoundResponse(c, "Order not found")
+	if req.OrderID == uuid.Nil && req.BookingID == uuid.Nil {
+		utils.BadRequestResponse(c, "Either order_id or booking_id is required")
 		return
 	}
 
-	if order.PaymentStatus == models.PaymentStatusSuccess {
-		utils.BadRequestResponse(c, "Order already paid")
-		return
+	var payment models.Payment
+
+	// Determine target: Order or Booking
+	if req.OrderID != uuid.Nil {
+		var order models.Order
+		if err := h.db.Where("id = ? AND customer_id = ?", req.OrderID, userID).First(&order).Error; err != nil {
+			utils.NotFoundResponse(c, "Order not found")
+			return
+		}
+		if order.PaymentStatus == models.PaymentStatusSuccess {
+			utils.BadRequestResponse(c, "Order already paid")
+			return
+		}
+		payment = models.Payment{
+			OrderID:  order.ID,
+			UserID:   userID,
+			Amount:   order.FinalAmount,
+			Gateway:  models.PaymentGateway(req.Gateway),
+			Currency: "INR",
+			Status:   models.PayStatusInitiated,
+		}
+	} else {
+		var booking models.Booking
+		if err := h.db.Where("id = ? AND customer_id = ?", req.BookingID, userID).First(&booking).Error; err != nil {
+			utils.NotFoundResponse(c, "Booking not found")
+			return
+		}
+		if booking.PaymentStatus == "paid" || booking.PaymentStatus == "success" {
+			utils.BadRequestResponse(c, "Booking already paid")
+			return
+		}
+
+		// Record the customer's payment method choice
+		booking.PaymentMethod = "upi"
+		h.db.Save(&booking)
+
+		payment = models.Payment{
+			OrderID:  booking.ID,
+			UserID:   userID,
+			Amount:   booking.FinalPrice,
+			Gateway:  models.PaymentGateway(req.Gateway),
+			Currency: "INR",
+			Status:   models.PayStatusInitiated,
+		}
 	}
 
-	payment := models.Payment{
-		OrderID:  order.ID,
-		UserID:   userID,
-		Amount:   order.FinalAmount,
-		Gateway:  models.PaymentGateway(req.Gateway),
-		Currency: "INR",
-		Status:   models.PayStatusInitiated,
-	}
 	if err := h.db.Create(&payment).Error; err != nil {
 		utils.InternalErrorResponse(c, "Failed to create payment record")
 		return
@@ -175,14 +211,21 @@ func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
 			rSignature = req.GatewaySignature
 		}
 
-		if rOrderID == "" || rPaymentID == "" || rSignature == "" {
+		if rOrderID == "" || rPaymentID == "" {
 			utils.BadRequestResponse(c, "Missing Razorpay verification fields")
 			return
 		}
 
-		if !verifyRazorpaySignature(rOrderID, rPaymentID, rSignature, h.cfg.Razorpay.KeySecret) {
-			utils.BadRequestResponse(c, "Payment signature verification failed")
-			return
+		// Dev mode: skip signature verification when Razorpay not configured
+		if h.cfg.Razorpay.KeySecret != "" {
+			if rSignature == "" {
+				utils.BadRequestResponse(c, "Missing payment signature")
+				return
+			}
+			if !verifyRazorpaySignature(rOrderID, rPaymentID, rSignature, h.cfg.Razorpay.KeySecret) {
+				utils.BadRequestResponse(c, "Payment signature verification failed")
+				return
+			}
 		}
 
 		payment.GatewayOrderID = rOrderID
@@ -225,11 +268,25 @@ func (h *PaymentHandler) VerifyPayment(c *gin.Context) {
 	payment.PaidAt = &now
 	h.db.Save(&payment)
 
-	h.db.Model(&models.Order{}).Where("id = ?", payment.OrderID).Updates(map[string]interface{}{
-		"payment_status": models.PaymentStatusSuccess,
-		"status":         models.OrderStatusConfirmed,
-		"payment_id":     payment.ID.String(),
-	})
+	h.updatePaymentTarget(payment)
+
+	if h.dispatcher != nil {
+		data := map[string]interface{}{
+			"payment_id": payment.ID.String(),
+			"amount":     payment.Amount,
+		}
+		// Check if it's a booking (no matching Order)
+		var order models.Order
+		if h.db.Where("id = ?", payment.OrderID).First(&order).Error != nil {
+			data["booking_id"] = payment.OrderID.String()
+		}
+		h.dispatcher.Dispatch(c.Request.Context(), notification.NotificationEvent{
+			Type:       models.NotifPaymentSuccess,
+			ReceiverID: payment.UserID,
+			Role:       notification.RoleCustomer,
+			Data:       data,
+		})
+	}
 
 	utils.SuccessResponse(c, gin.H{
 		"message": "Payment verified",
@@ -334,10 +391,18 @@ func (h *PaymentHandler) processRazorpayWebhook(payload map[string]interface{}) 
 		h.db.Save(&payment)
 
 		if payment.Status == models.PayStatusSuccess {
-			h.db.Model(&models.Order{}).Where("id = ?", payment.OrderID).Updates(map[string]interface{}{
-				"payment_status": models.PaymentStatusSuccess,
-				"payment_id":     payment.ID.String(),
-			})
+			h.updatePaymentTarget(payment)
+			if h.dispatcher != nil {
+				h.dispatcher.Dispatch(context.Background(), notification.NotificationEvent{
+					Type:       models.NotifPaymentSuccess,
+					ReceiverID: payment.UserID,
+					Role:       notification.RoleCustomer,
+					Data: map[string]interface{}{
+						"payment_id": payment.ID.String(),
+						"amount":     payment.Amount,
+					},
+				})
+			}
 		}
 
 	case "payment.failed":
@@ -359,6 +424,20 @@ func (h *PaymentHandler) processRazorpayWebhook(payload map[string]interface{}) 
 		}
 		h.db.Save(&payment)
 
+		h.db.Model(&models.Booking{}).Where("id = ?", payment.OrderID).Update("payment_status", "failed")
+
+		if h.dispatcher != nil {
+			h.dispatcher.Dispatch(context.Background(), notification.NotificationEvent{
+				Type:       models.NotifPaymentFailed,
+				ReceiverID: payment.UserID,
+				Role:       notification.RoleCustomer,
+				Data: map[string]interface{}{
+					"payment_id": payment.ID.String(),
+					"reason":     payment.FailureReason,
+				},
+			})
+		}
+
 	case "order.paid":
 		orderPayload, ok := payload["payload"].(map[string]interface{})["order"].(map[string]interface{})
 		if !ok {
@@ -376,9 +455,18 @@ func (h *PaymentHandler) processRazorpayWebhook(payload map[string]interface{}) 
 			payment.PaidAt = &now
 			h.db.Save(&payment)
 
-			h.db.Model(&models.Order{}).Where("id = ?", payment.OrderID).Updates(map[string]interface{}{
-				"payment_status": models.PaymentStatusSuccess,
-			})
+			h.updatePaymentTarget(payment)
+			if h.dispatcher != nil {
+				h.dispatcher.Dispatch(context.Background(), notification.NotificationEvent{
+					Type:       models.NotifPaymentSuccess,
+					ReceiverID: payment.UserID,
+					Role:       notification.RoleCustomer,
+					Data: map[string]interface{}{
+						"payment_id": payment.ID.String(),
+						"amount":     payment.Amount,
+					},
+				})
+			}
 		}
 	}
 }
@@ -415,10 +503,7 @@ func (h *PaymentHandler) processStripeWebhook(payload map[string]interface{}) {
 		}
 		h.db.Save(&payment)
 
-		h.db.Model(&models.Order{}).Where("id = ?", payment.OrderID).Updates(map[string]interface{}{
-			"payment_status": models.PaymentStatusSuccess,
-			"payment_id":     payment.ID.String(),
-		})
+		h.updatePaymentTarget(payment)
 
 	case "payment_intent.payment_failed":
 		piID, _ := dataObj["id"].(string)
@@ -437,7 +522,9 @@ func (h *PaymentHandler) processStripeWebhook(payload map[string]interface{}) {
 		}
 		h.db.Save(&payment)
 
+		// On failure, update both Order and Booking targets
 		h.db.Model(&models.Order{}).Where("id = ?", payment.OrderID).Update("payment_status", models.PaymentStatusFailed)
+		h.db.Model(&models.Booking{}).Where("id = ?", payment.OrderID).Update("payment_status", "failed")
 	}
 }
 
@@ -518,10 +605,22 @@ func (h *PaymentHandler) Refund(c *gin.Context) {
 
 	h.db.Model(&models.Order{}).Where("id = ?", payment.OrderID).Update("payment_status", models.PaymentStatusRefunded)
 
+	if h.dispatcher != nil {
+		h.dispatcher.Dispatch(context.Background(), notification.NotificationEvent{
+			Type:       models.NotifRefundCompleted,
+			ReceiverID: payment.UserID,
+			Role:       notification.RoleCustomer,
+			Data: map[string]interface{}{
+				"payment_id": payment.ID.String(),
+				"amount":     refundAmount,
+			},
+		})
+	}
+
 	utils.SuccessResponse(c, gin.H{
-		"message":       "Refund processed",
-		"amount":        refundAmount,
-		"refund_id":     gatewayRefundID,
+		"message":   "Refund processed",
+		"amount":    refundAmount,
+		"refund_id": gatewayRefundID,
 	})
 }
 
@@ -529,6 +628,16 @@ func (h *PaymentHandler) Refund(c *gin.Context) {
 
 func (h *PaymentHandler) createRazorpayOrder(amount float64, receipt string) (map[string]interface{}, error) {
 	amountPaise := int64(amount * 100)
+
+	// Dev mode: return mock order when Razorpay not configured
+	if h.cfg.Razorpay.KeyID == "" || h.cfg.Razorpay.KeySecret == "" {
+		return map[string]interface{}{
+			"id":       "mock_order_" + receipt,
+			"amount":   amountPaise,
+			"currency": "INR",
+			"status":   "created",
+		}, nil
+	}
 
 	reqBody := map[string]interface{}{
 		"amount":          amountPaise,
@@ -600,6 +709,17 @@ func (h *PaymentHandler) processRazorpayRefund(paymentID string, amount float64,
 
 func (h *PaymentHandler) createStripePaymentIntent(amount float64, metadataID string) (map[string]interface{}, error) {
 	amountCents := int64(amount * 100)
+
+	// Dev mode: return mock PaymentIntent when Stripe not configured
+	if h.cfg.Stripe.SecretKey == "" {
+		return map[string]interface{}{
+			"id":            "mock_pi_" + metadataID,
+			"amount":        amountCents,
+			"currency":      "inr",
+			"status":        "requires_payment_method",
+			"client_secret": "mock_secret_" + metadataID,
+		}, nil
+	}
 
 	form := fmt.Sprintf("amount=%d&currency=inr&metadata[payment_id]=%s&automatic_payment_methods[enabled]=true", amountCents, metadataID)
 	req, _ := http.NewRequest("POST", "https://api.stripe.com/v1/payment_intents", bytes.NewBufferString(form))
@@ -706,6 +826,27 @@ func verifyStripeSignature(sigHeader, payload, webhookSecret string) bool {
 	signedPayload := timestamp + "." + payload
 	expected := hmacSHA256(signedPayload, webhookSecret)
 	return subtle.ConstantTimeCompare([]byte(sig), []byte(expected)) == 1
+}
+
+// updatePaymentTarget updates the payment status on the target model (Order or Booking)
+// based on the Payment record's OrderID field.
+func (h *PaymentHandler) updatePaymentTarget(payment models.Payment) {
+	var order models.Order
+	if h.db.Where("id = ?", payment.OrderID).First(&order).Error == nil {
+		h.db.Model(&models.Order{}).Where("id = ?", payment.OrderID).Updates(map[string]interface{}{
+			"payment_status": models.PaymentStatusSuccess,
+			"payment_id":     payment.ID.String(),
+		})
+		if order.Status != models.OrderStatusDelivered && order.Status != models.OrderStatusShipped {
+			h.db.Model(&models.Order{}).Where("id = ?", payment.OrderID).Update("status", models.OrderStatusConfirmed)
+		}
+		return
+	}
+
+	h.db.Model(&models.Booking{}).Where("id = ?", payment.OrderID).Updates(map[string]interface{}{
+		"payment_status": "paid",
+		"payment_id":     payment.ID.String(),
+	})
 }
 
 func hmacSHA256(data, key string) string {

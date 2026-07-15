@@ -1,13 +1,9 @@
 package notification
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
-	"net/http"
 	"time"
 
-	"github.com/barbar-app/backend/internal/config"
 	"github.com/barbar-app/backend/internal/middleware"
 	"github.com/barbar-app/backend/internal/models"
 	"github.com/barbar-app/backend/internal/utils"
@@ -37,6 +33,7 @@ type SendNotificationInput struct {
 }
 
 func (s *NotificationService) Send(input SendNotificationInput) error {
+	now := time.Now()
 	notification := models.Notification{
 		UserID: input.UserID,
 		Title:  input.Title,
@@ -44,7 +41,7 @@ func (s *NotificationService) Send(input SendNotificationInput) error {
 		Type:   input.Type,
 		Image:  input.Image,
 		Link:   input.Link,
-		SentAt: time.Now(),
+		SentAt: &now,
 	}
 
 	if len(input.Data) > 0 {
@@ -175,117 +172,10 @@ func (s *NotificationService) sendPushNotification(userID uuid.UUID, notificatio
 		return
 	}
 
-	cfg := config.Load()
-	serverKey := cfg.FCM.ServerKey
-	if serverKey == "" {
-		return
-	}
-
-	payload := buildFCMPayload(tokens, notification)
-	data, _ := json.Marshal(payload)
-	tokenList := make([]models.DeviceToken, len(tokens))
-	copy(tokenList, tokens)
-
-	utils.DefaultPool.SubmitNamed("fcm_"+string(notification.Type), func(p interface{}) error {
-		req, err := http.NewRequest("POST", "https://fcm.googleapis.com/fcm/send", bytes.NewBuffer(data))
-		if err != nil {
-			return err
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "key="+serverKey)
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err := client.Do(req)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode == 200 {
-			var fcmResp FCMResponse
-			if json.NewDecoder(resp.Body).Decode(&fcmResp) == nil {
-				for i, result := range fcmResp.Results {
-					if result.Error != "" && i < len(tokenList) {
-						s.db.Model(&models.DeviceToken{}).Where("token = ?", tokenList[i].Token).
-							Update("is_active", false)
-					}
-				}
-			}
-		}
-		return nil
-	}, nil)
+	DispatchPushNotification(s.db, tokens, notification)
 }
 
-type FCMNotification struct {
-	Title string `json:"title"`
-	Body  string `json:"body"`
-	Image string `json:"image,omitempty"`
-}
 
-type FCMData struct {
-	Type        string `json:"type,omitempty"`
-	ID          string `json:"id,omitempty"`
-	DeepLink    string `json:"deep_link,omitempty"`
-	Image       string `json:"image,omitempty"`
-}
-
-type FCMMessage struct {
-	To           string        `json:"to,omitempty"`
-	RegistrationIDs []string   `json:"registration_ids,omitempty"`
-	Notification FCMNotification `json:"notification"`
-	Data         FCMData       `json:"data,omitempty"`
-	Priority     string        `json:"priority,omitempty"`
-	MutableContent bool        `json:"mutable_content,omitempty"`
-}
-
-type FCMResponse struct {
-	MulticastID  int64 `json:"multicast_id"`
-	Success      int   `json:"success"`
-	Failure      int   `json:"failure"`
-	CanonicalIDs int   `json:"canonical_ids"`
-	Results      []struct {
-		MessageID      string `json:"message_id"`
-		RegistrationID string `json:"registration_id,omitempty"`
-		Error          string `json:"error,omitempty"`
-	} `json:"results"`
-}
-
-func buildFCMPayload(tokens []models.DeviceToken, notification models.Notification) FCMMessage {
-	msg := FCMMessage{
-		Notification: FCMNotification{
-			Title: notification.Title,
-			Body:  notification.Body,
-			Image: notification.Image,
-		},
-		Priority: "high",
-	}
-
-	var dataMap map[string]interface{}
-	if notification.Data != nil {
-		json.Unmarshal(notification.Data, &dataMap)
-	}
-
-	notifType := string(notification.Type)
-	if id, ok := dataMap["booking_id"]; ok {
-		msg.Data = FCMData{Type: notifType, ID: fmt.Sprintf("%v", id), DeepLink: "barbar://booking/" + fmt.Sprintf("%v", id)}
-	} else if id, ok := dataMap["order_id"]; ok {
-		msg.Data = FCMData{Type: notifType, ID: fmt.Sprintf("%v", id), DeepLink: "barbar://order/" + fmt.Sprintf("%v", id)}
-	} else {
-		msg.Data = FCMData{Type: notifType}
-	}
-
-	if len(tokens) == 1 {
-		msg.To = tokens[0].Token
-	} else {
-		ids := make([]string, len(tokens))
-		for i, t := range tokens {
-			ids[i] = t.Token
-		}
-		msg.RegistrationIDs = ids
-	}
-
-	return msg
-}
 
 func (s *NotificationService) GetUserNotifications(c *gin.Context) {
 	userID := c.MustGet("user").(uuid.UUID)
@@ -338,20 +228,28 @@ func (s *NotificationService) RegisterDeviceToken(c *gin.Context) {
 	userID := c.MustGet("user").(uuid.UUID)
 
 	var req struct {
-		Token    string `json:"token" binding:"required"`
-		Platform string `json:"platform" binding:"required,oneof=ios android web"`
+		Token      string `json:"token" binding:"required"`
+		Platform   string `json:"platform" binding:"required"`
+		DeviceName string `json:"device_name"`
+		AppVersion string `json:"app_version"`
+		Role       string `json:"role" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestResponse(c, "Invalid input")
+		utils.BadRequestResponse(c, "Invalid input: "+err.Error())
 		return
 	}
 
 	device := models.DeviceToken{
-		UserID:   userID,
-		Token:    req.Token,
-		Platform: req.Platform,
-		IsActive: true,
+		UserID:     userID,
+		Token:      req.Token,
+		Platform:   req.Platform,
+		DeviceName: req.DeviceName,
+		AppVersion: req.AppVersion,
+		Role:       req.Role,
+		IsActive:   true,
 	}
+
+	// Delete old token if exists
 	s.db.Where("user_id = ? AND token = ?", userID, req.Token).Delete(&models.DeviceToken{})
 	s.db.Create(&device)
 

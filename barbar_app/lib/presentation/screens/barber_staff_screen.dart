@@ -7,6 +7,7 @@ import '../bloc/barber_staff/barber_staff_event.dart';
 import '../bloc/barber_staff/barber_staff_state.dart';
 import '../widgets/glass_card.dart';
 import '../../data/models/staff_model.dart';
+import 'barber_staff_profile_screen.dart';
 
 class BarberStaffScreen extends StatefulWidget {
   const BarberStaffScreen({super.key});
@@ -162,63 +163,69 @@ class _BarberStaffScreenState extends State<BarberStaffScreen> {
       child: GlassCard(
         padding: const EdgeInsets.all(16),
         margin: const EdgeInsets.only(bottom: 12),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: AppColors.primary.withOpacity(0.2),
-              backgroundImage: staff.image != null && staff.image!.isNotEmpty ? NetworkImage(staff.image!) : null,
-              child: staff.image == null || staff.image!.isEmpty ? const Icon(LucideIcons.user, color: AppColors.primary) : null,
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(staff.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: staff.role == 'manager' ? AppColors.warning.withOpacity(0.2) : AppColors.info.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          staff.role.toUpperCase(),
-                          style: TextStyle(fontSize: 10, color: staff.role == 'manager' ? AppColors.warning : AppColors.info, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      if (!staff.isActive) ...[
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => BarberStaffProfileScreen(staff: staff)),
+            );
+          },
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: AppColors.primary.withOpacity(0.2),
+                backgroundImage: staff.image != null && staff.image!.isNotEmpty ? NetworkImage(staff.image!) : null,
+                child: staff.image == null || staff.image!.isEmpty ? const Icon(LucideIcons.user, color: AppColors.primary) : null,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(staff.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(color: AppColors.error.withOpacity(0.2), borderRadius: BorderRadius.circular(4)),
-                          child: const Text('ARCHIVED', style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.bold)),
+                          decoration: BoxDecoration(
+                            color: staff.role == 'manager' ? AppColors.warning.withOpacity(0.2) : AppColors.info.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            staff.role.toUpperCase(),
+                            style: TextStyle(fontSize: 10, color: staff.role == 'manager' ? AppColors.warning : AppColors.info, fontWeight: FontWeight.bold),
+                          ),
                         ),
+                        if (!staff.isActive) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(color: AppColors.error.withOpacity(0.2), borderRadius: BorderRadius.circular(4)),
+                            child: const Text('ARCHIVED', style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  if (staff.phone != null && staff.phone!.isNotEmpty)
-                    Text(staff.phone!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(LucideIcons.star, size: 12, color: AppColors.warning),
-                      const SizedBox(width: 4),
-                      Text('${staff.rating} (${staff.reviewCount})', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: 4),
+                    if (staff.phone != null && staff.phone!.isNotEmpty)
+                      Text(staff.phone!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(LucideIcons.star, size: 12, color: AppColors.warning),
+                        const SizedBox(width: 4),
+                        Text('${staff.rating} (${staff.reviewCount})', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            IconButton(
-              icon: const Icon(LucideIcons.edit, size: 20),
-              onPressed: () => _showAddEditStaffDialog(staff: staff),
-            ),
-          ],
+              const Icon(LucideIcons.chevronRight, size: 20, color: AppColors.textMuted),
+            ],
+          ),
         ),
       ),
     );

@@ -62,6 +62,8 @@ vendor/
 # Other files you may want to ignore
 # Keep secrets out of VCS
 secret.key
+firebase-service-account.json
+google-services.json
 # Local configuration files
 local.properties
 # End of .gitignore

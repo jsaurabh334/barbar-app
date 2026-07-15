@@ -1,22 +1,25 @@
 package queue
 
 import (
+	"context"
 	"log"
 	"time"
 
 	"github.com/barbar-app/backend/internal/models"
+	"github.com/barbar-app/backend/internal/services/notification"
 	"github.com/barbar-app/backend/internal/websocket"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type QueueService struct {
-	db  *gorm.DB
-	hub *websocket.Hub
+	db         *gorm.DB
+	hub        *websocket.Hub
+	dispatcher notification.Dispatcher
 }
 
-func NewQueueService(db *gorm.DB, hub *websocket.Hub) *QueueService {
-	return &QueueService{db: db, hub: hub}
+func NewQueueService(db *gorm.DB, hub *websocket.Hub, dispatcher notification.Dispatcher) *QueueService {
+	return &QueueService{db: db, hub: hub, dispatcher: dispatcher}
 }
 
 func (s *QueueService) RecalculatePositions(barberID uuid.UUID) {
@@ -182,21 +185,34 @@ func (s *QueueService) BroadcastQueueUpdate(barberID uuid.UUID) {
 
 	for _, entry := range status.Entries {
 		customerID := entry.Booking.CustomerID
-		msg := &websocket.WSMessage{
-			Type: websocket.MsgQueueUpdate,
-			Payload: map[string]interface{}{
-				"booking_id":         entry.Booking.ID.String(),
-				"position":           entry.Position,
-				"current_position":   entry.Position,
-				"people_ahead":       entry.Position - 1,
-				"estimated_wait_ms":  entry.EstimatedWaitMs,
-				"estimated_wait_min": entry.EstimatedWaitMs / (60 * 1000),
-				"remaining_time":     remainingTime,
-				"currently_serving":  currentlyServing,
-				"queue_length":       status.QueueLength,
-			},
+		
+		payloadData := map[string]interface{}{
+			"booking_id":         entry.Booking.ID.String(),
+			"position":           entry.Position,
+			"current_position":   entry.Position,
+			"people_ahead":       entry.Position - 1,
+			"estimated_wait_ms":  entry.EstimatedWaitMs,
+			"estimated_wait_min": entry.EstimatedWaitMs / (60 * 1000),
+			"remaining_time":     remainingTime,
+			"currently_serving":  currentlyServing,
+			"queue_length":       status.QueueLength,
 		}
-		s.hub.SendToUser(customerID, msg)
+
+		if s.dispatcher != nil {
+			s.dispatcher.Dispatch(context.Background(), notification.NotificationEvent{
+				Type:       models.NotifQueueUpdate,
+				ReceiverID: customerID,
+				Role:       notification.RoleCustomer,
+				Data:       payloadData,
+			})
+		} else {
+			// Fallback to direct hub broadcast if dispatcher is not provided
+			msg := &websocket.WSMessage{
+				Type:    websocket.MsgQueueUpdate,
+				Payload: payloadData,
+			}
+			s.hub.SendToUser(customerID, msg)
+		}
 	}
 
 	barberUserID := s.getBarberUserID(barberID)

@@ -87,6 +87,38 @@ class FetchAllBookings extends BookingEvent {}
 
 class FetchBarberBookings extends BookingEvent {}
 
+class InitiateBookingPayment extends BookingEvent {
+  final String bookingId;
+  final String gateway;
+
+  const InitiateBookingPayment({
+    required this.bookingId,
+    required this.gateway,
+  });
+
+  @override
+  List<Object?> get props => [bookingId, gateway];
+}
+
+class VerifyBookingPayment extends BookingEvent {
+  final String paymentId;
+  final String gateway;
+  final String razorpayOrderId;
+  final String razorpayPaymentId;
+  final String razorpaySignature;
+
+  const VerifyBookingPayment({
+    required this.paymentId,
+    required this.gateway,
+    required this.razorpayOrderId,
+    required this.razorpayPaymentId,
+    required this.razorpaySignature,
+  });
+
+  @override
+  List<Object?> get props => [paymentId, gateway, razorpayOrderId, razorpayPaymentId, razorpaySignature];
+}
+
 class PayBooking extends BookingEvent {
   final String bookingId;
   final String method;
