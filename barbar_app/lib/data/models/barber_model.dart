@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import '../../core/constants/constants.dart';
 
 class BarberModel {
@@ -189,7 +191,12 @@ class BarberModel {
 
   static String getFullImageUrl(String? path) {
     if (path == null || path.isEmpty) return '';
-    if (path.startsWith('http')) return path;
+    if (path.startsWith('http')) {
+      if (!kIsWeb && Platform.isAndroid && path.contains('localhost')) {
+        return path.replaceAll('localhost', '10.0.2.2');
+      }
+      return path;
+    }
     final base = AppConfig.apiBaseUrl.replaceAll('/api/v1/', '/');
     return '$base${path.startsWith('/') ? path.substring(1) : path}';
   }

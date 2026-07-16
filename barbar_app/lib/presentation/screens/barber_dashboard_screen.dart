@@ -461,6 +461,7 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
     final isConfirmed = booking.status == 'confirmed';
     final isCompleted = booking.status == 'completed';
     final isCancelled = booking.status == 'cancelled';
+    final isPaid = booking.paymentStatus == 'paid';
 
     Color statusColor = AppColors.warning;
     if (isInProgress) statusColor = AppColors.success;
@@ -535,11 +536,28 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
                 ],
               ),
             ),
-            if (!isCompleted && !isCancelled)
+            if (!isCompleted && !isCancelled || (isCompleted && !isPaid))
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                 child: Row(
                   children: [
+                    if (isCompleted && !isPaid)
+                      Expanded(
+                        child: _actionButton(
+                          label: 'COLLECT CASH',
+                          color: AppColors.success,
+                          onTap: () {
+                            context.read<BookingBloc>().add(
+                              PayBooking(
+                                bookingId: booking.id,
+                                method: 'cash',
+                                status: 'paid',
+                                reference: 'CASH${DateTime.now().millisecondsSinceEpoch}',
+                              ),
+                            );
+                          },
+                        ),
+                      ),
                     if (isInProgress)
                       Expanded(
                         child: _actionButton(

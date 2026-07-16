@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/barbar-app/backend/internal/models"
 	notifService "github.com/barbar-app/backend/internal/services/notification"
@@ -34,7 +35,8 @@ func NewReviewHandler(db *gorm.DB, notifSvc notifService.Dispatcher, hub *websoc
 type CreateReviewRequest struct {
 	BookingID   uuid.UUID          `json:"booking_id" binding:"required"`
 	StaffID     *uuid.UUID         `json:"staff_id,omitempty"`
-	Rating      int                `json:"rating" binding:"required,min=1,max=5"`
+	ShopRating  *int               `json:"shop_rating" binding:"required,min=1,max=5"`
+	StaffRating *int               `json:"staff_rating,omitempty" binding:"omitempty,min=1,max=5"`
 	Comment     string             `json:"comment"`
 	IsAnonymous bool               `json:"is_anonymous"`
 	Images      []ReviewImageInput `json:"images"`
@@ -103,16 +105,31 @@ func (h *ReviewHandler) Create(c *gin.Context) {
 		return
 	}
 
+	reviewType := models.ReviewTypeShop
+	if req.ShopRating != nil && req.StaffRating != nil {
+		reviewType = models.ReviewTypeBoth
+	} else if req.StaffRating != nil {
+		reviewType = models.ReviewTypeStaff
+	}
+
+	ratingVal := 0
+	if req.ShopRating != nil {
+		ratingVal = *req.ShopRating
+	}
+
 	review := models.Review{
 		BookingID:   req.BookingID,
 		CustomerID:  customerID,
 		ShopID:      booking.BarberID,
 		StaffID:     req.StaffID,
-		Rating:      req.Rating,
+		Rating:      ratingVal,
+		ShopRating:  req.ShopRating,
+		StaffRating: req.StaffRating,
+		ReviewType:  reviewType,
 		Comment:     req.Comment,
 		IsAnonymous: req.IsAnonymous,
 		IsVerified:  true,
-		Status:      models.ReviewStatusPending,
+		Status:      models.ReviewStatusApproved,
 	}
 
 	tx := h.db.Begin()
@@ -140,6 +157,12 @@ func (h *ReviewHandler) Create(c *gin.Context) {
 
 	tx.Commit()
 
+	// Recalculate ratings immediately since review is auto-approved
+	h.ratingSvc.RecalculateShopRating(review.ShopID)
+	if review.StaffID != nil {
+		h.ratingSvc.RecalculateStaffRating(*review.StaffID)
+	}
+
 	go h.sendReviewNotifications(&review)
 
 	h.db.Preload("Images").First(&review, review.ID)
@@ -147,7 +170,8 @@ func (h *ReviewHandler) Create(c *gin.Context) {
 }
 
 type UpdateReviewRequest struct {
-	Rating      int                `json:"rating" binding:"required,min=1,max=5"`
+	ShopRating  *int               `json:"shop_rating" binding:"required,min=1,max=5"`
+	StaffRating *int               `json:"staff_rating,omitempty" binding:"omitempty,min=1,max=5"`
 	Comment     string             `json:"comment"`
 	IsAnonymous bool               `json:"is_anonymous"`
 	Images      []ReviewImageInput `json:"images"`
@@ -194,7 +218,16 @@ func (h *ReviewHandler) Update(c *gin.Context) {
 		return
 	}
 
-	review.Rating = req.Rating
+	reviewType := models.ReviewTypeShop
+	if req.ShopRating != nil && req.StaffRating != nil {
+		reviewType = models.ReviewTypeBoth
+	} else if req.StaffRating != nil {
+		reviewType = models.ReviewTypeStaff
+	}
+
+	review.ShopRating = req.ShopRating
+	review.StaffRating = req.StaffRating
+	review.ReviewType = reviewType
 	review.Comment = req.Comment
 	review.IsAnonymous = req.IsAnonymous
 
@@ -253,11 +286,34 @@ func (h *ReviewHandler) Moderate(c *gin.Context) {
 		return
 	}
 
+	adminID := c.MustGet("user").(uuid.UUID)
+	now := time.Now()
+
 	toStatus := models.ReviewStatus(req.Status)
 	review.Status = toStatus
+
+	switch toStatus {
+	case models.ReviewStatusApproved:
+		review.ApprovedBy = &adminID
+		review.ApprovedAt = &now
+		review.RejectedBy = nil
+		review.RejectionReason = ""
+	case models.ReviewStatusRejected:
+		review.RejectedBy = &adminID
+		review.RejectionReason = req.Reason
+		review.ApprovedBy = nil
+		review.ApprovedAt = nil
+	}
+
 	h.db.Save(&review)
 
-	h.ratingSvc.RecalculateShopRating(review.ShopID)
+	// Recalculate ratings only on approval
+	if toStatus == models.ReviewStatusApproved {
+		h.ratingSvc.RecalculateShopRating(review.ShopID)
+		if review.StaffID != nil {
+			h.ratingSvc.RecalculateStaffRating(*review.StaffID)
+		}
+	}
 
 	switch toStatus {
 	case models.ReviewStatusApproved:
@@ -290,6 +346,7 @@ func (h *ReviewHandler) ListPublicReviews(c *gin.Context) {
 
 	page, pageSize := utils.GetPageParams(c)
 	sort := c.DefaultQuery("sort", models.ReviewSortNewest)
+	staffIDFilter := c.Query("staff_id")
 
 	if !slices.Contains(models.ValidReviewSorts, sort) {
 		sort = models.ReviewSortNewest
@@ -298,21 +355,31 @@ func (h *ReviewHandler) ListPublicReviews(c *gin.Context) {
 	orderClause := "created_at DESC"
 	switch sort {
 	case models.ReviewSortHighest:
-		orderClause = "rating DESC, created_at DESC"
+		orderClause = "COALESCE(shop_rating, 0) DESC, created_at DESC"
 	case models.ReviewSortLowest:
-		orderClause = "rating ASC, created_at DESC"
+		orderClause = "COALESCE(shop_rating, 0) ASC, created_at DESC"
 	}
 
 	var total int64
-	h.db.Model(&models.Review{}).Where("shop_id = ? AND status = ?", shopID, models.ReviewStatusApproved).Count(&total)
+	totalQuery := h.db.Model(&models.Review{}).Where("shop_id = ? AND status = ?", shopID, models.ReviewStatusApproved)
+	dataQuery := h.db.Where("shop_id = ? AND status = ?", shopID, models.ReviewStatusApproved)
+
+	if staffIDFilter != "" {
+		if parsed, err := uuid.Parse(staffIDFilter); err == nil {
+			totalQuery = totalQuery.Where("staff_id = ?", parsed)
+			dataQuery = dataQuery.Where("staff_id = ?", parsed)
+		}
+	}
+	totalQuery.Count(&total)
 
 	var reviews []models.Review
 	offset := (page - 1) * pageSize
-	h.db.Where("shop_id = ? AND status = ?", shopID, models.ReviewStatusApproved).
+	dataQuery.
 		Preload("Images", func(db *gorm.DB) *gorm.DB {
 			return db.Order("sort_order ASC")
 		}).
 		Preload("Reply").
+		Preload("Customer").
 		Order(orderClause).
 		Offset(offset).
 		Limit(pageSize).
@@ -354,6 +421,42 @@ func (h *ReviewHandler) ListMyReviews(c *gin.Context) {
 		Find(&reviews)
 
 	utils.PaginatedResponse(c, reviews, page, pageSize, total)
+}
+
+// ListStaffReviews returns approved reviews for a specific staff member (public)
+func (h *ReviewHandler) ListStaffReviews(c *gin.Context) {
+	staffID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid staff ID")
+		return
+	}
+
+	page, pageSize := utils.GetPageParams(c)
+
+	var total int64
+	h.db.Model(&models.Review{}).Where("staff_id = ? AND status = ?", staffID, models.ReviewStatusApproved).Count(&total)
+
+	var reviews []models.Review
+	offset := (page - 1) * pageSize
+	h.db.Where("staff_id = ? AND status = ?", staffID, models.ReviewStatusApproved).
+		Preload("Images", func(db *gorm.DB) *gorm.DB {
+			return db.Order("sort_order ASC")
+		}).
+		Preload("Reply").
+		Order("created_at DESC").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&reviews)
+
+	for i := range reviews {
+		if reviews[i].IsAnonymous {
+			reviews[i].Customer = nil
+		}
+	}
+
+	utils.PaginatedResponse(c, gin.H{
+		"reviews": reviews,
+	}, page, pageSize, total)
 }
 
 func (h *ReviewHandler) ListAllReviews(c *gin.Context) {
@@ -408,8 +511,31 @@ func (h *ReviewHandler) GetShopRatingSummary(c *gin.Context) {
 	})
 }
 
+func (h *ReviewHandler) GetStaffRatingSummary(c *gin.Context) {
+	staffID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid staff ID")
+		return
+	}
+
+	var staff models.BarberStaff
+	if err := h.db.Select("id, name, rating, review_count, rating_distribution").First(&staff, staffID).Error; err != nil {
+		utils.NotFoundResponse(c, "Staff not found")
+		return
+	}
+
+	utils.SuccessResponse(c, gin.H{
+		"staff_id":            staff.ID,
+		"staff_name":          staff.Name,
+		"avg_rating":          staff.Rating,
+		"total_reviews":       staff.ReviewCount,
+		"rating_distribution": staff.RatingDistribution,
+	})
+}
+
 type ReportReviewRequest struct {
-	Reason string `json:"reason" binding:"required,min=10,max=500"`
+	Reason       models.ReviewReportReason `json:"reason" binding:"required,oneof=spam abusive fake wrong_information other"`
+	CustomReason string                    `json:"custom_reason"`
 }
 
 func (h *ReviewHandler) Report(c *gin.Context) {
@@ -424,6 +550,11 @@ func (h *ReviewHandler) Report(c *gin.Context) {
 	var req ReportReviewRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequestResponse(c, "Invalid input: "+err.Error())
+		return
+	}
+
+	if req.Reason == models.ReportOther && req.CustomReason == "" {
+		utils.BadRequestResponse(c, "Custom reason required when reason is 'other'")
 		return
 	}
 
@@ -446,14 +577,23 @@ func (h *ReviewHandler) Report(c *gin.Context) {
 	}
 
 	report := models.ReviewReport{
-		ReviewID:   reviewID,
-		ReporterID: userID,
-		Reason:     req.Reason,
+		ReviewID:     reviewID,
+		ReporterID:   userID,
+		Reason:       req.Reason,
+		CustomReason: req.CustomReason,
 	}
 
 	if err := h.db.Create(&report).Error; err != nil {
 		utils.InternalErrorResponse(c, "Failed to report review")
 		return
+	}
+
+	// Auto-hide if report threshold reached
+	var reportCount int64
+	h.db.Model(&models.ReviewReport{}).Where("review_id = ? AND status = ?", reviewID, models.ReportStatusPending).Count(&reportCount)
+	if reportCount >= models.AutoHideReportThreshold && review.Status == models.ReviewStatusApproved {
+		review.Status = models.ReviewStatusHidden
+		h.db.Save(&review)
 	}
 
 	utils.CreatedResponse(c, report)
@@ -533,6 +673,137 @@ func (h *ReviewHandler) CreateReply(c *gin.Context) {
 	utils.CreatedResponse(c, reply)
 }
 
+// ==================== Admin report management ====================
+
+// ListAllReports returns paginated review reports (admin only)
+func (h *ReviewHandler) ListAllReports(c *gin.Context) {
+	page, pageSize := utils.GetPageParams(c)
+	status := c.Query("status")
+
+	var total int64
+	q := h.db.Model(&models.ReviewReport{})
+	if status != "" {
+		q = q.Where("status = ?", status)
+	}
+	q.Count(&total)
+
+	var reports []models.ReviewReport
+	offset := (page - 1) * pageSize
+	query := h.db.Preload("Review").Preload("Reporter").Preload("Review.Customer").Preload("Review.Shop")
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+	query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&reports)
+
+	utils.PaginatedResponse(c, reports, page, pageSize, total)
+}
+
+type ResolveReportRequest struct {
+	Status models.ReviewReportStatus `json:"status" binding:"required,oneof=resolved dismissed"`
+}
+
+// ResolveReport resolves or dismisses a review report (admin only)
+func (h *ReviewHandler) ResolveReport(c *gin.Context) {
+	reportID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid report ID")
+		return
+	}
+
+	adminID := c.MustGet("user").(uuid.UUID)
+
+	var req ResolveReportRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "Invalid input: "+err.Error())
+		return
+	}
+
+	var report models.ReviewReport
+	if err := h.db.First(&report, reportID).Error; err != nil {
+		utils.NotFoundResponse(c, "Report not found")
+		return
+	}
+
+	if report.Status != models.ReportStatusPending {
+		utils.BadRequestResponse(c, "Report already resolved")
+		return
+	}
+
+	now := time.Now()
+	report.Status = req.Status
+	report.ResolvedBy = &adminID
+	report.ResolvedAt = &now
+	h.db.Save(&report)
+
+	utils.SuccessResponse(c, report)
+}
+
+// DeleteReview hard-deletes a review (admin only)
+func (h *ReviewHandler) DeleteReview(c *gin.Context) {
+	reviewID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid review ID")
+		return
+	}
+
+	var review models.Review
+	if err := h.db.Preload("Images").Preload("Reply").First(&review, reviewID).Error; err != nil {
+		utils.NotFoundResponse(c, "Review not found")
+		return
+	}
+
+	tx := h.db.Begin()
+	tx.Where("review_id = ?", review.ID).Delete(&models.ReviewImage{})
+	tx.Where("review_id = ?", review.ID).Delete(&models.ReviewReply{})
+	tx.Where("review_id = ?", review.ID).Delete(&models.ReviewReport{})
+	tx.Delete(&review)
+	tx.Commit()
+
+	// Recalculate ratings
+	h.ratingSvc.RecalculateShopRating(review.ShopID)
+	if review.StaffID != nil {
+		h.ratingSvc.RecalculateStaffRating(*review.StaffID)
+	}
+
+	utils.SuccessResponse(c, gin.H{"message": "Review deleted"})
+}
+
+// GetReviewAnalytics returns review stats for admin dashboard
+func (h *ReviewHandler) GetReviewAnalytics(c *gin.Context) {
+	var total, pending, approved, rejected, hidden int64
+	h.db.Model(&models.Review{}).Count(&total)
+	h.db.Model(&models.Review{}).Where("status = ?", models.ReviewStatusPending).Count(&pending)
+	h.db.Model(&models.Review{}).Where("status = ?", models.ReviewStatusApproved).Count(&approved)
+	h.db.Model(&models.Review{}).Where("status = ?", models.ReviewStatusRejected).Count(&rejected)
+	h.db.Model(&models.Review{}).Where("status = ?", models.ReviewStatusHidden).Count(&hidden)
+
+	var totalReports, pendingReports int64
+	h.db.Model(&models.ReviewReport{}).Count(&totalReports)
+	h.db.Model(&models.ReviewReport{}).Where("status = ?", models.ReportStatusPending).Count(&pendingReports)
+
+	var reportBreakdown []struct {
+		Reason string
+		Count  int64
+	}
+	h.db.Model(&models.ReviewReport{}).Select("reason, COUNT(*) as count").Group("reason").Scan(&reportBreakdown)
+
+	reasons := make(map[string]int64)
+	for _, r := range reportBreakdown {
+		reasons[r.Reason] = r.Count
+	}
+
+	utils.SuccessResponse(c, gin.H{
+		"total_reviews":    total,
+		"pending":          pending,
+		"approved":         approved,
+		"rejected":         rejected,
+		"hidden":           hidden,
+		"total_reports":    totalReports,
+		"pending_reports":  pendingReports,
+		"report_breakdown": reasons,
+	})
+}
+
 // Internal helpers
 
 func (h *ReviewHandler) sendReviewNotifications(review *models.Review) {
@@ -545,18 +816,27 @@ func (h *ReviewHandler) sendReviewNotifications(review *models.Review) {
 		return
 	}
 
-	ratingLabel := ratingLabel(review.Rating)
+	primaryRating := 0
+	if review.ShopRating != nil {
+		primaryRating = *review.ShopRating
+	} else if review.StaffRating != nil {
+		primaryRating = *review.StaffRating
+	}
+
+	ratingLabel := ratingLabel(primaryRating)
 	_ = fmt.Sprintf("New Review: %s", ratingLabel)
-	_ = fmt.Sprintf("Rating: %d/5 ★ | %s", review.Rating, truncate(review.Comment, 100))
+	_ = fmt.Sprintf("Rating: %d/5 ★ | %s", primaryRating, truncate(review.Comment, 100))
 
 	h.notifSvc.Dispatch(context.Background(), notifService.NotificationEvent{
 		Type:       models.NotifReviewReceived,
 		ReceiverID: barber.UserID,
 		Role:       notifService.RoleBarber,
 		Data: map[string]interface{}{
-			"review_id": review.ID.String(),
-			"shop_id":   review.ShopID.String(),
-			"rating":    review.Rating,
+			"review_id":  review.ID.String(),
+			"shop_id":    review.ShopID.String(),
+			"rating":     primaryRating,
+			"shop_rating": review.ShopRating,
+			"staff_rating": review.StaffRating,
 		},
 	})
 }

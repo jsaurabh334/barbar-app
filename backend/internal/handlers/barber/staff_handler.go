@@ -406,6 +406,41 @@ func (h *StaffHandler) GetStaffServices(c *gin.Context) {
 	utils.SuccessResponse(c, staffServices)
 }
 
+// GetPublicStaffProfile returns a single staff member with rating summary (public endpoint)
+func (h *StaffHandler) GetPublicStaffProfile(c *gin.Context) {
+	staffID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Invalid staff ID")
+		return
+	}
+
+	var staff models.BarberStaff
+	if err := h.db.Preload("Services.Service").Where("id = ? AND is_active = ?", staffID, true).First(&staff).Error; err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "Staff member not found")
+		return
+	}
+
+	dist := models.RatingDistribution{}
+	if staff.RatingDistribution != nil {
+		json.Unmarshal(staff.RatingDistribution, &dist)
+	}
+
+	utils.SuccessResponse(c, gin.H{
+		"staff": staff,
+		"rating_summary": gin.H{
+			"avg_rating":    staff.Rating,
+			"total_reviews": staff.ReviewCount,
+			"distribution": gin.H{
+				"5": dist.Star5,
+				"4": dist.Star4,
+				"3": dist.Star3,
+				"2": dist.Star2,
+				"1": dist.Star1,
+			},
+		},
+	})
+}
+
 // ListPublicStaff returns all active staff members for a barber (public endpoint)
 func (h *StaffHandler) ListPublicStaff(c *gin.Context) {
 	barberID, err := uuid.Parse(c.Param("id"))

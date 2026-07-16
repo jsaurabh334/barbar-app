@@ -12,11 +12,13 @@ import '../widgets/review_summary_card.dart';
 class ReviewListScreen extends StatefulWidget {
   final String shopId;
   final String shopName;
+  final List<Map<String, dynamic>>? staffMembers;
 
   const ReviewListScreen({
     super.key,
     required this.shopId,
     required this.shopName,
+    this.staffMembers,
   });
 
   @override
@@ -25,48 +27,88 @@ class ReviewListScreen extends StatefulWidget {
 
 class _ReviewListScreenState extends State<ReviewListScreen> {
   String _sortBy = 'newest';
+  String? _selectedStaffId;
   final _scrollController = ScrollController();
   int _page = 1;
 
   void _onReport(ReviewModel review) {
-    final controller = TextEditingController();
+    String? selectedReason;
+    final customController = TextEditingController();
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('Report Review'),
-        content: TextField(
-          controller: controller,
-          maxLines: 3,
-          maxLength: 500,
-          decoration: const InputDecoration(
-            hintText: 'Why are you reporting this review? (min 10 chars)',
-            border: OutlineInputBorder(),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text('Report Review'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Why are you reporting this review?',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+              const SizedBox(height: 12),
+              ...['spam', 'fake', 'abusive', 'wrong_information', 'other'].map((r) {
+                final label = {
+                  'spam': 'Spam',
+                  'fake': 'Fake Review',
+                  'abusive': 'Abusive',
+                  'wrong_information': 'Wrong Information',
+                  'other': 'Other',
+                }[r]!;
+                return RadioListTile<String>(
+                  value: r,
+                  groupValue: selectedReason,
+                  title: Text(label, style: const TextStyle(fontSize: 14)),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: AppColors.primary,
+                  onChanged: (val) => setDialogState(() => selectedReason = val),
+                );
+              }),
+              if (selectedReason == 'other')
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: TextField(
+                    controller: customController,
+                    maxLines: 2,
+                    maxLength: 500,
+                    decoration: const InputDecoration(
+                      hintText: 'Describe the issue...',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+            ],
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+              onPressed: selectedReason == null
+                  ? null
+                  : () async {
+                      try {
+                        await context.read<ReviewRepository>().reportReview(
+                          review.id,
+                          selectedReason!,
+                          customReason: selectedReason == 'other' ? customController.text.trim() : null,
+                        );
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Review reported. We will review it shortly.')),
+                        );
+                      } catch (e) {
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.error),
+                        );
+                      }
+                    },
+              child: const Text('Report'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            onPressed: () async {
-              final reason = controller.text.trim();
-              if (reason.length < 10) return;
-              try {
-                await context.read<ReviewRepository>().reportReview(review.id, reason);
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Review reported. We will review it shortly.')),
-                );
-              } catch (e) {
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.error),
-                );
-              }
-            },
-            child: const Text('Report'),
-          ),
-        ],
       ),
     );
   }
@@ -89,6 +131,7 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
         shopId: widget.shopId,
         page: _page,
         sort: _sortBy,
+        staffId: _selectedStaffId,
       ),
     );
   }
@@ -113,6 +156,23 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
               return const SizedBox.shrink();
             },
           ),
+          // Staff filter chips
+          if (widget.staffMembers != null && widget.staffMembers!.isNotEmpty)
+            SizedBox(
+              height: 40,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: [
+                  _filterChip('All', null),
+                  ...widget.staffMembers!.map((s) {
+                    final name = s['name'] as String? ?? 'Staff';
+                    final id = s['id'] as String?;
+                    return _filterChip(name, id);
+                  }),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
@@ -180,6 +240,28 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _filterChip(String label, String? staffId) {
+    final isSelected = _selectedStaffId == staffId;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(label, style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : AppColors.textPrimary)),
+        selected: isSelected,
+        selectedColor: AppColors.primary,
+        backgroundColor: AppColors.surface,
+        side: BorderSide(color: isSelected ? AppColors.primary : AppColors.border),
+        onSelected: (val) {
+          setState(() {
+            _selectedStaffId = staffId;
+            _page = 1;
+          });
+          _fetchReviews();
+        },
+        visualDensity: VisualDensity.compact,
       ),
     );
   }

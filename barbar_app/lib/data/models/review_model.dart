@@ -1,9 +1,23 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+
 class ReviewImageModel {
   final String id;
   final String url;
   final String? thumbnail;
   final int sortOrder;
   final int size;
+
+  String get fullUrl {
+    if (url.startsWith('http')) {
+      if (!kIsWeb && Platform.isAndroid && url.contains('localhost')) {
+        return url.replaceAll('localhost', '10.0.2.2');
+      }
+      return url;
+    }
+    // Need AppConfig.apiBaseUrl, but let's assume images are full URLs in response based on handler.
+    return url;
+  }
 
   ReviewImageModel({
     required this.id,
@@ -39,7 +53,9 @@ class ReviewModel {
   final String bookingId;
   final String shopId;
   final String? staffId;
-  final int rating;
+  final int? shopRating;
+  final int? staffRating;
+  final String reviewType;
   final String comment;
   final bool isAnonymous;
   final bool isVerified;
@@ -54,7 +70,9 @@ class ReviewModel {
     required this.bookingId,
     required this.shopId,
     this.staffId,
-    required this.rating,
+    this.shopRating,
+    this.staffRating,
+    this.reviewType = 'both',
     this.comment = '',
     this.isAnonymous = false,
     this.isVerified = true,
@@ -76,12 +94,20 @@ class ReviewModel {
       name = json['customer']['full_name'] as String;
     }
 
+    int? parseRating(dynamic val) {
+      if (val == null) return null;
+      if (val is num) return val.toInt();
+      return null;
+    }
+
     return ReviewModel(
       id: json['id'] as String,
       bookingId: json['booking_id'] as String,
       shopId: json['shop_id'] as String,
       staffId: json['staff_id'] as String?,
-      rating: (json['rating'] as num).toInt(),
+      shopRating: parseRating(json['shop_rating']),
+      staffRating: parseRating(json['staff_rating']),
+      reviewType: json['review_type'] as String? ?? 'both',
       comment: json['comment'] as String? ?? '',
       isAnonymous: json['is_anonymous'] as bool? ?? false,
       isVerified: json['is_verified'] as bool? ?? true,
@@ -101,7 +127,9 @@ class ReviewModel {
       'booking_id': bookingId,
       'shop_id': shopId,
       if (staffId != null) 'staff_id': staffId,
-      'rating': rating,
+      if (shopRating != null) 'shop_rating': shopRating,
+      if (staffRating != null) 'staff_rating': staffRating,
+      'review_type': reviewType,
       'comment': comment,
       'is_anonymous': isAnonymous,
       'is_verified': isVerified,

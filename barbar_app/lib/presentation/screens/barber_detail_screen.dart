@@ -88,7 +88,7 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
     final allImages = [
       if (widget.barber.fullShopImage != null) widget.barber.fullShopImage!,
       ...widget.barber.fullShopImages,
-    ];
+    ].toSet().toList();
 
     return Scaffold(
       body: Stack(
@@ -106,10 +106,39 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
                   PageView.builder(
                     onPageChanged: (index) => setState(() => _galleryIndex = index),
                     itemCount: allImages.length,
-                    itemBuilder: (context, index) => CachedNetworkImage(
-                      imageUrl: allImages[index],
-                      fit: BoxFit.cover,
-                      errorWidget: (context, _, __) => Container(color: AppColors.surface),
+                    itemBuilder: (context, index) => GestureDetector(
+                      onTap: () {
+                        showDialog(
+                          context: context,
+                          builder: (_) => Dialog(
+                            backgroundColor: Colors.transparent,
+                            insetPadding: EdgeInsets.zero,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                InteractiveViewer(
+                                  child: CachedNetworkImage(
+                                    imageUrl: allImages[index],
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 40, right: 20,
+                                  child: IconButton(
+                                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                                    onPressed: () => Navigator.pop(context),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                      child: CachedNetworkImage(
+                        imageUrl: allImages[index],
+                        fit: BoxFit.cover,
+                        errorWidget: (context, _, __) => Container(color: AppColors.surface),
+                      ),
                     ),
                   )
                 else
@@ -118,18 +147,20 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
                     fit: BoxFit.cover,
                     errorWidget: (context, _, __) => Container(color: AppColors.surface),
                   ),
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.black.withValues(alpha: 0.8),
-                        Colors.black.withValues(alpha: 0.2),
-                        Colors.transparent,
-                        AppColors.background,
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      stops: const [0.0, 0.4, 0.7, 1.0],
+                IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.black.withValues(alpha: 0.8),
+                          Colors.black.withValues(alpha: 0.2),
+                          Colors.transparent,
+                          AppColors.background,
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: const [0.0, 0.4, 0.7, 1.0],
+                      ),
                     ),
                   ),
                 ),
@@ -223,9 +254,11 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
                                 children: [
                                   const Icon(LucideIcons.mapPin, size: 14, color: AppColors.textSecondary),
                                   const SizedBox(width: 6),
-                                  Text(
-                                    '${widget.barber.address}, ${widget.barber.city}',
-                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+                                  Expanded(
+                                    child: Text(
+                                      '${widget.barber.address}, ${widget.barber.city}',
+                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -239,6 +272,7 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
                               builder: (_) => ReviewListScreen(
                                 shopId: widget.barber.id,
                                 shopName: widget.barber.shopName,
+                                staffMembers: _staffList,
                               ),
                             ),
                           ),

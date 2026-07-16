@@ -9,47 +9,12 @@ class MarketplaceRepositoryImpl implements MarketplaceRepository {
   List<ProductModel> _cachedProducts = [];
   List<OrderModel> _cachedOrders = [];
 
-  static final List<ProductModel> _mockProducts = [
-    ProductModel(
-      id: 'p1', vendorId: 'vendor-1',
-      name: 'Organic Matte Clay',
-      description: 'Premium strong hold hair wax for natural textured styling.',
-      basePrice: 600.0, discountPrice: 499.0,
-      availableStock: 35, isApproved: true,
-      imageUrl: 'https://images.unsplash.com/photo-1590156546746-c2370a8c6214?q=80&w=400',
-    ),
-    ProductModel(
-      id: 'p2', vendorId: 'vendor-1',
-      name: 'Premium Beard Conditioning Oil',
-      description: 'Softens beard hair, hydrates skin underneath, cedarwood scent.',
-      basePrice: 450.0,
-      availableStock: 20, isApproved: true,
-      imageUrl: 'https://images.unsplash.com/photo-1626015713026-d837d172406f?q=80&w=400',
-    ),
-    ProductModel(
-      id: 'p3', vendorId: 'vendor-2',
-      name: 'Professional Styling Powder',
-      description: 'Instant volume, matte finish texture powder for all hair types.',
-      basePrice: 500.0, discountPrice: 399.0,
-      availableStock: 50, isApproved: true,
-      imageUrl: 'https://images.unsplash.com/photo-1608248597481-496100c8c836?q=80&w=400',
-    ),
-  ];
-
   MarketplaceRepositoryImpl(this._remoteDataSource);
 
   @override
   Future<List<ProductModel>> getProducts() async {
-    try {
-      _cachedProducts = await _remoteDataSource.getProducts();
-      if (_cachedProducts.isEmpty) {
-        _cachedProducts = List.from(_mockProducts);
-      }
-      return List.from(_cachedProducts);
-    } catch (_) {
-      _cachedProducts = List.from(_mockProducts);
-      return List.from(_cachedProducts);
-    }
+    _cachedProducts = await _remoteDataSource.getProducts();
+    return List.from(_cachedProducts);
   }
 
   @override

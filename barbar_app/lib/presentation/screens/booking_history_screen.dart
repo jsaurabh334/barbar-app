@@ -240,6 +240,8 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
                     builder: (_) => ReviewScreen(
                       bookingId: booking.id,
                       shopName: booking.shopName,
+                      staffId: booking.staffId,
+                      staffName: booking.staff?['name'] as String?,
                     ),
                   ),
                 ),

@@ -62,9 +62,11 @@ type Vendor struct {
 	BusinessDocuments  JSONB               `gorm:"type:jsonb" json:"business_documents,omitempty"`
 
 	// Relations
-	User     *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Products []Product `gorm:"foreignKey:VendorID" json:"products,omitempty"`
-	Wallet   *Wallet   `gorm:"foreignKey:VendorID" json:"wallet,omitempty"`
+	User     *User           `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Products []Product       `gorm:"foreignKey:VendorID" json:"products,omitempty"`
+	Wallet   *Wallet         `gorm:"foreignKey:VendorID" json:"wallet,omitempty"`
+	Branches []VendorBranch  `gorm:"foreignKey:VendorID" json:"branches,omitempty"`
+	Images   []VendorImage   `gorm:"foreignKey:VendorID" json:"images,omitempty"`
 }
 
 type VendorDocument struct {
@@ -104,4 +106,92 @@ type KYCDocument struct {
 	VerifiedBy  *uuid.UUID `gorm:"type:uuid" json:"verified_by,omitempty"`
 	VerifiedAt  *time.Time `json:"verified_at,omitempty"`
 	RejectReason string   `gorm:"type:text" json:"reject_reason,omitempty"`
+}
+
+// ================ Vendor Branch Management ================
+
+type VendorBranchStatus string
+
+const (
+	VendorBranchActive   VendorBranchStatus = "active"
+	VendorBranchInactive VendorBranchStatus = "inactive"
+	VendorBranchClosed   VendorBranchStatus = "closed"
+)
+
+type VendorBranch struct {
+	BaseModel
+	VendorID     uuid.UUID           `gorm:"type:uuid;index;not null" json:"vendor_id"`
+	Name         string              `gorm:"size:255;not null" json:"name"`
+	Phone        string              `gorm:"size:20" json:"phone,omitempty"`
+	Email        string              `gorm:"size:255" json:"email,omitempty"`
+	Address      string              `gorm:"type:text;not null" json:"address"`
+	City         string              `gorm:"size:100;index;not null" json:"city"`
+	State        string              `gorm:"size:100" json:"state"`
+	Pincode      string              `gorm:"size:10" json:"pincode"`
+	Latitude     float64             `json:"latitude,omitempty"`
+	Longitude    float64             `json:"longitude,omitempty"`
+	Timezone     string              `gorm:"size:50;default:'Asia/Kolkata'" json:"timezone"`
+	Status       VendorBranchStatus  `gorm:"size:50;default:active" json:"status"`
+	IsDefault    bool                `gorm:"default:false" json:"is_default"`
+	IsActive     bool                `gorm:"default:true;index" json:"is_active"`
+	DisplayOrder int                 `gorm:"default:0" json:"display_order"`
+
+	// Relations
+	Vendor       Vendor              `gorm:"foreignKey:VendorID" json:"vendor,omitempty"`
+	WorkingHours []VendorWorkingHour `gorm:"foreignKey:BranchID" json:"working_hours,omitempty"`
+	Holidays     []VendorHoliday     `gorm:"foreignKey:BranchID" json:"holidays,omitempty"`
+	Images       []VendorImage       `gorm:"foreignKey:BranchID" json:"images,omitempty"`
+}
+
+type VendorWorkingHour struct {
+	BaseModel
+	BranchID   uuid.UUID `gorm:"type:uuid;index;not null;uniqueIndex:idx_branch_day" json:"branch_id"`
+	DayOfWeek  int       `gorm:"not null;uniqueIndex:idx_branch_day" json:"day_of_week"`
+	OpenTime   string    `gorm:"size:5;not null" json:"open_time"`
+	CloseTime  string    `gorm:"size:5;not null" json:"close_time"`
+	BreakStart string    `gorm:"size:5" json:"break_start,omitempty"`
+	BreakEnd   string    `gorm:"size:5" json:"break_end,omitempty"`
+	IsClosed   bool      `gorm:"default:false" json:"is_closed"`
+
+	// Relations
+	Branch VendorBranch `gorm:"foreignKey:BranchID" json:"branch,omitempty"`
+}
+
+type VendorHoliday struct {
+	BaseModel
+	BranchID  uuid.UUID  `gorm:"type:uuid;index;not null;uniqueIndex:idx_branch_date" json:"branch_id"`
+	Date      time.Time  `gorm:"not null;uniqueIndex:idx_branch_date" json:"date"`
+	Title     string     `gorm:"size:255;not null" json:"title"`
+	IsFullDay bool       `gorm:"default:true" json:"is_full_day"`
+	StartTime string     `gorm:"size:5" json:"start_time,omitempty"`
+	EndTime   string     `gorm:"size:5" json:"end_time,omitempty"`
+	Reason    string     `gorm:"type:text" json:"reason,omitempty"`
+
+	// Relations
+	Branch VendorBranch `gorm:"foreignKey:BranchID" json:"branch,omitempty"`
+}
+
+// ================ Vendor Image/Gallery ================
+
+type VendorImageType string
+
+const (
+	VendorImageLogo    VendorImageType = "logo"
+	VendorImageBanner  VendorImageType = "banner"
+	VendorImageGallery VendorImageType = "gallery"
+)
+
+type VendorImage struct {
+	BaseModel
+	VendorID  uuid.UUID       `gorm:"type:uuid;index;not null" json:"vendor_id"`
+	BranchID  *uuid.UUID      `gorm:"type:uuid;index" json:"branch_id,omitempty"`
+	ImageURL  string          `gorm:"size:500;not null" json:"image_url"`
+	ImageType VendorImageType `gorm:"size:50;default:gallery" json:"image_type"`
+	SortOrder int             `gorm:"default:0" json:"sort_order"`
+	Caption   string          `gorm:"size:255" json:"caption,omitempty"`
+	IsPrimary bool            `gorm:"default:false" json:"is_primary"`
+
+	// Relations
+	Vendor Vendor       `gorm:"foreignKey:VendorID" json:"vendor,omitempty"`
+	Branch *VendorBranch `gorm:"foreignKey:BranchID" json:"branch,omitempty"`
 }

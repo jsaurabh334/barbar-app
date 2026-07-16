@@ -13,6 +13,7 @@ import '../bloc/auth/auth_event.dart';
 import 'admin/customers/admin_customers_screen.dart';
 import 'admin/admin_dashboard_screen.dart';
 import 'admin/admin_review_moderation_screen.dart';
+import 'admin/admin_report_management_screen.dart';
 
 class DisputeCase {
   final String id;
@@ -137,8 +138,9 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
             _buildDrawerItem(LucideIcons.bike, 'Delivery', 3),
             _buildDrawerItem(LucideIcons.scale, 'Disputes', 4),
             _buildDrawerItem(LucideIcons.messageSquare, 'Reviews', 5),
-            _buildDrawerItem(LucideIcons.settings, 'Settings', 6),
-            _buildDrawerItem(LucideIcons.activity, 'Analytics', 7),
+            _buildDrawerItem(LucideIcons.flag, 'Reports', 6),
+            _buildDrawerItem(LucideIcons.settings, 'Settings', 7),
+            _buildDrawerItem(LucideIcons.activity, 'Analytics', 8),
           ],
         ),
       ),
@@ -179,6 +181,9 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
           ),
           _buildDisputesTab(),
           AdminReviewModerationScreen(
+            adminRepository: context.read<AdminRepository>(),
+          ),
+          AdminReportManagementScreen(
             adminRepository: context.read<AdminRepository>(),
           ),
           _buildSettingsTab(),

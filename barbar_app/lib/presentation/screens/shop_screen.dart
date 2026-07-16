@@ -4,11 +4,14 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/product_model.dart';
+import '../../data/models/category_model.dart';
+import '../../domain/repositories/directory_repository.dart';
 import '../bloc/marketplace/marketplace_bloc.dart';
 import '../bloc/marketplace/marketplace_event.dart';
 import '../bloc/marketplace/marketplace_state.dart';
 import 'order_history_screen.dart';
 import 'select_address_screen.dart';
+import 'vendor_detail_screen.dart';
 
 class ShopScreen extends StatefulWidget {
   const ShopScreen({super.key});
@@ -19,11 +22,22 @@ class ShopScreen extends StatefulWidget {
 
 class _ShopScreenState extends State<ShopScreen> {
   final _couponController = TextEditingController();
+  List<CategoryModel> _categories = [];
+  String? _selectedCategoryId;
 
   @override
   void initState() {
     super.initState();
     context.read<MarketplaceBloc>().add(FetchProducts());
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final repo = RepositoryProvider.of<DirectoryRepository>(context);
+      final cats = await repo.getProductCategories();
+      if (mounted) setState(() => _categories = cats);
+    } catch (_) {}
   }
 
   @override
@@ -63,21 +77,33 @@ class _ShopScreenState extends State<ShopScreen> {
             return const Center(child: CircularProgressIndicator(color: AppColors.primary));
           } else if (state is ProductsLoaded) {
             final products = state.products;
+            final filtered = _selectedCategoryId == null
+                ? products
+                : products.where((p) => p.categoryId == _selectedCategoryId).toList();
             if (products.isEmpty) {
               return const Center(child: Text('No grooming products registered yet.'));
             }
-            return GridView.builder(
-              padding: const EdgeInsets.all(20),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 0.68,
-              ),
-              itemCount: products.length,
-              itemBuilder: (context, index) {
-                return _buildProductCard(products[index], state.cart);
-              },
+            return Column(
+              children: [
+                if (_categories.isNotEmpty) _buildCategoryFilter(),
+                Expanded(
+                  child: filtered.isEmpty
+                      ? const Center(child: Text('No products in this category.'))
+                      : GridView.builder(
+                          padding: const EdgeInsets.all(20),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            childAspectRatio: 0.68,
+                          ),
+                          itemCount: filtered.length,
+                          itemBuilder: (context, index) {
+                            return _buildProductCard(filtered[index], state.cart);
+                          },
+                        ),
+                ),
+              ],
             );
           } else if (state is MarketplaceFailure) {
             return Center(child: Text(state.error, style: const TextStyle(color: AppColors.error)));
@@ -118,6 +144,36 @@ class _ShopScreenState extends State<ShopScreen> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildCategoryFilter() {
+    return Container(
+      height: 48,
+      margin: const EdgeInsets.only(top: 8),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        children: [
+          _buildCategoryChip('All', null),
+          ..._categories.map((c) => _buildCategoryChip(c.name, c.id)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryChip(String label, String? id) {
+    final selected = _selectedCategoryId == id;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(label, style: TextStyle(fontSize: 12, color: selected ? Colors.black : AppColors.textSecondary)),
+        selected: selected,
+        selectedColor: AppColors.primary,
+        backgroundColor: AppColors.cardBg,
+        side: BorderSide(color: selected ? AppColors.primary : AppColors.border),
+        onSelected: (_) => setState(() => _selectedCategoryId = id),
+      ),
     );
   }
 
@@ -169,6 +225,24 @@ class _ShopScreenState extends State<ShopScreen> {
                   style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                GestureDetector(
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VendorDetailScreen(vendorId: product.vendorId))),
+                  child: Row(
+                    children: [
+                      const Icon(LucideIcons.store, size: 12, color: AppColors.primary),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          product.vendorName ?? 'View Store',
+                          style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const Icon(LucideIcons.chevronRight, size: 12, color: AppColors.primary),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Row(

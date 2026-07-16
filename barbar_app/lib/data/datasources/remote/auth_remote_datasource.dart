@@ -92,7 +92,8 @@ class AuthRemoteDataSource {
         'file': await MultipartFile.fromFile(filePath),
       });
       final response = await _apiClient.dio.post('/upload/image', data: formData);
-      if (response.statusCode == 200 && response.data['status'] == 'success') {
+      if ((response.statusCode == 200 || response.statusCode == 201) && 
+          (response.data['status'] == 'success' || response.data['status'] == 'created')) {
         return response.data['data']['url'] as String;
       }
       throw Exception('Upload failed');

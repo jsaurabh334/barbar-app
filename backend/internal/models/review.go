@@ -15,23 +15,77 @@ const (
 	ReviewStatusDeleted  ReviewStatus = "deleted"
 )
 
+type ReviewType string
+
+const (
+	ReviewTypeShop  ReviewType = "shop"
+	ReviewTypeStaff ReviewType = "staff"
+	ReviewTypeBoth  ReviewType = "both"
+)
+
 type Review struct {
 	BaseModel
 	BookingID    uuid.UUID  `gorm:"type:uuid;uniqueIndex;not null" json:"booking_id"`
 	CustomerID   uuid.UUID  `gorm:"type:uuid;index;not null" json:"customer_id"`
 	ShopID       uuid.UUID  `gorm:"type:uuid;index;not null" json:"shop_id"`
 	StaffID      *uuid.UUID `gorm:"type:uuid;index" json:"staff_id,omitempty"`
-	Rating       int        `gorm:"not null;check:rating>=1 AND rating<=5" json:"rating"`
+	Rating       int        `gorm:"default:0" json:"rating,omitempty"` // deprecated
+	ShopRating   *int       `gorm:"check:shop_rating>=1 AND shop_rating<=5" json:"shop_rating,omitempty"`
+	StaffRating  *int       `gorm:"check:staff_rating>=1 AND staff_rating<=5" json:"staff_rating,omitempty"`
+	ReviewType   ReviewType `gorm:"size:10;default:'both'" json:"review_type"`
 	Comment      string     `gorm:"type:text" json:"comment"`
 	IsAnonymous  bool       `gorm:"default:false" json:"is_anonymous"`
 	IsVerified   bool       `gorm:"default:true" json:"is_verified"`
 	Status       ReviewStatus `gorm:"size:20;default:pending;index" json:"status"`
+
+	// Audit
+	ApprovedBy     *uuid.UUID `gorm:"type:uuid;index" json:"approved_by,omitempty"`
+	ApprovedAt     *time.Time `json:"approved_at,omitempty"`
+	RejectedBy     *uuid.UUID `gorm:"type:uuid;index" json:"rejected_by,omitempty"`
+	RejectionReason string   `gorm:"size:500" json:"rejection_reason,omitempty"`
 
 	Booking  *Booking        `gorm:"foreignKey:BookingID" json:"booking,omitempty"`
 	Customer *User           `gorm:"foreignKey:CustomerID" json:"customer,omitempty"`
 	Shop     *Barber         `gorm:"foreignKey:ShopID" json:"shop,omitempty"`
 	Images   []ReviewImage   `gorm:"foreignKey:ReviewID" json:"images,omitempty"`
 	Reply    *ReviewReply    `gorm:"foreignKey:ReviewID" json:"reply,omitempty"`
+	Reports  []ReviewReport  `gorm:"foreignKey:ReviewID" json:"reports,omitempty"`
+}
+
+type ReviewReportReason string
+
+const (
+	ReportSpam             ReviewReportReason = "spam"
+	ReportAbusive          ReviewReportReason = "abusive"
+	ReportFake             ReviewReportReason = "fake"
+	ReportWrongInformation ReviewReportReason = "wrong_information"
+	ReportOther            ReviewReportReason = "other"
+)
+
+type ReviewReportStatus string
+
+const (
+	ReportStatusPending   ReviewReportStatus = "pending"
+	ReportStatusResolved  ReviewReportStatus = "resolved"
+	ReportStatusDismissed ReviewReportStatus = "dismissed"
+)
+
+// AutoHideReportThreshold — reviews with this many pending reports are auto-hidden
+const AutoHideReportThreshold = 5
+
+type ReviewReport struct {
+	BaseModel
+	ReviewID   uuid.UUID `gorm:"type:uuid;index;not null" json:"review_id"`
+	ReporterID uuid.UUID `gorm:"type:uuid;index;not null" json:"reporter_id"`
+	Reason     ReviewReportReason `gorm:"size:50;not null" json:"reason"`
+	CustomReason string           `gorm:"size:500" json:"custom_reason,omitempty"`
+	Status     ReviewReportStatus `gorm:"size:20;default:pending;index" json:"status"`
+	ResolvedBy *uuid.UUID         `gorm:"type:uuid;index" json:"resolved_by,omitempty"`
+	ResolvedAt *time.Time         `json:"resolved_at,omitempty"`
+
+	Review   *Review `gorm:"foreignKey:ReviewID" json:"review,omitempty"`
+	Reporter *User   `gorm:"foreignKey:ReporterID" json:"reporter,omitempty"`
+	Resolver *User   `gorm:"foreignKey:ResolvedBy" json:"resolver,omitempty"`
 }
 
 type ReviewImage struct {
@@ -41,17 +95,6 @@ type ReviewImage struct {
 	Thumbnail  string    `gorm:"size:500" json:"thumbnail,omitempty"`
 	SortOrder  int       `gorm:"default:0" json:"sort_order"`
 	Size       int       `gorm:"default:0" json:"size"`
-}
-
-type ReviewReport struct {
-	BaseModel
-	ReviewID   uuid.UUID `gorm:"type:uuid;index;not null" json:"review_id"`
-	ReporterID uuid.UUID `gorm:"type:uuid;index;not null" json:"reporter_id"`
-	Reason     string    `gorm:"type:text;not null" json:"reason"`
-	Status     string    `gorm:"size:20;default:pending;index" json:"status"`
-
-	Review   *Review `gorm:"foreignKey:ReviewID" json:"review,omitempty"`
-	Reporter *User   `gorm:"foreignKey:ReporterID" json:"reporter,omitempty"`
 }
 
 func (ReviewReport) TableName() string {

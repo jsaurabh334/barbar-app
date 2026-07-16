@@ -1,3 +1,7 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import '../../core/constants/constants.dart';
+
 class UserModel {
   final String id;
   final String? email;
@@ -43,6 +47,18 @@ class UserModel {
       updatedAt: json['updated_at'] != null ? DateTime.tryParse(json['updated_at']) : null,
       lastLoginAt: json['last_login_at'] != null ? DateTime.tryParse(json['last_login_at']) : null,
     );
+  }
+
+  String? get fullAvatarUrl {
+    if (avatar == null || avatar!.isEmpty) return null;
+    if (avatar!.startsWith('http')) {
+      if (!kIsWeb && Platform.isAndroid && avatar!.contains('localhost')) {
+        return avatar!.replaceAll('localhost', '10.0.2.2');
+      }
+      return avatar;
+    }
+    final base = AppConfig.apiBaseUrl.replaceAll('/api/v1/', '/');
+    return '$base${avatar!.startsWith('/') ? avatar!.substring(1) : avatar}';
   }
 
   Map<String, dynamic> toJson() {

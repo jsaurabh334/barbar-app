@@ -23,7 +23,6 @@ class MarketplaceBloc extends Bloc<MarketplaceEvent, MarketplaceState> {
   Future<void> _onFetchProducts(FetchProducts event, Emitter<MarketplaceState> emit) async {
     emit(MarketplaceLoading());
     try {
-      await _marketplaceRepository.getProducts();
       _cachedProducts = await _marketplaceRepository.getProducts();
       emit(ProductsLoaded(products: List.from(_cachedProducts), cart: Map.from(_cart)));
     } catch (e) {

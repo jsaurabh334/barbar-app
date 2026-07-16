@@ -78,10 +78,10 @@ class _ProfileContent extends StatelessWidget {
               CircleAvatar(
                 radius: 48,
                 backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                backgroundImage: user.avatar != null && user.avatar!.isNotEmpty
-                    ? NetworkImage(user.avatar!)
+                backgroundImage: user.fullAvatarUrl != null
+                    ? NetworkImage(user.fullAvatarUrl!)
                     : null,
-                child: user.avatar == null || user.avatar!.isEmpty
+                child: user.fullAvatarUrl == null
                     ? Text(
                         user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : '?',
                         style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: AppColors.primary),
@@ -99,43 +99,45 @@ class _ProfileContent extends StatelessWidget {
         ),
         const SizedBox(height: 24),
 
-        // Profile Completion
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.cardBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Profile Completion', style: Theme.of(context).textTheme.titleMedium),
-                  Text('$completion%', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: LinearProgressIndicator(
-                  value: completion / 100,
-                  backgroundColor: AppColors.surface,
-                  color: AppColors.primary,
-                  minHeight: 8,
+        if (completion < 100) ...[
+          // Profile Completion
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Profile Completion', style: Theme.of(context).textTheme.titleMedium),
+                    Text('$completion%', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 12),
-              _completionItem('Full Name', user.fullName.isNotEmpty, Icons.check, Icons.close),
-              _completionItem('Phone Number', user.phone.isNotEmpty, Icons.check, Icons.close),
-              _completionItem('Email Address', user.email != null && user.email!.isNotEmpty, Icons.check, Icons.close),
-              _completionItem('Avatar', user.avatar != null && user.avatar!.isNotEmpty, Icons.check, Icons.close),
-            ],
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: completion / 100,
+                    backgroundColor: AppColors.surface,
+                    color: AppColors.primary,
+                    minHeight: 8,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _completionItem('Full Name', user.fullName.isNotEmpty, Icons.check, Icons.close),
+                _completionItem('Phone Number', user.phone.isNotEmpty, Icons.check, Icons.close),
+                _completionItem('Email Address', user.email != null && user.email!.isNotEmpty, Icons.check, Icons.close),
+                _completionItem('Avatar', user.avatar != null && user.avatar!.isNotEmpty, Icons.check, Icons.close),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 24),
+          const SizedBox(height: 24),
+        ],
 
         // Menu options
         _menuItem(context, LucideIcons.wallet, 'Wallet', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletScreen()))),
@@ -277,7 +279,7 @@ class _EditProfileScreenState extends State<_EditProfileScreen> {
                           radius: 50,
                           backgroundColor: AppColors.surface,
                           backgroundImage: _avatarUrl != null && _avatarUrl!.isNotEmpty
-                              ? NetworkImage(_avatarUrl!)
+                              ? NetworkImage(UserModel(id: '', phone: '', fullName: '', role: '', status: '', otpVerified: false, languagePref: '', avatar: _avatarUrl).fullAvatarUrl!)
                               : null,
                           child: _avatarUrl == null || _avatarUrl!.isEmpty
                               ? const Icon(LucideIcons.user, size: 40, color: AppColors.textSecondary)

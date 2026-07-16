@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:barbar_app/data/models/barber_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
@@ -526,7 +527,7 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
                                         child: ClipRRect(
                                           borderRadius: BorderRadius.circular(10),
                                           child: Image.network(
-                                            url,
+                                            BarberModel.getFullImageUrl(url),
                                             width: 110, height: 130, fit: BoxFit.cover,
                                             errorBuilder: (_, __, ___) => Container(
                                               width: 110, height: 130,

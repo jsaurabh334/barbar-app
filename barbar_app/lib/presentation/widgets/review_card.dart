@@ -89,7 +89,7 @@ class ReviewCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          RatingBar(rating: review.rating, size: 18),
+          RatingBar(rating: review.shopRating ?? 0, size: 18),
           if (review.comment.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(

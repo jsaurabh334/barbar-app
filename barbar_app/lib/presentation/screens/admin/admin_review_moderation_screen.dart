@@ -79,6 +79,48 @@ class _AdminReviewModerationScreenState extends State<AdminReviewModerationScree
       await widget.adminRepository.moderateReview(reviewId, status, reason: reason);
       _reviews.removeWhere((r) => r.id == reviewId);
       setState(() {});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Review ${status == 'approved' ? 'approved' : 'rejected'}!'),
+              backgroundColor: AppColors.success),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteReview(String reviewId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Delete Review'),
+        content: const Text('Are you sure? This action cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await widget.adminRepository.deleteReview(reviewId);
+      _reviews.removeWhere((r) => r.id == reviewId);
+      setState(() {});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Review deleted'), backgroundColor: AppColors.success),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -243,7 +285,7 @@ class _AdminReviewModerationScreenState extends State<AdminReviewModerationScree
                 const Spacer(),
                 Row(
                   children: List.generate(5, (i) => Icon(
-                    i < review.rating ? Icons.star : Icons.star_border,
+                    i < (review.shopRating ?? 0) ? Icons.star : Icons.star_border,
                     color: Colors.amber, size: 16,
                   )),
                 ),
@@ -261,12 +303,28 @@ class _AdminReviewModerationScreenState extends State<AdminReviewModerationScree
             ),
             if (review.customerName != null) ...[
               const SizedBox(height: 6),
-              Text(review.customerName!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              Row(
+                children: [
+                  Icon(LucideIcons.user, size: 12, color: AppColors.textSecondary),
+                  const SizedBox(width: 4),
+                  Text(review.customerName!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                ],
+              ),
+            ],
+            if (review.staffId != null) ...[
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Icon(LucideIcons.scissors, size: 12, color: AppColors.textSecondary),
+                  const SizedBox(width: 4),
+                  Text('Staff: ${review.staffId}', style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                ],
+              ),
             ],
             const SizedBox(height: 4),
             Text(review.createdAt, style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+            const Divider(height: 20),
             if (isPending) ...[
-              const Divider(height: 20),
               Row(
                 children: [
                   Expanded(
@@ -293,6 +351,19 @@ class _AdminReviewModerationScreenState extends State<AdminReviewModerationScree
                     ),
                   ),
                 ],
+              ),
+            ] else ...[
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(LucideIcons.trash2, size: 16),
+                  label: const Text('Delete Review'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    side: const BorderSide(color: AppColors.error),
+                  ),
+                  onPressed: () => _deleteReview(review.id),
+                ),
               ),
             ],
           ],

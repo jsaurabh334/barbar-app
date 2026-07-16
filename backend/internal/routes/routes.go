@@ -153,6 +153,11 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			public.GET("/barbers/:id/reviews", reviewH.ListPublicReviews)
 			public.GET("/barbers/:id/rating-summary", reviewH.GetShopRatingSummary)
 
+			// Staff
+			public.GET("/staff/:id", staffH.GetPublicStaffProfile)
+			public.GET("/staff/:id/rating-summary", reviewH.GetStaffRatingSummary)
+			public.GET("/staff/:id/reviews", reviewH.ListStaffReviews)
+
 			// Search
 			public.GET("/search", searchH.Search)
 		}
@@ -295,8 +300,9 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 		vendorRoutes.Use(authMW.Authenticate())
 		{
 			vendorRoutes.POST("/register", vendorH.Register)
-			vendorRoutes.GET("/dashboard", vendorH.GetDashboard)
+			vendorRoutes.GET("/profile", vendorH.GetProfile)
 			vendorRoutes.PUT("/profile", vendorH.UpdateProfile)
+			vendorRoutes.GET("/dashboard", vendorH.GetDashboard)
 			vendorRoutes.GET("/orders", orderH.ListVendorOrders)
 			vendorRoutes.PUT("/orders/:id/status", orderH.UpdateStatus)
 			vendorRoutes.GET("/products", productH.ListByVendor)
@@ -311,6 +317,29 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			vendorRoutes.POST("/documents", vendorH.UploadDocument)
 			vendorRoutes.GET("/documents", vendorH.ListDocuments)
 			vendorRoutes.DELETE("/documents/:id", vendorH.DeleteDocument)
+
+			// Branches
+			vendorRoutes.POST("/branches", vendorH.CreateBranch)
+			vendorRoutes.GET("/branches", vendorH.ListBranches)
+			vendorRoutes.GET("/branches/:id", vendorH.GetBranch)
+			vendorRoutes.PUT("/branches/:id", vendorH.UpdateBranch)
+			vendorRoutes.DELETE("/branches/:id", vendorH.DeleteBranch)
+			vendorRoutes.PUT("/branches/:id/default", vendorH.SetDefaultBranch)
+
+			// Gallery
+			vendorRoutes.POST("/gallery", vendorH.UploadImage)
+			vendorRoutes.GET("/gallery", vendorH.ListImages)
+			vendorRoutes.DELETE("/gallery/:id", vendorH.DeleteImage)
+			vendorRoutes.PUT("/gallery/reorder", vendorH.ReorderImages)
+
+			// Working Hours (per branch)
+			vendorRoutes.PUT("/branches/:id/hours", vendorH.SetWorkingHours)
+			vendorRoutes.GET("/branches/:id/hours", vendorH.GetWorkingHours)
+
+			// Holidays (per branch)
+			vendorRoutes.POST("/branches/:id/holidays", vendorH.AddHoliday)
+			vendorRoutes.GET("/branches/:id/holidays", vendorH.ListHolidays)
+			vendorRoutes.DELETE("/branches/:id/holidays/:holiday_id", vendorH.DeleteHoliday)
 		}
 
 		// ==================== Product routes ====================
@@ -472,6 +501,12 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			// Reviews
 			adminRoutes.GET("/reviews", reviewH.ListAllReviews)
 			adminRoutes.PUT("/reviews/:id/moderate", reviewH.Moderate)
+			adminRoutes.DELETE("/reviews/:id", reviewH.DeleteReview)
+			adminRoutes.GET("/reviews/analytics", reviewH.GetReviewAnalytics)
+
+			// Reports
+			adminRoutes.GET("/reports", reviewH.ListAllReports)
+			adminRoutes.PUT("/reports/:id/resolve", reviewH.ResolveReport)
 
 			// Settings
 			adminRoutes.GET("/settings", adminH.GetSettings)

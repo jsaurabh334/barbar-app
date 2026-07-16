@@ -11,14 +11,18 @@ class ReviewRepositoryImpl implements ReviewRepository {
   @override
   Future<ReviewModel> createReview({
     required String bookingId,
-    required int rating,
+    String? staffId,
+    required int shopRating,
+    int? staffRating,
     String comment = '',
     bool isAnonymous = false,
     List<Map<String, dynamic>> images = const [],
   }) async {
     return _remoteDataSource.createReview(
       bookingId: bookingId,
-      rating: rating,
+      staffId: staffId,
+      shopRating: shopRating,
+      staffRating: staffRating,
       comment: comment,
       isAnonymous: isAnonymous,
       images: images,
@@ -31,8 +35,9 @@ class ReviewRepositoryImpl implements ReviewRepository {
     int page = 1,
     int limit = 10,
     String sort = 'newest',
+    String? staffId,
   }) async {
-    return _remoteDataSource.getPublicReviews(shopId, page: page, limit: limit, sort: sort);
+    return _remoteDataSource.getPublicReviews(shopId, page: page, limit: limit, sort: sort, staffId: staffId);
   }
 
   @override
@@ -48,14 +53,16 @@ class ReviewRepositoryImpl implements ReviewRepository {
   @override
   Future<ReviewModel> updateReview({
     required String reviewId,
-    required int rating,
+    required int shopRating,
+    int? staffRating,
     String comment = '',
     bool isAnonymous = false,
     List<Map<String, dynamic>> images = const [],
   }) async {
     return _remoteDataSource.updateReview(
       reviewId: reviewId,
-      rating: rating,
+      shopRating: shopRating,
+      staffRating: staffRating,
       comment: comment,
       isAnonymous: isAnonymous,
       images: images,
@@ -63,8 +70,18 @@ class ReviewRepositoryImpl implements ReviewRepository {
   }
 
   @override
-  Future<void> reportReview(String reviewId, String reason) async {
-    return _remoteDataSource.reportReview(reviewId, reason);
+  Future<void> reportReview(String reviewId, String reason, {String? customReason}) async {
+    return _remoteDataSource.reportReview(reviewId, reason, customReason: customReason);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getStaffProfile(String staffId) async {
+    return _remoteDataSource.getStaffProfile(staffId);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getStaffReviews(String staffId, {int page = 1, int limit = 10}) async {
+    return _remoteDataSource.getStaffReviews(staffId, page: page, limit: limit);
   }
 
   @override

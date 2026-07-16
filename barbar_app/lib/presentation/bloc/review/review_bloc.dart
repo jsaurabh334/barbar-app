@@ -21,7 +21,9 @@ class ReviewBloc extends Bloc<ReviewEvent, ReviewState> {
     try {
       final review = await _reviewRepository.createReview(
         bookingId: event.bookingId,
-        rating: event.rating,
+        staffId: event.staffId,
+        shopRating: event.shopRating,
+        staffRating: event.staffRating,
         comment: event.comment,
         isAnonymous: event.isAnonymous,
         images: event.images,
@@ -35,7 +37,8 @@ class ReviewBloc extends Bloc<ReviewEvent, ReviewState> {
   Future<void> _onFetchPublicReviews(FetchPublicReviews event, Emitter<ReviewState> emit) async {
     emit(ReviewLoading());
     try {
-      final result = await _reviewRepository.getPublicReviews(event.shopId, page: event.page, limit: event.limit, sort: event.sort);
+      final result = await _reviewRepository.getPublicReviews(event.shopId,
+          page: event.page, limit: event.limit, sort: event.sort, staffId: event.staffId);
       final data = result['data'] as Map<String, dynamic>;
       final rawReviews = data['reviews'] as List;
       final summaryJson = data['summary'] as Map<String, dynamic>;
@@ -73,7 +76,8 @@ class ReviewBloc extends Bloc<ReviewEvent, ReviewState> {
     try {
       final review = await _reviewRepository.updateReview(
         reviewId: event.reviewId,
-        rating: event.rating,
+        shopRating: event.shopRating,
+        staffRating: event.staffRating,
         comment: event.comment,
         isAnonymous: event.isAnonymous,
         images: event.images,

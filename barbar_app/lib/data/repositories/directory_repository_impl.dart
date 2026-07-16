@@ -2,6 +2,7 @@ import '../../domain/repositories/directory_repository.dart';
 import '../datasources/remote/directory_remote_datasource.dart';
 import '../models/barber_model.dart';
 import '../models/category_model.dart';
+import '../models/vendor_model.dart';
 
 class DirectoryRepositoryImpl implements DirectoryRepository {
   final DirectoryRemoteDataSource _remoteDataSource;
@@ -38,5 +39,15 @@ class DirectoryRepositoryImpl implements DirectoryRepository {
   @override
   Future<List<Map<String, dynamic>>> getBarberStaff(String barberId) async {
     return await _remoteDataSource.getBarberStaff(barberId);
+  }
+
+  @override
+  Future<VendorModel> getVendorDetail(String vendorId) async {
+    return await _remoteDataSource.getVendorDetail(vendorId);
+  }
+
+  @override
+  Future<List<CategoryModel>> getProductCategories() async {
+    return await _remoteDataSource.getProductCategories();
   }
 }

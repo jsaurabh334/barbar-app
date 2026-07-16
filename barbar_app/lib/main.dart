@@ -15,6 +15,7 @@ import 'data/datasources/remote/wallet_remote_datasource.dart';
 import 'data/datasources/remote/address_remote_datasource.dart';
 import 'data/datasources/remote/review_remote_datasource.dart';
 import 'data/datasources/remote/notification_remote_datasource.dart';
+import 'data/datasources/remote/vendor_remote_datasource.dart';
 import 'data/repositories/auth_repository_impl.dart';
 import 'data/repositories/barber_repository_impl.dart';
 import 'data/repositories/admin_repository_impl.dart';
@@ -32,6 +33,7 @@ import 'domain/repositories/directory_repository.dart';
 import 'data/repositories/directory_repository_impl.dart';
 import 'data/repositories/marketplace_repository_impl.dart';
 import 'data/repositories/wallet_repository_impl.dart';
+import 'data/repositories/vendor_repository_impl.dart';
 import 'domain/repositories/auth_repository.dart';
 import 'presentation/bloc/auth/auth_bloc.dart';
 import 'presentation/bloc/auth/auth_event.dart';
@@ -56,7 +58,10 @@ import 'presentation/screens/auth_screen.dart';
 import 'presentation/screens/barber_shell.dart';
 import 'presentation/screens/customer_dashboard_shell.dart';
 import 'presentation/screens/delivery_dashboard_screen.dart';
-import 'presentation/screens/vendor_dashboard_screen.dart';
+import 'domain/repositories/vendor_repository.dart';
+import 'presentation/screens/vendor/vendor_shell.dart';
+import 'presentation/bloc/vendor/vendor_bloc.dart';
+import 'presentation/bloc/vendor/vendor_event.dart';
 
 import 'core/navigation/navigation_service.dart';
 import 'core/notification/fcm_service.dart';
@@ -88,6 +93,7 @@ void main() async {
   final reviewRemoteDataSource = ReviewRemoteDataSource(apiClient);
   final notificationRemoteDataSource = NotificationRemoteDataSource(apiClient);
   final barberRemoteDataSource = BarberRemoteDataSource(apiClient);
+  final vendorRemoteDataSource = VendorRemoteDataSource(apiClient);
 
   // Repositories
   final authRepository = AuthRepositoryImpl(authRemoteDataSource, localDataSource);
@@ -100,6 +106,7 @@ void main() async {
   final adminRepository = AdminRepositoryImpl(adminRemoteDataSource);
   final reviewRepository = ReviewRepositoryImpl(reviewRemoteDataSource);
   final notificationRepository = NotificationRepositoryImpl(notificationRemoteDataSource);
+  final vendorRepository = VendorRepositoryImpl(vendorRemoteDataSource);
 
   await FCMService.initialize(notificationRepository);
 
@@ -115,6 +122,7 @@ void main() async {
       adminRepository: adminRepository,
       reviewRepository: reviewRepository,
       notificationRepository: notificationRepository,
+      vendorRepository: vendorRepository,
       webSocketClient: webSocketClient,
     ),
   );
@@ -131,6 +139,7 @@ class MyApp extends StatelessWidget {
   final AdminRepositoryImpl adminRepository;
   final ReviewRepository reviewRepository;
   final NotificationRepository notificationRepository;
+  final VendorRepositoryImpl vendorRepository;
   final WebSocketClient webSocketClient;
 
   const MyApp({
@@ -145,6 +154,7 @@ class MyApp extends StatelessWidget {
     required this.adminRepository,
     required this.reviewRepository,
     required this.notificationRepository,
+    required this.vendorRepository,
     required this.webSocketClient,
   });
 
@@ -175,6 +185,9 @@ class MyApp extends StatelessWidget {
         ),
         RepositoryProvider<NotificationRepository>(
           create: (context) => notificationRepository,
+        ),
+        RepositoryProvider<VendorRepository>(
+          create: (context) => vendorRepository,
         ),
       ],
       child: MultiBlocProvider(
@@ -229,6 +242,9 @@ class MyApp extends StatelessWidget {
               notificationRepository,
             )..add(const FetchNotifications(refresh: true)),
           ),
+          BlocProvider<VendorBloc>(
+            create: (context) => VendorBloc(vendorRepository),
+          ),
         ],
         child: MaterialApp(
           title: 'Barbar App',
@@ -250,7 +266,7 @@ class MyApp extends StatelessWidget {
                 if (role == 'barber') {
                   return BarberShell(webSocketClient: webSocketClient);
                 } else if (role == 'vendor') {
-                  return const VendorDashboardScreen();
+                  return const VendorShell();
                 } else if (role == 'delivery' || role == 'delivery_partner') {
                   return const DeliveryDashboardScreen();
                 } else if (role == 'admin' || role == 'super_admin') {

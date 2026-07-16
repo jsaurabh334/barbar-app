@@ -23,6 +23,8 @@ class _ImageItem {
 class ReviewScreen extends StatefulWidget {
   final String bookingId;
   final String shopName;
+  final String? staffId;
+  final String? staffName;
   final ReviewModel? review;
   final bool isEdit;
 
@@ -30,6 +32,8 @@ class ReviewScreen extends StatefulWidget {
     super.key,
     required this.bookingId,
     required this.shopName,
+    this.staffId,
+    this.staffName,
     this.review,
   }) : isEdit = review != null;
 
@@ -38,7 +42,8 @@ class ReviewScreen extends StatefulWidget {
 }
 
 class _ReviewScreenState extends State<ReviewScreen> {
-  late int _rating;
+  late int _shopRating;
+  late int? _staffRating;
   late TextEditingController _commentController;
   late bool _isAnonymous;
   final List<_ImageItem> _images = [];
@@ -48,7 +53,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
   @override
   void initState() {
     super.initState();
-    _rating = widget.review?.rating ?? 0;
+    _shopRating = widget.review?.shopRating ?? 0;
+    _staffRating = widget.review?.staffRating;
     _commentController = TextEditingController(text: widget.review?.comment ?? '');
     _isAnonymous = widget.review?.isAnonymous ?? false;
     if (widget.review != null) {
@@ -119,7 +125,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
   }
 
   Future<void> _submit() async {
-    if (_rating == 0) return;
+    if (_shopRating == 0) return;
     await _uploadImages();
     if (!mounted) return;
     final imageUrls = _images.where((i) => i.url != null).map((i) => {'url': i.url!}).toList();
@@ -127,7 +133,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
       context.read<ReviewBloc>().add(
         UpdateReview(
           reviewId: widget.review!.id,
-          rating: _rating,
+          shopRating: _shopRating,
+          staffRating: _staffRating,
           comment: _commentController.text.trim(),
           isAnonymous: _isAnonymous,
           images: imageUrls,
@@ -137,7 +144,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
       context.read<ReviewBloc>().add(
         CreateReview(
           bookingId: widget.bookingId,
-          rating: _rating,
+          staffId: widget.staffId,
+          shopRating: _shopRating,
+          staffRating: _staffRating,
           comment: _commentController.text.trim(),
           isAnonymous: _isAnonymous,
           images: imageUrls,
@@ -154,7 +163,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
         listener: (context, state) {
           if (state is ReviewCreated || state is ReviewUpdated) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(widget.isEdit ? 'Review updated!' : 'Review submitted! Awaiting moderation.')),
+              SnackBar(content: Text(widget.isEdit ? 'Review updated!' : 'Review submitted successfully!')),
             );
             Navigator.pop(context, true);
           } else if (state is ReviewFailure) {
@@ -168,27 +177,46 @@ class _ReviewScreenState extends State<ReviewScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Rate Shop
               Text(widget.shopName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              const Text('How was your experience?', style: TextStyle(color: AppColors.textSecondary)),
-              const SizedBox(height: 24),
-
+              const SizedBox(height: 4),
+              const Text('Rate your experience', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+              const SizedBox(height: 12),
               Center(
                 child: RatingBar(
-                  rating: _rating,
-                  size: 42,
+                  rating: _shopRating,
+                  size: 40,
                   showLabel: true,
-                  onChanged: (val) => setState(() => _rating = val),
+                  onChanged: (val) => setState(() => _shopRating = val),
                 ),
               ),
-              const SizedBox(height: 32),
+
+              // Rate Staff (only if staffId is present)
+              if (widget.staffId != null) ...[
+                const SizedBox(height: 28),
+                const Divider(color: AppColors.border),
+                const SizedBox(height: 20),
+                Text('Rate ${widget.staffName ?? 'Staff'}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                const Text('How was the service?', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                const SizedBox(height: 12),
+                Center(
+                  child: RatingBar(
+                    rating: _staffRating ?? 0,
+                    size: 40,
+                    showLabel: true,
+                    onChanged: (val) => setState(() => _staffRating = val == 0 ? null : val),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 28),
 
               TextField(
                 controller: _commentController,
                 maxLines: 4,
                 maxLength: 1000,
                 decoration: InputDecoration(
-                  hintText: _rating >= 4 ? 'What went well?' : (_rating >= 3 ? 'How could we improve?' : 'What can we improve?'),
+                  hintText: _shopRating >= 4 ? 'What went well?' : (_shopRating >= 3 ? 'How could we improve?' : 'What can we improve?'),
                   hintStyle: const TextStyle(color: AppColors.textMuted),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   filled: true,
@@ -251,7 +279,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
               BlocBuilder<ReviewBloc, ReviewState>(
                 builder: (context, state) {
                   final isSubmitting = state is ReviewLoading;
-                  final canSubmit = _rating > 0;
+                  final canSubmit = _shopRating > 0;
                   return ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: canSubmit ? AppColors.primary : AppColors.textMuted,

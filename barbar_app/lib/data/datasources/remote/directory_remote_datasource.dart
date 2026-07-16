@@ -1,6 +1,7 @@
 import '../../../core/network/api_client.dart';
 import '../../models/barber_model.dart';
 import '../../models/category_model.dart';
+import '../../models/vendor_model.dart';
 
 class DirectoryRemoteDataSource {
   final ApiClient _apiClient;
@@ -50,5 +51,22 @@ class DirectoryRemoteDataSource {
       return List<Map<String, dynamic>>.from(response.data['data'] ?? []);
     }
     throw Exception(response.data['error'] ?? 'Failed to fetch staff');
+  }
+
+  Future<VendorModel> getVendorDetail(String vendorId) async {
+    final response = await _apiClient.dio.get('/public/vendors/$vendorId');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return VendorModel.fromJson(response.data['data']['vendor'] as Map<String, dynamic>);
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch vendor detail');
+  }
+
+  Future<List<CategoryModel>> getProductCategories() async {
+    final response = await _apiClient.dio.get('/public/categories');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      final data = (response.data['data'] as List<dynamic>?) ?? [];
+      return data.map((e) => CategoryModel.fromJson(e as Map<String, dynamic>)).toList();
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch categories');
   }
 }

@@ -153,7 +153,7 @@ class _VendorCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
-            Text(vendor.city, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            Text(vendor.city ?? '', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
             const SizedBox(height: 8),
             Row(
               children: [

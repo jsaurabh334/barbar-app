@@ -9,21 +9,25 @@ abstract class ReviewEvent extends Equatable {
 
 class CreateReview extends ReviewEvent {
   final String bookingId;
-  final int rating;
+  final String? staffId;
+  final int shopRating;
+  final int? staffRating;
   final String comment;
   final bool isAnonymous;
   final List<Map<String, dynamic>> images;
 
   const CreateReview({
     required this.bookingId,
-    required this.rating,
+    this.staffId,
+    required this.shopRating,
+    this.staffRating,
     this.comment = '',
     this.isAnonymous = false,
     this.images = const [],
   });
 
   @override
-  List<Object?> get props => [bookingId, rating, comment, isAnonymous, images];
+  List<Object?> get props => [bookingId, staffId, shopRating, staffRating, comment, isAnonymous, images];
 }
 
 class FetchPublicReviews extends ReviewEvent {
@@ -31,16 +35,18 @@ class FetchPublicReviews extends ReviewEvent {
   final int page;
   final int limit;
   final String sort;
+  final String? staffId;
 
   const FetchPublicReviews({
     required this.shopId,
     this.page = 1,
     this.limit = 10,
     this.sort = 'newest',
+    this.staffId,
   });
 
   @override
-  List<Object?> get props => [shopId, page, limit, sort];
+  List<Object?> get props => [shopId, page, limit, sort, staffId];
 }
 
 class FetchShopRatingSummary extends ReviewEvent {
@@ -74,19 +80,21 @@ class ReplyToReview extends ReviewEvent {
 
 class UpdateReview extends ReviewEvent {
   final String reviewId;
-  final int rating;
+  final int shopRating;
+  final int? staffRating;
   final String comment;
   final bool isAnonymous;
   final List<Map<String, dynamic>> images;
 
   const UpdateReview({
     required this.reviewId,
-    required this.rating,
+    required this.shopRating,
+    this.staffRating,
     this.comment = '',
     this.isAnonymous = false,
     this.images = const [],
   });
 
   @override
-  List<Object?> get props => [reviewId, rating, comment, isAnonymous, images];
+  List<Object?> get props => [reviewId, shopRating, staffRating, comment, isAnonymous, images];
 }

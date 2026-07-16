@@ -10,7 +10,9 @@ class ReviewRemoteDataSource {
 
   Future<ReviewModel> createReview({
     required String bookingId,
-    required int rating,
+    String? staffId,
+    required int shopRating,
+    int? staffRating,
     String comment = '',
     bool isAnonymous = false,
     List<Map<String, dynamic>> images = const [],
@@ -19,7 +21,9 @@ class ReviewRemoteDataSource {
       '/reviews',
       data: {
         'booking_id': bookingId,
-        'rating': rating,
+        if (staffId != null) 'staff_id': staffId,
+        'shop_rating': shopRating,
+        if (staffRating != null) 'staff_rating': staffRating,
         'comment': comment,
         'is_anonymous': isAnonymous,
         if (images.isNotEmpty) 'images': images,
@@ -36,10 +40,13 @@ class ReviewRemoteDataSource {
     int page = 1,
     int limit = 10,
     String sort = 'newest',
+    String? staffId,
   }) async {
+    final params = <String, dynamic>{'page': page, 'limit': limit, 'sort': sort};
+    if (staffId != null) params['staff_id'] = staffId;
     final response = await _apiClient.dio.get(
       '/public/barbers/$shopId/reviews',
-      queryParameters: {'page': page, 'limit': limit, 'sort': sort},
+      queryParameters: params,
     );
     if (response.statusCode == 200) {
       return response.data as Map<String, dynamic>;
@@ -82,7 +89,8 @@ class ReviewRemoteDataSource {
 
   Future<ReviewModel> updateReview({
     required String reviewId,
-    required int rating,
+    required int shopRating,
+    int? staffRating,
     String comment = '',
     bool isAnonymous = false,
     List<Map<String, dynamic>> images = const [],
@@ -90,7 +98,8 @@ class ReviewRemoteDataSource {
     final response = await _apiClient.dio.put(
       '/reviews/$reviewId',
       data: {
-        'rating': rating,
+        'shop_rating': shopRating,
+        if (staffRating != null) 'staff_rating': staffRating,
         'comment': comment,
         'is_anonymous': isAnonymous,
         if (images.isNotEmpty) 'images': images,
@@ -102,20 +111,42 @@ class ReviewRemoteDataSource {
     throw Exception(response.data['error'] ?? 'Failed to update review');
   }
 
-  Future<void> reportReview(String reviewId, String reason) async {
+  Future<void> reportReview(String reviewId, String reason, {String? customReason}) async {
     final response = await _apiClient.dio.post(
       '/reviews/$reviewId/report',
-      data: {'reason': reason},
+      data: {
+        'reason': reason,
+        if (customReason != null && customReason.isNotEmpty) 'custom_reason': customReason,
+      },
     );
     if (response.statusCode != 201) {
       throw Exception(response.data?['error'] ?? 'Failed to report review');
     }
   }
 
+  Future<Map<String, dynamic>> getStaffProfile(String staffId) async {
+    final response = await _apiClient.dio.get('/public/staff/$staffId');
+    if (response.statusCode == 200 && (response.data['status'] == 'success')) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception('Failed to fetch staff profile');
+  }
+
+  Future<Map<String, dynamic>> getStaffReviews(String staffId, {int page = 1, int limit = 10}) async {
+    final response = await _apiClient.dio.get(
+      '/public/staff/$staffId/reviews',
+      queryParameters: {'page': page, 'limit': limit},
+    );
+    if (response.statusCode == 200) {
+      return response.data as Map<String, dynamic>;
+    }
+    throw Exception('Failed to fetch staff reviews');
+  }
+
   Future<void> replyToReview(String reviewId, String reply) async {
     final response = await _apiClient.dio.post(
       '/barber/reviews/$reviewId/reply',
-      data: {'reply': reply},
+      data: {'message': reply},
     );
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw Exception(response.data?['error'] ?? 'Failed to reply to review');

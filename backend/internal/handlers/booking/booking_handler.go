@@ -535,6 +535,20 @@ func (h *BookingHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
+	// Prevent staff member from having multiple active (in progress) services
+	if toStatus == models.BookingStatusInProgress {
+		var activeCount int64
+		if booking.StaffID != nil {
+			h.db.Model(&models.Booking{}).Where("staff_id = ? AND status = ? AND id != ?", booking.StaffID, models.BookingStatusInProgress, booking.ID).Count(&activeCount)
+		} else {
+			h.db.Model(&models.Booking{}).Where("barber_id = ? AND staff_id IS NULL AND status = ? AND id != ?", booking.BarberID, models.BookingStatusInProgress, booking.ID).Count(&activeCount)
+		}
+		if activeCount > 0 {
+			utils.BadRequestResponse(c, "Cannot start service: staff member is already serving another client")
+			return
+		}
+	}
+
 	booking.Status = toStatus
 	booking.BarberNotes = req.Notes
 
@@ -1178,6 +1192,42 @@ func (h *BookingHandler) PayBooking(c *gin.Context) {
 		ChangedByRole:  claims.Role,
 		Reason:         "Payment " + req.Status + " via " + req.Method + " by " + claims.Role,
 	})
+
+	// Send payment notifications
+	if h.notifSvc != nil {
+		if req.Method == "cash" && req.Status == "pending" {
+			// Customer selected cash → notify the barber
+			var barberRecord models.Barber
+			if h.db.First(&barberRecord, booking.BarberID).Error == nil {
+				h.notifSvc.Dispatch(context.Background(), notifService.NotificationEvent{
+					Type:       models.NotifPaymentSuccess,
+					ReceiverID: barberRecord.UserID,
+					Role:       notifService.RoleBarber,
+					Data: map[string]interface{}{
+						"booking_id": booking.ID.String(),
+						"method":     "cash",
+						"status":     "pending",
+						"amount":     booking.FinalPrice,
+						"message":    "Customer opted for cash payment",
+					},
+				})
+			}
+		}
+		if req.Status == "paid" {
+			// Barber confirmed cash received → notify the customer
+			h.notifSvc.Dispatch(context.Background(), notifService.NotificationEvent{
+				Type:       models.NotifPaymentSuccess,
+				ReceiverID: booking.CustomerID,
+				Role:       notifService.RoleCustomer,
+				Data: map[string]interface{}{
+					"booking_id": booking.ID.String(),
+					"method":     req.Method,
+					"status":     "paid",
+					"amount":     booking.FinalPrice,
+				},
+			})
+		}
+	}
 
 	utils.SuccessResponse(c, booking)
 }

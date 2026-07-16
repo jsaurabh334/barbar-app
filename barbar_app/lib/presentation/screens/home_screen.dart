@@ -162,10 +162,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final authState = context.watch<AuthBloc>().state;
     String userName = 'Guest';
     String userRole = 'customer';
+    String? userAvatar;
 
     if (authState is AuthAuthenticated) {
       userName = authState.user.fullName;
       userRole = authState.user.role;
+      userAvatar = authState.user.fullAvatarUrl;
     }
 
     return Scaffold(
@@ -200,9 +202,12 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             UserAccountsDrawerHeader(
               decoration: const BoxDecoration(color: AppColors.surface),
-              currentAccountPicture: const CircleAvatar(
+              currentAccountPicture: CircleAvatar(
                 backgroundColor: AppColors.primary,
-                child: Icon(LucideIcons.user, color: Colors.black, size: 36),
+                backgroundImage: userAvatar != null ? NetworkImage(userAvatar) : null,
+                child: userAvatar == null
+                    ? const Icon(LucideIcons.user, color: Colors.black, size: 36)
+                    : null,
               ),
               accountName: Text(
                 userName,
@@ -612,9 +617,18 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       },
       builder: (context, state) {
-        if (_activeBooking == null) return const SizedBox.shrink();
+        BookingModel? currentActive = _activeBooking;
+        
+        if (state is BookingsLoaded) {
+          currentActive = state.bookings.cast<BookingModel?>().firstWhere(
+            (b) => b!.status == 'confirmed' || b!.status == 'in_progress',
+            orElse: () => null,
+          );
+        }
 
-        final booking = _activeBooking!;
+        if (currentActive == null) return const SizedBox.shrink();
+
+        final booking = currentActive;
         final ahead = booking.queuePosition > 1 ? booking.queuePosition - 1 : 0;
 
         return GestureDetector(

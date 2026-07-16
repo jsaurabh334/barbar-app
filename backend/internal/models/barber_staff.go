@@ -20,8 +20,9 @@ type BarberStaff struct {
 	Phone    string     `gorm:"size:20" json:"phone,omitempty"`
 	Role     StaffRole  `gorm:"size:50;default:staff" json:"role"`
 	IsActive bool       `gorm:"default:true;index" json:"is_active"`
-	Rating   float64    `gorm:"default:0" json:"rating"`
-	ReviewCount int     `gorm:"default:0" json:"review_count"`
+	Rating          float64 `gorm:"default:0" json:"rating"`
+	ReviewCount     int     `gorm:"default:0" json:"review_count"`
+	RatingDistribution JSONB `gorm:"type:jsonb;default:'{}'" json:"rating_distribution,omitempty"`
 
 	// Profile details
 	Bio             string `gorm:"size:1000" json:"bio,omitempty"`

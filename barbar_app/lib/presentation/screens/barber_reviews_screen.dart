@@ -118,12 +118,12 @@ class _BarberReviewsScreenState extends State<BarberReviewsScreen> {
                           Row(
                             children: [
                               ...List.generate(5, (i) => Icon(
-                                i < review.rating ? Icons.star : Icons.star_border,
+                                i < (review.shopRating ?? 0) ? Icons.star : Icons.star_border,
                                 color: Colors.amber,
                                 size: 16,
                               )),
                               const SizedBox(width: 8),
-                              Text(review.rating.toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                              Text((review.shopRating ?? 0).toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
                             ],
                           ),
                           const SizedBox(height: 8),

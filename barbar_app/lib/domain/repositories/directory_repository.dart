@@ -1,5 +1,6 @@
 import '../../data/models/barber_model.dart';
 import '../../data/models/category_model.dart';
+import '../../data/models/vendor_model.dart';
 
 abstract class DirectoryRepository {
   Future<List<BarberModel>> getNearbyBarbers({
@@ -15,4 +16,8 @@ abstract class DirectoryRepository {
   Future<List<CategoryModel>> getCategories();
 
   Future<List<Map<String, dynamic>>> getBarberStaff(String barberId);
+
+  Future<VendorModel> getVendorDetail(String vendorId);
+
+  Future<List<CategoryModel>> getProductCategories();
 }

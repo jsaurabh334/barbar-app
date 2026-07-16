@@ -143,4 +143,24 @@ class AdminRemoteDataSource {
       if (reason.isNotEmpty) 'reason': reason,
     });
   }
+
+  Future<void> deleteReview(String reviewId) async {
+    await apiClient.dio.delete('/admin/reviews/$reviewId');
+  }
+
+  Future<Map<String, dynamic>> getReviewAnalytics() async {
+    final response = await apiClient.dio.get('/admin/reviews/analytics');
+    return response.data['data'] as Map<String, dynamic>? ?? {};
+  }
+
+  Future<Map<String, dynamic>> getAllReports({int page = 1, int limit = 20, String? status}) async {
+    final queryParams = <String, dynamic>{'page': page, 'limit': limit};
+    if (status != null) queryParams['status'] = status;
+    final response = await apiClient.dio.get('/admin/reports', queryParameters: queryParams);
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<void> resolveReport(String reportId, String status) async {
+    await apiClient.dio.put('/admin/reports/$reportId/resolve', data: {'status': status});
+  }
 }

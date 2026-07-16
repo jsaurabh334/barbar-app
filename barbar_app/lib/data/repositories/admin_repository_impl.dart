@@ -201,4 +201,24 @@ class AdminRepositoryImpl implements AdminRepository {
   Future<void> moderateReview(String reviewId, String status, {String reason = ''}) async {
     await remoteDataSource.moderateReview(reviewId, status, reason: reason);
   }
+
+  @override
+  Future<void> deleteReview(String reviewId) async {
+    await remoteDataSource.deleteReview(reviewId);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getReviewAnalytics() async {
+    return remoteDataSource.getReviewAnalytics();
+  }
+
+  @override
+  Future<Map<String, dynamic>> getAllReports({int page = 1, int limit = 20, String? status}) async {
+    return remoteDataSource.getAllReports(page: page, limit: limit, status: status);
+  }
+
+  @override
+  Future<void> resolveReport(String reportId, String status) async {
+    await remoteDataSource.resolveReport(reportId, status);
+  }
 }

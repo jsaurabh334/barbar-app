@@ -10,6 +10,7 @@ import '../bloc/booking/booking_state.dart';
 import '../widgets/glass_card.dart';
 import 'payment_screen.dart';
 import 'invoice_screen.dart';
+import 'review_screen.dart';
 
 class QueueTrackerScreen extends StatefulWidget {
   final WebSocketClient webSocketClient;
@@ -54,6 +55,11 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
             currentlyServing: currentlyServing,
           ),
         );
+      } else if (event['type'] == 'notification') {
+        final payload = event['payload'] as Map<String, dynamic>;
+        if (payload['type'] == 'payment_success' || payload['type'] == 'booking_status_updated') {
+          context.read<BookingBloc>().add(FetchAllBookings());
+        }
       }
     });
 
@@ -171,21 +177,45 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
                 const SizedBox(height: 24),
 
                 // Payment Action buttons
-                if (status == 'completed' && _activeBooking!.paymentStatus != 'success')
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => PaymentScreen(booking: _activeBooking!),
-                        ),
-                      );
-                    },
-                    icon: const Icon(LucideIcons.creditCard),
-                    label: const Text('PROCEED TO PAYMENT'),
-                  )
-                else if (_activeBooking!.paymentStatus == 'success')
+                if (status == 'completed' && _activeBooking!.paymentStatus != 'success' && _activeBooking!.paymentStatus != 'paid') ...[
+                  // Cash pending: show waiting message
+                  if (_activeBooking!.paymentMethod == 'cash' && _activeBooking!.paymentStatus == 'pending')
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.info.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.info.withValues(alpha: 0.3)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(LucideIcons.clock, color: AppColors.info, size: 20),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Cash payment selected. Please pay at the counter — barber will confirm.',
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => PaymentScreen(booking: _activeBooking!),
+                          ),
+                        );
+                      },
+                      icon: const Icon(LucideIcons.creditCard),
+                      label: const Text('PROCEED TO PAYMENT'),
+                    ),
+                ]
+                else if (_activeBooking!.paymentStatus == 'success' || _activeBooking!.paymentStatus == 'paid') ...[
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
                     onPressed: () {
@@ -199,6 +229,37 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
                     icon: const Icon(LucideIcons.fileText),
                     label: const Text('VIEW INVOICE / RECEIPT'),
                   ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    icon: const Icon(LucideIcons.star, size: 16),
+                    label: const Text('WRITE A REVIEW'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: () {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => ClipRRect(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                          child: SizedBox(
+                            height: MediaQuery.of(context).size.height * 0.9,
+                            child: ReviewScreen(
+                              bookingId: _activeBooking!.id,
+                              shopName: _activeBooking!.shopName,
+                              staffId: _activeBooking!.staffId,
+                              staffName: _activeBooking!.staff?['name'] as String?,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
 
                 const SizedBox(height: 16),
 
@@ -228,7 +289,7 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
     if (status == 'in_progress') activeIndex = 2;
     if (status == 'completed') {
       activeIndex = 3;
-      if (paymentStatus == 'success') {
+      if (paymentStatus == 'success' || paymentStatus == 'paid') {
         activeIndex = 4;
       }
     } else if (status == 'cancelled') {
