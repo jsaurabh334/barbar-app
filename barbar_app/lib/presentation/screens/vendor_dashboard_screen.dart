@@ -10,6 +10,7 @@ import '../bloc/marketplace/marketplace_state.dart';
 import '../bloc/wallet/wallet_bloc.dart';
 import '../bloc/wallet/wallet_event.dart';
 import '../bloc/wallet/wallet_state.dart';
+import 'barber_notifications_screen.dart';
 
 class VendorDashboardScreen extends StatefulWidget {
   const VendorDashboardScreen({super.key});
@@ -42,6 +43,15 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
       appBar: AppBar(
         title: const Text('VENDOR CONSOLE'),
         actions: [
+          IconButton(
+            icon: const Icon(LucideIcons.bell),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const BarberNotificationsScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(LucideIcons.logOut),
             onPressed: () => context.read<AuthBloc>().add(LogoutRequested()),

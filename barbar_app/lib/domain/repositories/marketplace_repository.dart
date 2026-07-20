@@ -7,7 +7,10 @@ abstract class MarketplaceRepository {
     required String vendorId,
     required String shippingAddressId,
     String? couponCode,
+    required List<Map<String, dynamic>> items,
+    required String paymentMethod,
   });
   Future<List<OrderModel>> getOrders();
   Future<void> updateOrderStatus(String orderId, String status);
+  Future<Map<String, dynamic>> getDriverLocation(String orderId);
 }

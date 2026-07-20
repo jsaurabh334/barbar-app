@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:barbar_app/domain/repositories/barber_repository.dart';
 import 'package:barbar_app/core/network/websocket_client.dart';
-import 'package:barbar_app/presentation/bloc/barber_profile/barber_profile_bloc.dart';
 import 'package:barbar_app/presentation/screens/barber_dashboard_shell.dart';
-import 'package:barbar_app/presentation/screens/barber_profile_screen.dart';
 import 'package:barbar_app/presentation/screens/barber/shop_setup_screen.dart';
 import 'package:barbar_app/core/theme/app_theme.dart';
 
@@ -20,7 +18,7 @@ class BarberShell extends StatefulWidget {
 class _BarberShellState extends State<BarberShell> {
   bool _checking = true;
   bool _profileExists = false;
-  bool _profileCompleted = false;
+
 
   @override
   void initState() {
@@ -31,11 +29,10 @@ class _BarberShellState extends State<BarberShell> {
   Future<void> _checkProfile() async {
     final barberRepo = context.read<BarberRepository>();
     try {
-      final result = await barberRepo.getProfile();
-      final completed = result['profile_completed'] as bool? ?? false;
-      if (mounted) setState(() { _profileExists = true; _profileCompleted = completed; _checking = false; });
+      await barberRepo.getProfile();
+      if (mounted) setState(() { _profileExists = true; _checking = false; });
     } catch (e) {
-      if (mounted) setState(() { _profileExists = false; _profileCompleted = false; _checking = false; });
+      if (mounted) setState(() { _profileExists = false; _checking = false; });
     }
   }
 

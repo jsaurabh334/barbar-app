@@ -79,7 +79,26 @@ class WebSocketClient {
     _setConnectionState(false);
   }
 
+  void subscribeOrder(String orderId) {
+    sendRawEvent('subscribe_order', orderId);
+  }
+
+  Stream<Map<String, dynamic>> eventsByType(String type) {
+    return _eventController.stream.where((event) {
+      final eventType = event['type'] as String?;
+      if (eventType == type) return true;
+      final payloadEvent = event['payload'] is Map
+          ? (event['payload'] as Map)['event'] as String?
+          : null;
+      return payloadEvent == type;
+    });
+  }
+
   void sendEvent(String type, Map<String, dynamic> payload) {
+    sendRawEvent(type, payload);
+  }
+
+  void sendRawEvent(String type, dynamic payload) {
     if (_channel != null && _isConnected) {
       final message = jsonEncode({
         'type': type,

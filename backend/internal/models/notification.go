@@ -20,8 +20,14 @@ const (
 	NotifBarberStarted         NotificationType = "barber_started"
 	NotifBarberCompleted       NotificationType = "barber_completed"
 	NotifOrderPlaced           NotificationType = "order_placed"
+	NotifOrderAccepted         NotificationType = "order_accepted"
 	NotifOrderConfirmed        NotificationType = "order_confirmed"
+	NotifOrderPacked           NotificationType = "order_packed"
+	NotifOrderReadyForPickup   NotificationType = "order_ready_for_pickup"
+	NotifOrderAssigned         NotificationType = "order_assigned"
 	NotifOrderShipped          NotificationType = "order_shipped"
+	NotifOrderPickedUp         NotificationType = "order_picked_up"
+	NotifOrderOutForDelivery   NotificationType = "order_out_for_delivery"
 	NotifOrderDelivered        NotificationType = "order_delivered"
 	NotifOrderCancelled        NotificationType = "order_cancelled"
 	NotifPaymentSuccess        NotificationType = "payment_success"
@@ -43,6 +49,9 @@ const (
 	NotifReviewReceived        NotificationType = "review_received"
 	NotifReviewModerated       NotificationType = "review_moderated"
 	NotifReviewReply           NotificationType = "review_reply"
+	NotifOrderDriverAssigned   NotificationType = "order_driver_assigned"
+	NotifOrderDriverAccepted   NotificationType = "order_driver_accepted"
+	NotifOrderAssignmentExpired NotificationType = "order_assignment_expired"
 )
 
 type DeliveryStatus string

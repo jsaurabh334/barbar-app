@@ -456,17 +456,17 @@ func getProductData() []seedProduct {
 }
 
 type seedVendor struct {
-	StoreName string
-	StoreSlug string
-	Email     string
-	Phone     string
-	Address   string
-	City      string
-	State     string
-	Pincode   string
-	Lat       float64
-	Lng       float64
-	Rating    float64
+	BusinessName string
+	BusinessSlug string
+	Email        string
+	Phone        string
+	Address      string
+	City         string
+	State        string
+	Pincode      string
+	Lat          float64
+	Lng          float64
+	Rating       float64
 }
 
 func getVendorData() []seedVendor {
@@ -513,6 +513,28 @@ func seedAllData(db *gorm.DB) {
 	db.Create(&models.Wallet{UserID: &customer.ID, Balance: 1000})
 	log.Println("  Created customer: customer@demo.com / Demo@123")
 
+	// 1.5 Demo Delivery
+	var deliveryUser models.User
+	if err := db.Where("phone = ?", "+916666666666").First(&deliveryUser).Error; err != nil {
+		deliveryUser = models.User{
+			FullName:     "Demo Delivery",
+			Email:        "delivery@demo.com",
+			Phone:        "+916666666666",
+			PasswordHash: string(hash),
+			Role:         models.RoleDelivery,
+			Status:       models.UserStatusActive,
+		}
+		db.Create(&deliveryUser)
+		db.Create(&models.Wallet{UserID: &deliveryUser.ID, Balance: 0})
+	} else {
+		db.Model(&deliveryUser).Updates(map[string]interface{}{
+			"full_name":     "Demo Delivery",
+			"role":          models.RoleDelivery,
+			"password_hash": string(hash),
+		})
+	}
+	log.Println("  Created delivery: delivery@demo.com / Demo@123")
+
 	// 2. Vendors
 	vendorData := getVendorData()
 	type vendorRecord struct {
@@ -523,7 +545,7 @@ func seedAllData(db *gorm.DB) {
 
 	for i, vd := range vendorData {
 		user := models.User{
-			FullName:     vd.StoreName + " Admin",
+			FullName:     vd.BusinessName + " Admin",
 			Email:        vd.Email,
 			Phone:        vd.Phone,
 			PasswordHash: string(hash),
@@ -534,26 +556,26 @@ func seedAllData(db *gorm.DB) {
 		db.Create(&models.Wallet{UserID: &user.ID, Balance: 0})
 
 		vendor := models.Vendor{
-			UserID:           user.ID,
-			StoreName:        vd.StoreName,
-			StoreSlug:        vd.StoreSlug,
-			StoreDescription: vd.StoreName + " - official store on Barbar App. Authentic products guaranteed.",
-			StoreEmail:       vd.Email,
-			StorePhone:       vd.Phone,
-			Address:          vd.Address,
-			City:             vd.City,
-			State:            vd.State,
-			Pincode:          vd.Pincode,
-			Latitude:         vd.Lat,
-			Longitude:        vd.Lng,
-			Status:           models.VendorStatusApproved,
-			IsVerified:       true,
-			IsActive:         true,
-			Rating:           vd.Rating,
+			UserID:              user.ID,
+			BusinessName:        vd.BusinessName,
+			BusinessSlug:        vd.BusinessSlug,
+			BusinessDescription: vd.BusinessName + " - official seller on Barbar App. Authentic products guaranteed.",
+			BusinessEmail:       vd.Email,
+			BusinessPhone:       vd.Phone,
+			Address:             vd.Address,
+			City:                vd.City,
+			State:               vd.State,
+			Pincode:             vd.Pincode,
+			Latitude:            vd.Lat,
+			Longitude:           vd.Lng,
+			Status:              models.VendorStatusApproved,
+			IsVerified:          true,
+			IsActive:            true,
+			Rating:              vd.Rating,
 		}
 		db.Create(&vendor)
 		vendorRecords[i] = vendorRecord{User: user, Vend: vendor}
-		log.Printf("  Created vendor: %s (%s / Demo@123)", vd.StoreName, vd.Email)
+		log.Printf("  Created vendor: %s (%s / Demo@123)", vd.BusinessName, vd.Email)
 	}
 
 	// 3. Barber Shops
@@ -739,7 +761,7 @@ func seedAllData(db *gorm.DB) {
 			Slug:             strings.ToLower(strings.ReplaceAll(p.Name, " ", "-")),
 			Description:      p.Description,
 			ShortDescription: p.Description,
-			Brand:            p.Brand,
+			BrandName:        p.Brand,
 			BasePrice:        p.BasePrice,
 			DiscountPrice:    p.DiscountPrice,
 			AvailableStock:   int(p.AvailableStock),

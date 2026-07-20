@@ -333,7 +333,7 @@ func (h *AdminHandler) ListVendors(c *gin.Context) {
 		query = query.Where("kyc_status = ?", kyc)
 	}
 	if search := c.Query("search"); search != "" {
-		query = query.Where("store_name ILIKE ?", "%"+search+"%")
+		query = query.Where("business_name ILIKE ?", "%"+search+"%")
 	}
 
 	query.Count(&total)

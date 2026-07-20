@@ -15,7 +15,8 @@ import 'data/datasources/remote/wallet_remote_datasource.dart';
 import 'data/datasources/remote/address_remote_datasource.dart';
 import 'data/datasources/remote/review_remote_datasource.dart';
 import 'data/datasources/remote/notification_remote_datasource.dart';
-import 'data/datasources/remote/vendor_remote_datasource.dart';
+import 'package:barbar_app/data/datasources/remote/vendor_remote_datasource.dart';
+import 'package:barbar_app/data/datasources/remote/delivery_remote_datasource.dart';
 import 'data/repositories/auth_repository_impl.dart';
 import 'data/repositories/barber_repository_impl.dart';
 import 'data/repositories/admin_repository_impl.dart';
@@ -34,6 +35,8 @@ import 'data/repositories/directory_repository_impl.dart';
 import 'data/repositories/marketplace_repository_impl.dart';
 import 'data/repositories/wallet_repository_impl.dart';
 import 'data/repositories/vendor_repository_impl.dart';
+import 'data/repositories/delivery_repository_impl.dart';
+import 'domain/repositories/delivery_repository.dart';
 import 'domain/repositories/auth_repository.dart';
 import 'presentation/bloc/auth/auth_bloc.dart';
 import 'presentation/bloc/auth/auth_event.dart';
@@ -57,11 +60,10 @@ import 'presentation/screens/admin_console_screen.dart';
 import 'presentation/screens/auth_screen.dart';
 import 'presentation/screens/barber_shell.dart';
 import 'presentation/screens/customer_dashboard_shell.dart';
-import 'presentation/screens/delivery_dashboard_screen.dart';
+import 'presentation/screens/delivery/delivery_shell.dart';
 import 'domain/repositories/vendor_repository.dart';
 import 'presentation/screens/vendor/vendor_shell.dart';
 import 'presentation/bloc/vendor/vendor_bloc.dart';
-import 'presentation/bloc/vendor/vendor_event.dart';
 
 import 'core/navigation/navigation_service.dart';
 import 'core/notification/fcm_service.dart';
@@ -94,6 +96,7 @@ void main() async {
   final notificationRemoteDataSource = NotificationRemoteDataSource(apiClient);
   final barberRemoteDataSource = BarberRemoteDataSource(apiClient);
   final vendorRemoteDataSource = VendorRemoteDataSource(apiClient);
+  final deliveryRemoteDataSource = DeliveryRemoteDataSource(apiClient);
 
   // Repositories
   final authRepository = AuthRepositoryImpl(authRemoteDataSource, localDataSource);
@@ -107,6 +110,7 @@ void main() async {
   final reviewRepository = ReviewRepositoryImpl(reviewRemoteDataSource);
   final notificationRepository = NotificationRepositoryImpl(notificationRemoteDataSource);
   final vendorRepository = VendorRepositoryImpl(vendorRemoteDataSource);
+  final deliveryRepository = DeliveryRepositoryImpl(deliveryRemoteDataSource);
 
   await FCMService.initialize(notificationRepository);
 
@@ -123,6 +127,8 @@ void main() async {
       reviewRepository: reviewRepository,
       notificationRepository: notificationRepository,
       vendorRepository: vendorRepository,
+      vendorRemoteDataSource: vendorRemoteDataSource,
+      deliveryRepository: deliveryRepository,
       webSocketClient: webSocketClient,
     ),
   );
@@ -140,6 +146,8 @@ class MyApp extends StatelessWidget {
   final ReviewRepository reviewRepository;
   final NotificationRepository notificationRepository;
   final VendorRepositoryImpl vendorRepository;
+  final VendorRemoteDataSource vendorRemoteDataSource;
+  final DeliveryRepositoryImpl deliveryRepository;
   final WebSocketClient webSocketClient;
 
   const MyApp({
@@ -155,6 +163,8 @@ class MyApp extends StatelessWidget {
     required this.reviewRepository,
     required this.notificationRepository,
     required this.vendorRepository,
+    required this.vendorRemoteDataSource,
+    required this.deliveryRepository,
     required this.webSocketClient,
   });
 
@@ -188,6 +198,12 @@ class MyApp extends StatelessWidget {
         ),
         RepositoryProvider<VendorRepository>(
           create: (context) => vendorRepository,
+        ),
+        RepositoryProvider<VendorRemoteDataSource>(
+          create: (context) => vendorRemoteDataSource,
+        ),
+        RepositoryProvider<DeliveryRepository>(
+          create: (context) => deliveryRepository,
         ),
       ],
       child: MultiBlocProvider(
@@ -268,7 +284,7 @@ class MyApp extends StatelessWidget {
                 } else if (role == 'vendor') {
                   return const VendorShell();
                 } else if (role == 'delivery' || role == 'delivery_partner') {
-                  return const DeliveryDashboardScreen();
+                  return const DeliveryShell();
                 } else if (role == 'admin' || role == 'super_admin') {
                   return const AdminConsoleScreen();
                 } else {

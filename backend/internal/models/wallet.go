@@ -33,6 +33,7 @@ const (
 	TxnRefAdjustment  TxnReferenceType = "adjustment"
 	TxnRefPayout      TxnReferenceType = "payout"
 	TxnRefBonus       TxnReferenceType = "bonus"
+	TxnRefDeliveryEarning TxnReferenceType = "delivery_earning"
 	TxnRefCancellation TxnReferenceType = "cancellation"
 )
 
@@ -62,6 +63,7 @@ const (
 type WithdrawalRequest struct {
 	BaseModel
 	VendorID         uuid.UUID                `gorm:"type:uuid;index;not null" json:"vendor_id"`
+	DeliveryPartnerID *uuid.UUID               `gorm:"type:uuid;index" json:"delivery_partner_id,omitempty"`
 	Amount           float64                  `json:"amount"`
 	FeeAmount        float64                  `gorm:"default:0" json:"fee_amount"`
 	NetAmount        float64                  `json:"net_amount"`

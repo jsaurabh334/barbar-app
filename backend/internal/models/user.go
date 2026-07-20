@@ -12,7 +12,8 @@ const (
 	RoleBarber   UserRole = "barber"
 	RoleVendor   UserRole = "vendor"
 	RoleAdmin    UserRole = "admin"
-	RoleSuperAdmin UserRole = "super_admin"
+	RoleSuperAdmin   UserRole = "super_admin"
+	RoleDelivery     UserRole = "delivery"
 )
 
 type UserStatus string

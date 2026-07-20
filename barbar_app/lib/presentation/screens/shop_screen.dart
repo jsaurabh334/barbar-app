@@ -12,6 +12,7 @@ import '../bloc/marketplace/marketplace_state.dart';
 import 'order_history_screen.dart';
 import 'select_address_screen.dart';
 import 'vendor_detail_screen.dart';
+import 'product_detail_screen.dart';
 
 class ShopScreen extends StatefulWidget {
   const ShopScreen({super.key});
@@ -55,7 +56,12 @@ class _ShopScreenState extends State<ShopScreen> {
           IconButton(
             icon: const Icon(LucideIcons.package),
             tooltip: 'Order History',
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderHistoryScreen())),
+            onPressed: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderHistoryScreen()));
+              if (context.mounted) {
+                context.read<MarketplaceBloc>().add(FetchProducts());
+              }
+            },
           ),
           _buildCartButton(),
         ],
@@ -179,7 +185,10 @@ class _ShopScreenState extends State<ShopScreen> {
 
   Widget _buildProductCard(ProductModel product, Map<String, int> cart) {
     final cartQty = cart[product.id] ?? 0;
-    
+    // Resolve primary image: prefer first image in list, fallback to imageUrl
+    final images = product.images ?? (product.imageUrl != null ? [product.imageUrl!] : <String>[]);
+    final primaryImage = product.imageUrl ?? (images.isNotEmpty ? images.first : null);
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.cardBg,
@@ -189,24 +198,70 @@ class _ShopScreenState extends State<ShopScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Banner image
+          // Primary image only (tap → detail modal with full gallery)
           Expanded(
-            child: ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
-              ),
-              child: CachedNetworkImage(
-                imageUrl: product.imageUrl ?? '',
-                fit: BoxFit.cover,
-                errorWidget: (context, _, __) => Container(
-                  color: AppColors.surface,
-                  child: const Icon(LucideIcons.image, color: AppColors.textSecondary),
+            child: GestureDetector(
+              onTap: () => _openProductDetail(product),
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Hero(
+                      tag: 'product_img_${product.id}',
+                      child: primaryImage != null
+                          ? CachedNetworkImage(
+                              imageUrl: primaryImage,
+                              fit: BoxFit.cover,
+                              errorWidget: (_, __, ___) => Container(
+                                color: AppColors.surface,
+                                child: const Icon(LucideIcons.image,
+                                    color: AppColors.textSecondary),
+                              ),
+                            )
+                          : Container(
+                              color: AppColors.surface,
+                              child: const Icon(LucideIcons.image,
+                                  color: AppColors.textSecondary),
+                            ),
+                    ),
+                    // Badge: show image count if >1
+                    if (images.length > 1)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(LucideIcons.image,
+                                  size: 10, color: Colors.white),
+                              const SizedBox(width: 3),
+                              Text('${images.length}',
+                                  style: const TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
           ),
-          
+
+
           // Details
           Padding(
             padding: const EdgeInsets.all(12.0),
@@ -303,6 +358,16 @@ class _ShopScreenState extends State<ShopScreen> {
         ],
       ),
     );
+  }
+
+  void _openProductDetail(ProductModel product) async {
+    final openCart = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => ProductDetailScreen(product: product)),
+    );
+    if (openCart == true && mounted) {
+      _showCartDrawer(context);
+    }
   }
 
   void _showCartDrawer(BuildContext context) {

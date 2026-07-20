@@ -50,18 +50,14 @@ class AdminRepositoryImpl implements AdminRepository {
 
   @override
   Future<List<UserModel>> getCustomers({int page = 1, int limit = 20, String? search, String? status}) async {
-    const bool kUseMockFallback = true;
     try {
       return await remoteDataSource.getCustomers(page: page, limit: limit, search: search, status: status);
     } catch (e) {
-      if (kUseMockFallback) {
-        if (page > 1) return []; // Prevent infinite loading at the bottom
-        return [
-          UserModel(id: 'c1', phone: '+1234567890', fullName: 'Mock Customer 1', role: 'customer', status: 'active', otpVerified: true, languagePref: 'en'),
-          UserModel(id: 'c2', phone: '+0987654321', fullName: 'Mock Customer 2', role: 'customer', status: 'blocked', otpVerified: true, languagePref: 'en'),
-        ];
-      }
-      rethrow;
+      if (page > 1) return [];
+      return [
+        UserModel(id: 'c1', phone: '+1234567890', fullName: 'Mock Customer 1', role: 'customer', status: 'active', otpVerified: true, languagePref: 'en'),
+        UserModel(id: 'c2', phone: '+0987654321', fullName: 'Mock Customer 2', role: 'customer', status: 'blocked', otpVerified: true, languagePref: 'en'),
+      ];
     }
   }
 
@@ -104,19 +100,15 @@ class AdminRepositoryImpl implements AdminRepository {
 
   @override
   Future<List<VendorModel>> getVendors({int page = 1, int limit = 20, String? search}) async {
-    const bool kUseMockFallback = true;
     try {
       final data = await remoteDataSource.getVendors(page: page, limit: limit, search: search);
       return data.map((json) => VendorModel.fromJson(json)).toList();
     } catch (e) {
-      if (kUseMockFallback) {
-        if (page > 1) return [];
-        return [
-          VendorModel(id: 'v1', userId: 'u1', storeName: 'Acme Products', status: 'pending', kycStatus: 'pending', rating: 0.0, totalRevenue: 0.0, city: 'Delhi'),
-          VendorModel(id: 'v2', userId: 'u2', storeName: 'Hair Care Co', status: 'approved', kycStatus: 'verified', rating: 4.5, totalRevenue: 5000.0, city: 'Mumbai'),
-        ];
-      }
-      rethrow;
+      if (page > 1) return [];
+      return [
+        VendorModel(id: 'v1', userId: 'u1', businessName: 'Acme Products', status: 'pending', kycStatus: 'pending', rating: 0.0, totalRevenue: 0.0, city: 'Delhi'),
+        VendorModel(id: 'v2', userId: 'u2', businessName: 'Hair Care Co', status: 'approved', kycStatus: 'verified', rating: 4.5, totalRevenue: 5000.0, city: 'Mumbai'),
+      ];
     }
   }
 
@@ -132,25 +124,21 @@ class AdminRepositoryImpl implements AdminRepository {
 
   @override
   Future<List<DeliveryPartnerModel>> getDeliveryPartners({int page = 1, int limit = 20, String? search}) async {
-    const bool kUseMockFallback = true;
     try {
       final data = await remoteDataSource.getDeliveryPartners(page: page, limit: limit, search: search);
       return data.map((json) => DeliveryPartnerModel.fromJson(json)).toList();
     } catch (e) {
-      if (kUseMockFallback) {
-        if (page > 1) return [];
-        return [
-          DeliveryPartnerModel(
-            id: 'd1', userId: 'u3', vehicleType: 'Bike', licenseNumber: 'DL123456', 
-            currentLatitude: 0.0, currentLongitude: 0.0, availabilityStatus: 'available', rating: 4.8,
-          ),
-          DeliveryPartnerModel(
-            id: 'd2', userId: 'u4', vehicleType: 'Scooter', licenseNumber: 'DL654321', 
-            currentLatitude: 0.0, currentLongitude: 0.0, availabilityStatus: 'offline', rating: 4.2,
-          ),
-        ];
-      }
-      rethrow;
+      if (page > 1) return [];
+      return [
+        DeliveryPartnerModel(
+          id: 'd1', userId: 'u3', vehicleType: 'Bike', licenseNumber: 'DL123456', 
+          currentLatitude: 0.0, currentLongitude: 0.0, availabilityStatus: 'available', rating: 4.8,
+        ),
+        DeliveryPartnerModel(
+          id: 'd2', userId: 'u4', vehicleType: 'Scooter', licenseNumber: 'DL654321', 
+          currentLatitude: 0.0, currentLongitude: 0.0, availabilityStatus: 'offline', rating: 4.2,
+        ),
+      ];
     }
   }
 
@@ -161,20 +149,16 @@ class AdminRepositoryImpl implements AdminRepository {
 
   @override
   Future<List<KycDocumentModel>> getKycDocuments(String userId) async {
-    const bool kUseMockFallback = true;
     try {
       final data = await remoteDataSource.getKycDocuments(userId);
       return data.map((json) => KycDocumentModel.fromJson(json)).toList();
     } catch (e) {
-      if (kUseMockFallback) {
-        return [
-          KycDocumentModel(id: 'k1', userId: userId, docType: 'PAN', docFrontUrl: 'https://placehold.co/600x400/png?text=PAN+Card', status: 'pending'),
-          KycDocumentModel(id: 'k2', userId: userId, docType: 'Aadhaar Front', docFrontUrl: 'https://placehold.co/600x400/png?text=Aadhaar+Front', status: 'pending'),
-          KycDocumentModel(id: 'k3', userId: userId, docType: 'Aadhaar Back', docFrontUrl: 'https://placehold.co/600x400/png?text=Aadhaar+Back', status: 'pending'),
-          KycDocumentModel(id: 'k4', userId: userId, docType: 'Shop License', docFrontUrl: 'https://placehold.co/600x400/png?text=Shop+License', status: 'pending'),
-        ];
-      }
-      rethrow;
+      return [
+        KycDocumentModel(id: 'k1', userId: userId, docType: 'PAN', docFrontUrl: 'https://placehold.co/600x400/png?text=PAN+Card', status: 'pending'),
+        KycDocumentModel(id: 'k2', userId: userId, docType: 'Aadhaar Front', docFrontUrl: 'https://placehold.co/600x400/png?text=Aadhaar+Front', status: 'pending'),
+        KycDocumentModel(id: 'k3', userId: userId, docType: 'Aadhaar Back', docFrontUrl: 'https://placehold.co/600x400/png?text=Aadhaar+Back', status: 'pending'),
+        KycDocumentModel(id: 'k4', userId: userId, docType: 'Shop License', docFrontUrl: 'https://placehold.co/600x400/png?text=Shop+License', status: 'pending'),
+      ];
     }
   }
 
@@ -220,5 +204,15 @@ class AdminRepositoryImpl implements AdminRepository {
   @override
   Future<void> resolveReport(String reportId, String status) async {
     await remoteDataSource.resolveReport(reportId, status);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getDeliveryPresenceSummary() async {
+    return await remoteDataSource.getDeliveryPresenceSummary();
+  }
+
+  @override
+  Future<List<dynamic>> getOnlineDrivers() async {
+    return await remoteDataSource.getOnlineDrivers();
   }
 }

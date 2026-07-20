@@ -9,6 +9,7 @@ import (
 	"github.com/barbar-app/backend/internal/auth"
 	"github.com/barbar-app/backend/internal/models"
 	"github.com/barbar-app/backend/internal/services/notification"
+	warehouseSvc "github.com/barbar-app/backend/internal/services/warehouse"
 	"github.com/barbar-app/backend/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -16,12 +17,17 @@ import (
 )
 
 type OrderHandler struct {
-	db         *gorm.DB
-	dispatcher notification.Dispatcher
+	db             *gorm.DB
+	dispatcher     notification.Dispatcher
+	warehouseSvc   *warehouseSvc.SelectionService
 }
 
 func NewOrderHandler(db *gorm.DB, dispatcher notification.Dispatcher) *OrderHandler {
-	return &OrderHandler{db: db, dispatcher: dispatcher}
+	return &OrderHandler{
+		db:           db,
+		dispatcher:   dispatcher,
+		warehouseSvc: warehouseSvc.NewSelectionService(db),
+	}
 }
 
 type PlaceOrderRequest struct {
@@ -189,9 +195,16 @@ func (h *OrderHandler) PlaceOrder(c *gin.Context) {
 	var orders []models.Order
 
 	for _, vi := range vendorMap {
+		warehouse, err := h.warehouseSvc.SelectWarehouse(vi.vendor.ID, nil)
+		var warehouseID *uuid.UUID
+		if err == nil && warehouse != nil {
+			warehouseID = &warehouse.ID
+		}
+
 		order := models.Order{
 			CustomerID:        customerID,
 			VendorID:          vi.vendor.ID,
+			WarehouseID:       warehouseID,
 			OrderNumber:       generateOrderNumber(),
 			Status:            models.OrderStatusPending,
 			PaymentMethod:     req.PaymentMethod,
@@ -445,6 +458,18 @@ func (h *OrderHandler) UpdateStatus(c *gin.Context) {
 	})
 
 	switch req.Status {
+	case "accepted":
+		h.dispatchOrderEvent(c.Request.Context(), order, models.NotifOrderAccepted)
+	case "packed":
+		h.dispatchOrderEvent(c.Request.Context(), order, models.NotifOrderPacked)
+	case "ready_for_pickup":
+		h.dispatchOrderEvent(c.Request.Context(), order, models.NotifOrderReadyForPickup)
+	case "assigned":
+		h.dispatchOrderEvent(c.Request.Context(), order, models.NotifOrderAssigned)
+	case "picked_up":
+		h.dispatchOrderEvent(c.Request.Context(), order, models.NotifOrderPickedUp)
+	case "out_for_delivery":
+		h.dispatchOrderEvent(c.Request.Context(), order, models.NotifOrderOutForDelivery)
 	case "confirmed":
 		h.dispatchOrderEvent(c.Request.Context(), order, models.NotifOrderConfirmed)
 	case "shipped":
@@ -646,7 +671,36 @@ func (h *OrderHandler) dispatchOrderEvent(ctx context.Context, order models.Orde
 				Data:       map[string]interface{}{"order_id": order.ID.String()},
 			})
 		}
-	case models.NotifOrderConfirmed, models.NotifOrderShipped, models.NotifOrderDelivered:
+	case models.NotifOrderAccepted, models.NotifOrderPacked, models.NotifOrderOutForDelivery, models.NotifOrderDelivered:
+		h.dispatcher.Dispatch(ctx, notification.NotificationEvent{
+			Type:       event,
+			ReceiverID: order.CustomerID,
+			Role:       notification.RoleCustomer,
+			Data:       map[string]interface{}{"order_id": order.ID.String()},
+		})
+	case models.NotifOrderReadyForPickup, models.NotifOrderPickedUp:
+		h.dispatcher.Dispatch(ctx, notification.NotificationEvent{
+			Type:       event,
+			ReceiverID: order.CustomerID,
+			Role:       notification.RoleCustomer,
+			Data:       map[string]interface{}{"order_id": order.ID.String()},
+		})
+	case models.NotifOrderAssigned:
+		h.dispatcher.Dispatch(ctx, notification.NotificationEvent{
+			Type:       event,
+			ReceiverID: order.CustomerID,
+			Role:       notification.RoleCustomer,
+			Data:       map[string]interface{}{"order_id": order.ID.String()},
+		})
+		if order.DeliveryPartnerID != nil {
+			h.dispatcher.Dispatch(ctx, notification.NotificationEvent{
+				Type:       event,
+				ReceiverID: *order.DeliveryPartnerID,
+				Role:       notification.RoleDelivery,
+				Data:       map[string]interface{}{"order_id": order.ID.String()},
+			})
+		}
+	case models.NotifOrderConfirmed, models.NotifOrderShipped:
 		h.dispatcher.Dispatch(ctx, notification.NotificationEvent{
 			Type:       event,
 			ReceiverID: order.CustomerID,

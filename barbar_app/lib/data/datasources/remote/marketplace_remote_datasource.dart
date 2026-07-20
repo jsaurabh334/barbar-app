@@ -20,12 +20,16 @@ class MarketplaceRemoteDataSource {
     required String vendorId,
     required String shippingAddressId,
     String? couponCode,
+    required List<Map<String, dynamic>> items,
+    required String paymentMethod,
   }) async {
     final response = await _apiClient.dio.post(
       '/orders',
       data: {
         'vendor_id': vendorId,
         'shipping_address_id': shippingAddressId,
+        'items': items,
+        'payment_method': paymentMethod,
         if (couponCode != null) 'coupon_code': couponCode,
       },
     );
@@ -52,5 +56,13 @@ class MarketplaceRemoteDataSource {
     if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
       throw Exception(response.data['error'] ?? 'Failed to update order status');
     }
+  }
+
+  Future<Map<String, dynamic>> getDriverLocation(String orderId) async {
+    final response = await _apiClient.dio.get('/public/orders/$orderId/driver-location');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch driver location');
   }
 }

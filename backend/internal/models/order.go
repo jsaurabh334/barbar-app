@@ -8,15 +8,23 @@ import (
 type OrderStatus string
 
 const (
-	OrderStatusPending       OrderStatus = "pending"
-	OrderStatusConfirmed     OrderStatus = "confirmed"
-	OrderStatusProcessing    OrderStatus = "processing"
-	OrderStatusShipped       OrderStatus = "shipped"
-	OrderStatusOutForDelivery OrderStatus = "out_for_delivery"
-	OrderStatusDelivered     OrderStatus = "delivered"
-	OrderStatusCancelled     OrderStatus = "cancelled"
-	OrderStatusReturned      OrderStatus = "returned"
-	OrderStatusRefunded      OrderStatus = "refunded"
+	OrderStatusPending         OrderStatus = "pending"
+	OrderStatusAccepted        OrderStatus = "accepted"
+	OrderStatusConfirmed       OrderStatus = "confirmed"
+	OrderStatusProcessing      OrderStatus = "processing"
+	OrderStatusPacked          OrderStatus = "packed"
+	OrderStatusReadyForPickup  OrderStatus = "ready_for_pickup"
+	OrderStatusDriverAssigned  OrderStatus = "driver_assigned"
+	OrderStatusDriverAccepted  OrderStatus = "driver_accepted"
+	OrderStatusAssigned        OrderStatus = "assigned"
+	OrderStatusShipped         OrderStatus = "shipped"
+	OrderStatusPickedUp        OrderStatus = "picked_up"
+	OrderStatusOutForDelivery  OrderStatus = "out_for_delivery"
+	OrderStatusDelivered       OrderStatus = "delivered"
+	OrderStatusCancelled       OrderStatus = "cancelled"
+	OrderStatusReturnRequested OrderStatus = "return_requested"
+	OrderStatusReturned        OrderStatus = "returned"
+	OrderStatusRefunded        OrderStatus = "refunded"
 	OrderStatusPartiallyRefunded OrderStatus = "partially_refunded"
 )
 
@@ -62,9 +70,15 @@ type Order struct {
 	TrackingNumber    string        `gorm:"size:255" json:"tracking_number,omitempty"`
 	CourierPartner    string        `gorm:"size:255" json:"courier_partner,omitempty"`
 	EstimatedDelivery *time.Time    `json:"estimated_delivery,omitempty"`
+	DeliveryPartnerID *uuid.UUID    `gorm:"type:uuid;index" json:"delivery_partner_id,omitempty"`
+	WarehouseID       *uuid.UUID    `gorm:"type:uuid" json:"warehouse_id,omitempty"`
+	AssignedAt        *time.Time    `json:"assigned_at,omitempty"`
+	PickedUpAt        *time.Time    `json:"picked_up_at,omitempty"`
 	IsRated           bool          `gorm:"default:false" json:"is_rated"`
 
 	// Relations
+	DeliveryPartner  *User            `gorm:"foreignKey:DeliveryPartnerID" json:"delivery_partner,omitempty"`
+	PickupWarehouse  *Warehouse       `gorm:"foreignKey:WarehouseID" json:"pickup_warehouse,omitempty"`
 	Customer        *User            `gorm:"foreignKey:CustomerID" json:"customer,omitempty"`
 	Vendor          *Vendor          `gorm:"foreignKey:VendorID" json:"vendor,omitempty"`
 	Items           []OrderItem      `gorm:"foreignKey:OrderID" json:"items,omitempty"`
@@ -100,6 +114,28 @@ type OrderStatusLog struct {
 	ChangedBy  uuid.UUID   `gorm:"type:uuid" json:"changed_by"`
 	Role       string      `gorm:"size:50" json:"role"`
 	Note       string      `gorm:"type:text" json:"note,omitempty"`
+}
+
+type AssignmentStatus string
+
+const (
+	AssignmentPending  AssignmentStatus = "pending"
+	AssignmentAccepted AssignmentStatus = "accepted"
+	AssignmentRejected AssignmentStatus = "rejected"
+	AssignmentExpired  AssignmentStatus = "expired"
+)
+
+type OrderDeliveryAssignment struct {
+	BaseModel
+	OrderID        uuid.UUID        `gorm:"type:uuid;index;not null" json:"order_id"`
+	DeliveryUserID uuid.UUID        `gorm:"type:uuid;index;not null" json:"delivery_user_id"`
+	AssignedAt     time.Time        `json:"assigned_at"`
+	AcceptedAt     *time.Time       `json:"accepted_at,omitempty"`
+	RejectedAt     *time.Time       `json:"rejected_at,omitempty"`
+	ExpiresAt      time.Time        `json:"expires_at"`
+	Status         AssignmentStatus `gorm:"size:50;default:pending" json:"status"`
+	TimeoutCount   int              `gorm:"default:0" json:"timeout_count"`
+	Note           string           `gorm:"type:text" json:"note,omitempty"`
 }
 
 type ShippingAddress struct {

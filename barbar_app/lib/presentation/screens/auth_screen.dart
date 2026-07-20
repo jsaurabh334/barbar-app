@@ -230,8 +230,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
               _buildDemoLoginBtn('Customer', '+919876543210'),
               _buildDemoLoginBtn('Barber', '+919000000001'),
               _buildDemoLoginBtn('Vendor', '+919876543212'),
-              // Delivery role doesn't exist in seed data yet
-              // _buildDemoLoginBtn('Delivery', '+916666666666'),
+              _buildDemoLoginBtn('Delivery', '+916666666666'),
               _buildDemoLoginBtn('Admin', '+919999999999'),
             ],
           ),

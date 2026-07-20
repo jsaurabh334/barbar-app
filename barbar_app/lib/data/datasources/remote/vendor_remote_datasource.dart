@@ -11,11 +11,11 @@ class VendorRemoteDataSource {
   Future<Map<String, dynamic>> register(Map<String, dynamic> data) async {
     try {
       final response = await _apiClient.dio.post('/vendor/register', data: data);
-      
+
       if (response.data is! Map) {
         throw Exception("API returned unexpected type: ${response.data.runtimeType}. Content: ${response.data}");
       }
-      
+
       final respData = response.data as Map<String, dynamic>;
       if ((response.statusCode == 200 || response.statusCode == 201) &&
           (respData['status'] == 'success' || respData['status'] == 'created')) {
@@ -56,132 +56,52 @@ class VendorRemoteDataSource {
     throw Exception(response.data['error'] ?? 'Failed to fetch dashboard');
   }
 
-  // ==================== Branches ====================
+  // ==================== Warehouses ====================
 
-  Future<Map<String, dynamic>> createBranch(Map<String, dynamic> data) async {
-    final response = await _apiClient.dio.post('/vendor/branches', data: data);
+  Future<Map<String, dynamic>> createWarehouse(Map<String, dynamic> data) async {
+    final response = await _apiClient.dio.post('/vendor/warehouses', data: data);
     if ((response.statusCode == 200 || response.statusCode == 201) &&
         (response.data['status'] == 'success' || response.data['status'] == 'created')) {
       return response.data['data'] as Map<String, dynamic>;
     }
-    throw Exception(response.data['error'] ?? 'Failed to create branch');
+    throw Exception(response.data['error'] ?? 'Failed to create warehouse');
   }
 
-  Future<List<dynamic>> listBranches() async {
-    final response = await _apiClient.dio.get('/vendor/branches');
+  Future<List<dynamic>> listWarehouses() async {
+    final response = await _apiClient.dio.get('/vendor/warehouses');
     if (response.statusCode == 200 && response.data['status'] == 'success') {
       return (response.data['data'] as List<dynamic>?) ?? [];
     }
-    throw Exception(response.data['error'] ?? 'Failed to fetch branches');
+    throw Exception(response.data['error'] ?? 'Failed to fetch warehouses');
   }
 
-  Future<Map<String, dynamic>> getBranch(String branchId) async {
-    final response = await _apiClient.dio.get('/vendor/branches/$branchId');
+  Future<Map<String, dynamic>> getWarehouse(String warehouseId) async {
+    final response = await _apiClient.dio.get('/vendor/warehouses/$warehouseId');
     if (response.statusCode == 200 && response.data['status'] == 'success') {
       return response.data['data'] as Map<String, dynamic>;
     }
-    throw Exception(response.data['error'] ?? 'Failed to fetch branch');
+    throw Exception(response.data['error'] ?? 'Failed to fetch warehouse');
   }
 
-  Future<Map<String, dynamic>> updateBranch(String branchId, Map<String, dynamic> data) async {
-    final response = await _apiClient.dio.put('/vendor/branches/$branchId', data: data);
+  Future<Map<String, dynamic>> updateWarehouse(String warehouseId, Map<String, dynamic> data) async {
+    final response = await _apiClient.dio.put('/vendor/warehouses/$warehouseId', data: data);
     if (response.statusCode == 200 && response.data['status'] == 'success') {
       return response.data['data'] as Map<String, dynamic>;
     }
-    throw Exception(response.data['error'] ?? 'Failed to update branch');
+    throw Exception(response.data['error'] ?? 'Failed to update warehouse');
   }
 
-  Future<void> deleteBranch(String branchId) async {
-    final response = await _apiClient.dio.delete('/vendor/branches/$branchId');
+  Future<void> deleteWarehouse(String warehouseId) async {
+    final response = await _apiClient.dio.delete('/vendor/warehouses/$warehouseId');
     if (response.statusCode != 200 || response.data['status'] != 'success') {
-      throw Exception(response.data['error'] ?? 'Failed to delete branch');
+      throw Exception(response.data['error'] ?? 'Failed to delete warehouse');
     }
   }
 
-  Future<void> setDefaultBranch(String branchId) async {
-    final response = await _apiClient.dio.put('/vendor/branches/$branchId/default');
+  Future<void> setDefaultWarehouse(String warehouseId) async {
+    final response = await _apiClient.dio.put('/vendor/warehouses/$warehouseId/default');
     if (response.statusCode != 200 || response.data['status'] != 'success') {
-      throw Exception(response.data['error'] ?? 'Failed to set default branch');
-    }
-  }
-
-  // ==================== Gallery ====================
-
-  Future<Map<String, dynamic>> uploadImage(Map<String, dynamic> data) async {
-    final response = await _apiClient.dio.post('/vendor/gallery', data: data);
-    if ((response.statusCode == 200 || response.statusCode == 201) &&
-        (response.data['status'] == 'success' || response.data['status'] == 'created')) {
-      return response.data['data'] as Map<String, dynamic>;
-    }
-    throw Exception(response.data['error'] ?? 'Failed to upload image');
-  }
-
-  Future<List<dynamic>> listImages({String? branchId, String? imageType}) async {
-    final params = <String, dynamic>{};
-    if (branchId != null) params['branch_id'] = branchId;
-    if (imageType != null) params['image_type'] = imageType;
-    final response = await _apiClient.dio.get('/vendor/gallery', queryParameters: params);
-    if (response.statusCode == 200 && response.data['status'] == 'success') {
-      return (response.data['data'] as List<dynamic>?) ?? [];
-    }
-    throw Exception(response.data['error'] ?? 'Failed to fetch images');
-  }
-
-  Future<void> deleteImage(String imageId) async {
-    final response = await _apiClient.dio.delete('/vendor/gallery/$imageId');
-    if (response.statusCode != 200 || response.data['status'] != 'success') {
-      throw Exception(response.data['error'] ?? 'Failed to delete image');
-    }
-  }
-
-  Future<void> reorderImages(List<String> imageIds) async {
-    final response = await _apiClient.dio.put('/vendor/gallery/reorder', data: {'image_ids': imageIds});
-    if (response.statusCode != 200 || response.data['status'] != 'success') {
-      throw Exception(response.data['error'] ?? 'Failed to reorder images');
-    }
-  }
-
-  // ==================== Working Hours ====================
-
-  Future<List<dynamic>> setWorkingHours(String branchId, List<Map<String, dynamic>> hours) async {
-    final response = await _apiClient.dio.put('/vendor/branches/$branchId/hours', data: hours);
-    if (response.statusCode == 200 && response.data['status'] == 'success') {
-      return (response.data['data'] as List<dynamic>?) ?? [];
-    }
-    throw Exception(response.data['error'] ?? 'Failed to set working hours');
-  }
-
-  Future<List<dynamic>> getWorkingHours(String branchId) async {
-    final response = await _apiClient.dio.get('/vendor/branches/$branchId/hours');
-    if (response.statusCode == 200 && response.data['status'] == 'success') {
-      return (response.data['data'] as List<dynamic>?) ?? [];
-    }
-    throw Exception(response.data['error'] ?? 'Failed to fetch working hours');
-  }
-
-  // ==================== Holidays ====================
-
-  Future<Map<String, dynamic>> addHoliday(String branchId, Map<String, dynamic> data) async {
-    final response = await _apiClient.dio.post('/vendor/branches/$branchId/holidays', data: data);
-    if ((response.statusCode == 200 || response.statusCode == 201) &&
-        (response.data['status'] == 'success' || response.data['status'] == 'created')) {
-      return response.data['data'] as Map<String, dynamic>;
-    }
-    throw Exception(response.data['error'] ?? 'Failed to add holiday');
-  }
-
-  Future<List<dynamic>> listHolidays(String branchId) async {
-    final response = await _apiClient.dio.get('/vendor/branches/$branchId/holidays');
-    if (response.statusCode == 200 && response.data['status'] == 'success') {
-      return (response.data['data'] as List<dynamic>?) ?? [];
-    }
-    throw Exception(response.data['error'] ?? 'Failed to fetch holidays');
-  }
-
-  Future<void> deleteHoliday(String branchId, String holidayId) async {
-    final response = await _apiClient.dio.delete('/vendor/branches/$branchId/holidays/$holidayId');
-    if (response.statusCode != 200 || response.data['status'] != 'success') {
-      throw Exception(response.data['error'] ?? 'Failed to delete holiday');
+      throw Exception(response.data['error'] ?? 'Failed to set default warehouse');
     }
   }
 
@@ -235,6 +155,188 @@ class VendorRemoteDataSource {
     final response = await _apiClient.dio.put('/vendor/orders/$orderId/status', data: {'status': status});
     if (response.statusCode != 200 || response.data['status'] != 'success') {
       throw Exception(response.data['error'] ?? 'Failed to update order status');
+    }
+  }
+
+  Future<Map<String, dynamic>> getOrderById(String orderId) async {
+    final response = await _apiClient.dio.get('/orders/$orderId');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch order');
+  }
+
+  Future<Map<String, dynamic>> acceptOrder(String orderId) async {
+    final response = await _apiClient.dio.put('/vendor/orders/$orderId/accept');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to accept order');
+  }
+
+  Future<Map<String, dynamic>> rejectOrder(String orderId, {String? reason}) async {
+    final data = <String, dynamic>{};
+    if (reason != null) data['reason'] = reason;
+    final response = await _apiClient.dio.put('/vendor/orders/$orderId/reject', data: data);
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to reject order');
+  }
+
+  Future<Map<String, dynamic>> packOrder(String orderId) async {
+    final response = await _apiClient.dio.put('/vendor/orders/$orderId/pack');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to pack order');
+  }
+
+  Future<Map<String, dynamic>> readyForPickup(String orderId) async {
+    final response = await _apiClient.dio.put('/vendor/orders/$orderId/ready-for-pickup');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to set order ready for pickup');
+  }
+
+  // ==================== Brands ====================
+
+  Future<List<dynamic>> getBrands() async {
+    final response = await _apiClient.dio.get('/vendor/brands');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return (response.data['data'] as List<dynamic>?) ?? [];
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch brands');
+  }
+
+  Future<Map<String, dynamic>> createBrand(Map<String, dynamic> data) async {
+    final response = await _apiClient.dio.post('/vendor/brands', data: data);
+    if ((response.statusCode == 200 || response.statusCode == 201) &&
+        (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to create brand');
+  }
+
+  Future<Map<String, dynamic>> updateBrand(String id, Map<String, dynamic> data) async {
+    final response = await _apiClient.dio.put('/vendor/brands/$id', data: data);
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to update brand');
+  }
+
+  Future<void> deleteBrand(String id) async {
+    final response = await _apiClient.dio.delete('/vendor/brands/$id');
+    if (response.statusCode != 200 || response.data['status'] != 'success') {
+      throw Exception(response.data['error'] ?? 'Failed to delete brand');
+    }
+  }
+
+  // ==================== Product Images ====================
+
+  Future<List<dynamic>> uploadProductImages(String productId, List<String> filePaths) async {
+    final formData = FormData.fromMap({
+      'images': await Future.wait(
+        filePaths.map((path) async => await MultipartFile.fromFile(path)),
+      ),
+    });
+    final response = await _apiClient.dio.post(
+      '/products/$productId/images',
+      data: formData,
+      options: Options(contentType: 'multipart/form-data'),
+    );
+    if ((response.statusCode == 200 || response.statusCode == 201) &&
+        (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+      final data = response.data['data'] as Map<String, dynamic>;
+      return (data['images'] as List<dynamic>?) ?? [];
+    }
+    throw Exception(response.data['error'] ?? 'Failed to upload product images');
+  }
+
+  Future<List<dynamic>> listProductImages(String productId) async {
+    final response = await _apiClient.dio.get('/products/$productId/images');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return (response.data['data'] as List<dynamic>?) ?? [];
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch product images');
+  }
+
+  Future<void> deleteProductImage(String imageId) async {
+    final response = await _apiClient.dio.delete('/products/images/$imageId');
+    if (response.statusCode != 200 || response.data['status'] != 'success') {
+      throw Exception(response.data['error'] ?? 'Failed to delete product image');
+    }
+  }
+
+  Future<void> reorderProductImages(String productId, List<String> imageIds) async {
+    final response = await _apiClient.dio.put(
+      '/products/$productId/images/reorder',
+      data: {'image_ids': imageIds},
+    );
+    if (response.statusCode != 200 || response.data['status'] != 'success') {
+      throw Exception(response.data['error'] ?? 'Failed to reorder product images');
+    }
+  }
+
+  Future<void> setPrimaryProductImage(String productId, String imageId) async {
+    final response = await _apiClient.dio.put('/products/$productId/images/$imageId/primary');
+    if (response.statusCode != 200 || response.data['status'] != 'success') {
+      throw Exception(response.data['error'] ?? 'Failed to set primary image');
+    }
+  }
+
+  // ==================== Purchases ====================
+
+  Future<List<dynamic>> getPurchases() async {
+    final response = await _apiClient.dio.get('/vendor/purchases');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return (response.data['data'] as List<dynamic>?) ?? [];
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch purchases');
+  }
+
+  Future<Map<String, dynamic>> createPurchase(Map<String, dynamic> data) async {
+    final response = await _apiClient.dio.post('/vendor/purchases', data: data);
+    if ((response.statusCode == 200 || response.statusCode == 201) &&
+        (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to create purchase');
+  }
+
+  // ==================== Product Variants ====================
+
+  Future<List<dynamic>> listProductVariants(String productId) async {
+    final response = await _apiClient.dio.get('/products/$productId/variants');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return (response.data['data'] as List<dynamic>?) ?? [];
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch variants');
+  }
+
+  Future<Map<String, dynamic>> createVariant(String productId, Map<String, dynamic> data) async {
+    final response = await _apiClient.dio.post('/products/$productId/variants', data: data);
+    if ((response.statusCode == 200 || response.statusCode == 201) &&
+        (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to create variant');
+  }
+
+  Future<Map<String, dynamic>> updateVariant(String productId, String variantId, Map<String, dynamic> data) async {
+    final response = await _apiClient.dio.put('/products/$productId/variants/$variantId', data: data);
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to update variant');
+  }
+
+  Future<void> deleteVariant(String productId, String variantId) async {
+    final response = await _apiClient.dio.delete('/products/$productId/variants/$variantId');
+    if (response.statusCode != 200 || response.data['status'] != 'success') {
+      throw Exception(response.data['error'] ?? 'Failed to delete variant');
     }
   }
 }

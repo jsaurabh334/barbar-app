@@ -10,6 +10,8 @@ import '../bloc/marketplace/marketplace_bloc.dart';
 import '../bloc/marketplace/marketplace_event.dart';
 import '../bloc/marketplace/marketplace_state.dart';
 import '../widgets/glass_card.dart';
+import 'delivery/delivery_earnings_screen.dart';
+import 'delivery/delivery_bank_screen.dart';
 
 class DeliveryDashboardScreen extends StatefulWidget {
   const DeliveryDashboardScreen({super.key});
@@ -51,8 +53,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
   ''';
 
   // Fixed coordinates for simulated route
-  static const LatLng _vendorLoc = LatLng(12.9725, 77.5955);
-  static const LatLng _customerLoc = LatLng(12.9812, 77.6045);
+  static const LatLng _defaultLoc = LatLng(12.9725, 77.5955);
 
   @override
   void initState() {
@@ -302,6 +303,26 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
             child: Column(
               children: [
                 ListTile(
+                  leading: const Icon(LucideIcons.wallet, color: AppColors.primary),
+                  title: const Text('Earnings'),
+                  trailing: const Icon(LucideIcons.chevronRight, size: 18),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const DeliveryEarningsScreen()),
+                  ),
+                ),
+                const Divider(height: 1, color: AppColors.border),
+                ListTile(
+                  leading: const Icon(LucideIcons.building2, color: AppColors.primary),
+                  title: const Text('Bank Account'),
+                  trailing: const Icon(LucideIcons.chevronRight, size: 18),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const DeliveryBankScreen()),
+                  ),
+                ),
+                const Divider(height: 1, color: AppColors.border),
+                ListTile(
                   leading: const Icon(LucideIcons.shieldAlert, color: AppColors.primary),
                   title: const Text('License & Vehicle Verification'),
                   trailing: const Text(
@@ -496,39 +517,43 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
           child: Stack(
             children: [
               GoogleMap(
-                initialCameraPosition: const CameraPosition(
-                  target: _vendorLoc,
+                initialCameraPosition: CameraPosition(
+                  target: _selectedOrder?.vendorLatitude != null
+                      ? LatLng(_selectedOrder!.vendorLatitude!, _selectedOrder!.vendorLongitude!)
+                      : _defaultLoc,
                   zoom: 13.5,
                 ),
                 style: _darkMapStyle,
                 onMapCreated: (controller) {},
                 markers: {
-                  Marker(
-                    markerId: const MarkerId('vendor'),
-                    position: _vendorLoc,
-                    infoWindow: const InfoWindow(title: 'Style Products Hub (Pickup)'),
-                    icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
-                  ),
-                  Marker(
-                    markerId: const MarkerId('customer'),
-                    position: _customerLoc,
-                    infoWindow: const InfoWindow(title: 'Delivery Address (Drop)'),
-                    icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
-                  ),
+                  if (_selectedOrder?.vendorLatitude != null)
+                    Marker(
+                      markerId: const MarkerId('vendor'),
+                      position: LatLng(_selectedOrder!.vendorLatitude!, _selectedOrder!.vendorLongitude!),
+                      infoWindow: const InfoWindow(title: 'Pickup Location'),
+                      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+                    ),
+                  if (_selectedOrder?.customerLatitude != null)
+                    Marker(
+                      markerId: const MarkerId('customer'),
+                      position: LatLng(_selectedOrder!.customerLatitude!, _selectedOrder!.customerLongitude!),
+                      infoWindow: const InfoWindow(title: 'Delivery Address (Drop)'),
+                      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
+                    ),
                 },
-                polylines: {
-                  Polyline(
-                    polylineId: const PolylineId('route'),
-                    color: AppColors.primary,
-                    width: 5,
-                    points: const [
-                      _vendorLoc,
-                      LatLng(12.9750, 77.5980),
-                      LatLng(12.9780, 77.6010),
-                      _customerLoc,
-                    ],
-                  ),
-                },
+                polylines: _selectedOrder?.vendorLatitude != null && _selectedOrder?.customerLatitude != null
+                    ? {
+                        Polyline(
+                          polylineId: const PolylineId('route'),
+                          color: AppColors.primary,
+                          width: 5,
+                          points: [
+                            LatLng(_selectedOrder!.vendorLatitude!, _selectedOrder!.vendorLongitude!),
+                            LatLng(_selectedOrder!.customerLatitude!, _selectedOrder!.customerLongitude!),
+                          ],
+                        ),
+                      }
+                    : {},
                 myLocationButtonEnabled: false,
                 zoomControlsEnabled: false,
               ),

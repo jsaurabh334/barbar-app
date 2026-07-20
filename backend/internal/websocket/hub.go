@@ -24,6 +24,13 @@ const (
 	MsgOrderUpdate    MessageType = "order_update"
 	MsgVendorUpdate   MessageType = "vendor_update"
 	MsgAdminAlert     MessageType = "admin_alert"
+	MsgDriverOnline   MessageType = "driver.online"
+	MsgDriverOffline  MessageType = "driver.offline"
+	MsgDriverBusy     MessageType = "driver.busy"
+	MsgDriverAvailable MessageType = "driver.available"
+	MsgDriverLocation  MessageType = "driver.location_updated"
+	MsgOrderStatusChanged  MessageType = "order.status_changed"
+	MsgDeliveryOTPGenerated MessageType = "delivery_otp_generated"
 )
 
 type WSMessage struct {
@@ -172,6 +179,10 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		client.Rooms["vendors"] = true
 		h.addToRoom("vendors", client)
 	}
+	if claims.Role == "delivery" {
+		client.Rooms["delivery"] = true
+		h.addToRoom("delivery", client)
+	}
 	if claims.Role == "admin" || claims.Role == "super_admin" {
 		client.Rooms["admins"] = true
 		h.addToRoom("admins", client)
@@ -209,6 +220,8 @@ func (h *Hub) BroadcastToRole(role string, msg *WSMessage) {
 		msg.Room = "barbers"
 	case "vendor":
 		msg.Room = "vendors"
+	case "delivery":
+		msg.Room = "delivery"
 	case "admin", "super_admin":
 		msg.Room = "admins"
 	default:

@@ -38,7 +38,7 @@ type RegisterRequest struct {
 	Email    string `json:"email" binding:"omitempty,email,max=255"`
 	Phone    string `json:"phone" binding:"required,min=10,max=20"`
 	Password string `json:"password" binding:"required,min=8,max=100"`
-	Role     string `json:"role" binding:"omitempty,oneof=customer barber vendor"`
+	Role     string `json:"role" binding:"omitempty,oneof=customer barber vendor delivery admin"`
 }
 
 type LoginRequest struct {
@@ -69,6 +69,17 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	if req.Role == "" {
 		req.Role = string(models.RoleCustomer)
+	}
+	allowedRoles := map[string]bool{
+		string(models.RoleCustomer): true,
+		string(models.RoleBarber):   true,
+		string(models.RoleVendor):   true,
+		string(models.RoleDelivery): true,
+		string(models.RoleAdmin):    true,
+	}
+	if !allowedRoles[req.Role] {
+		utils.BadRequestResponse(c, "Invalid role: "+req.Role)
+		return
 	}
 	req.Phone = strings.ReplaceAll(req.Phone, " ", "")
 

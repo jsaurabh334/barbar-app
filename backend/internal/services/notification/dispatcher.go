@@ -56,11 +56,20 @@ var NotificationMatrix = map[models.NotificationType][]string{
 	models.NotifPaymentSuccess:   {RoleCustomer, RoleBarber},
 	models.NotifPaymentFailed:    {RoleCustomer},
 	models.NotifRefundCompleted:  {RoleCustomer},
-	models.NotifOrderPlaced:      {RoleVendor},
-	models.NotifOrderConfirmed:   {RoleCustomer},
-	models.NotifOrderShipped:     {RoleCustomer},
-	models.NotifOrderDelivered:   {RoleCustomer},
-	models.NotifOrderCancelled:   {RoleCustomer, RoleVendor},
+	models.NotifOrderPlaced:         {RoleVendor},
+	models.NotifOrderAccepted:       {RoleCustomer},
+	models.NotifOrderConfirmed:      {RoleCustomer},
+	models.NotifOrderPacked:         {RoleCustomer},
+	models.NotifOrderReadyForPickup:    {RoleCustomer, RoleDelivery},
+	models.NotifOrderAssigned:         {RoleCustomer, RoleDelivery},
+	models.NotifOrderDriverAssigned:   {RoleCustomer, RoleDelivery},
+	models.NotifOrderDriverAccepted:   {RoleCustomer, RoleVendor},
+	models.NotifOrderAssignmentExpired: {RoleCustomer, RoleDelivery},
+	models.NotifOrderShipped:        {RoleCustomer},
+	models.NotifOrderPickedUp:       {RoleCustomer},
+	models.NotifOrderOutForDelivery: {RoleCustomer},
+	models.NotifOrderDelivered:      {RoleCustomer},
+	models.NotifOrderCancelled:      {RoleCustomer, RoleVendor},
 	models.NotifWithdrawalApproved:  {RoleBarber, RoleVendor},
 	models.NotifWithdrawalProcessed: {RoleBarber, RoleVendor},
 	models.NotifWithdrawalRejected:  {RoleBarber, RoleVendor},
@@ -252,9 +261,44 @@ func (d *notificationDispatcher) buildMessageFallback(event NotificationEvent) (
 		body = "You have received a new order."
 		action = ActionOpenOrder
 		priority = models.PriorityHigh
+	case models.NotifOrderAccepted:
+		title = "Order Accepted"
+		body = "Your order has been accepted by the vendor."
+		action = ActionOpenOrder
+		priority = models.PriorityHigh
 	case models.NotifOrderConfirmed:
 		title = "Order Confirmed"
 		body = "Your order has been confirmed."
+		action = ActionOpenOrder
+		priority = models.PriorityNormal
+	case models.NotifOrderPacked:
+		title = "Order Packed"
+		body = "Your order has been packed and is ready for pickup."
+		action = ActionOpenOrder
+		priority = models.PriorityNormal
+	case models.NotifOrderReadyForPickup:
+		title = "Ready for Pickup"
+		body = "Your order is ready for pickup."
+		action = ActionOpenOrder
+		priority = models.PriorityHigh
+	case models.NotifOrderAssigned:
+		title = "Delivery Partner Assigned"
+		body = "A delivery partner has been assigned to your order."
+		action = ActionOpenOrder
+		priority = models.PriorityNormal
+	case models.NotifOrderDriverAssigned:
+		title = "Driver Assigned"
+		body = "A delivery driver has been assigned to your order."
+		action = ActionOpenOrder
+		priority = models.PriorityNormal
+	case models.NotifOrderDriverAccepted:
+		title = "Driver Accepted"
+		body = "The delivery driver has accepted the assignment."
+		action = ActionOpenOrder
+		priority = models.PriorityNormal
+	case models.NotifOrderAssignmentExpired:
+		title = "Assignment Expired"
+		body = "The delivery assignment has expired. A new driver will be assigned shortly."
 		action = ActionOpenOrder
 		priority = models.PriorityNormal
 	case models.NotifOrderShipped:
@@ -262,6 +306,16 @@ func (d *notificationDispatcher) buildMessageFallback(event NotificationEvent) (
 		body = "Your order has been shipped."
 		action = ActionOpenOrder
 		priority = models.PriorityNormal
+	case models.NotifOrderPickedUp:
+		title = "Order Picked Up"
+		body = "Your order has been picked up by the delivery partner."
+		action = ActionOpenOrder
+		priority = models.PriorityNormal
+	case models.NotifOrderOutForDelivery:
+		title = "Out for Delivery"
+		body = "Your order is out for delivery."
+		action = ActionOpenOrder
+		priority = models.PriorityHigh
 	case models.NotifOrderDelivered:
 		title = "Order Delivered"
 		body = "Your order has been delivered successfully."

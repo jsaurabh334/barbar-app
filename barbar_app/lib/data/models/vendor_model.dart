@@ -1,16 +1,15 @@
-import 'vendor_branch_model.dart';
-import 'vendor_image_model.dart';
+import 'vendor_warehouse_model.dart';
 
 class VendorModel {
   final String id;
   final String userId;
-  final String storeName;
-  final String? storeSlug;
-  final String? storeDescription;
-  final String? storeLogo;
-  final String? storeBanner;
-  final String? storeEmail;
-  final String? storePhone;
+  final String businessName;
+  final String? businessSlug;
+  final String? businessDescription;
+  final String? logo;
+  final String? banner;
+  final String? businessEmail;
+  final String? businessPhone;
   final String? address;
   final String? city;
   final String? state;
@@ -19,7 +18,6 @@ class VendorModel {
   final double? longitude;
   final String? gstNumber;
   final String? panNumber;
-  final String? fssaiNumber;
   final String? businessType;
   final String? website;
   final String status;
@@ -37,19 +35,18 @@ class VendorModel {
   final String? shippingPolicy;
   final String? deliveryTimeframe;
   final String? createdAt;
-  final List<VendorBranchModel>? branches;
-  final List<VendorImageModel>? images;
+  final List<WarehouseModel>? warehouses;
 
   VendorModel({
     required this.id,
     required this.userId,
-    required this.storeName,
-    this.storeSlug,
-    this.storeDescription,
-    this.storeLogo,
-    this.storeBanner,
-    this.storeEmail,
-    this.storePhone,
+    required this.businessName,
+    this.businessSlug,
+    this.businessDescription,
+    this.logo,
+    this.banner,
+    this.businessEmail,
+    this.businessPhone,
     this.address,
     this.city,
     this.state,
@@ -58,7 +55,6 @@ class VendorModel {
     this.longitude,
     this.gstNumber,
     this.panNumber,
-    this.fssaiNumber,
     this.businessType,
     this.website,
     this.status = 'pending',
@@ -76,21 +72,20 @@ class VendorModel {
     this.shippingPolicy,
     this.deliveryTimeframe,
     this.createdAt,
-    this.branches,
-    this.images,
+    this.warehouses,
   });
 
   factory VendorModel.fromJson(Map<String, dynamic> json) {
     return VendorModel(
       id: json['id'] ?? '',
       userId: json['user_id'] ?? '',
-      storeName: json['store_name'] ?? '',
-      storeSlug: json['store_slug'],
-      storeDescription: json['store_description'],
-      storeLogo: json['store_logo'],
-      storeBanner: json['store_banner'],
-      storeEmail: json['store_email'],
-      storePhone: json['store_phone'],
+      businessName: json['business_name'] ?? '',
+      businessSlug: json['business_slug'],
+      businessDescription: json['business_description'],
+      logo: json['logo'],
+      banner: json['banner'],
+      businessEmail: json['business_email'],
+      businessPhone: json['business_phone'],
       address: json['address'],
       city: json['city'],
       state: json['state'],
@@ -99,7 +94,6 @@ class VendorModel {
       longitude: (json['longitude'] as num?)?.toDouble(),
       gstNumber: json['gst_number'],
       panNumber: json['pan_number'],
-      fssaiNumber: json['fssai_number'],
       businessType: json['business_type'],
       website: json['website'],
       status: json['status'] ?? 'pending',
@@ -117,14 +111,9 @@ class VendorModel {
       shippingPolicy: json['shipping_policy'],
       deliveryTimeframe: json['delivery_timeframe'],
       createdAt: json['created_at'],
-      branches: json['branches'] != null
-          ? (json['branches'] as List<dynamic>)
-              .map((e) => VendorBranchModel.fromJson(e as Map<String, dynamic>))
-              .toList()
-          : null,
-      images: json['images'] != null
-          ? (json['images'] as List<dynamic>)
-              .map((e) => VendorImageModel.fromJson(e as Map<String, dynamic>))
+      warehouses: json['warehouses'] != null
+          ? (json['warehouses'] as List<dynamic>)
+              .map((e) => WarehouseModel.fromJson(e as Map<String, dynamic>))
               .toList()
           : null,
     );
@@ -132,12 +121,12 @@ class VendorModel {
 
   Map<String, dynamic> toJson() {
     return {
-      'store_name': storeName,
-      'store_description': storeDescription,
-      'store_logo': storeLogo,
-      'store_banner': storeBanner,
-      'store_email': storeEmail,
-      'store_phone': storePhone,
+      'business_name': businessName,
+      'business_description': businessDescription,
+      'logo': logo,
+      'banner': banner,
+      'business_email': businessEmail,
+      'business_phone': businessPhone,
       'address': address,
       'city': city,
       'state': state,
@@ -146,7 +135,6 @@ class VendorModel {
       'longitude': longitude,
       'gst_number': gstNumber,
       'pan_number': panNumber,
-      'fssai_number': fssaiNumber,
       'business_type': businessType,
       'website': website,
       'return_policy': returnPolicy,
@@ -156,12 +144,12 @@ class VendorModel {
   }
 
   VendorModel copyWith({
-    String? storeName,
-    String? storeDescription,
-    String? storeLogo,
-    String? storeBanner,
-    String? storeEmail,
-    String? storePhone,
+    String? businessName,
+    String? businessDescription,
+    String? logo,
+    String? banner,
+    String? businessEmail,
+    String? businessPhone,
     String? address,
     String? city,
     String? state,
@@ -170,7 +158,6 @@ class VendorModel {
     double? longitude,
     String? gstNumber,
     String? panNumber,
-    String? fssaiNumber,
     String? businessType,
     String? website,
     String? status,
@@ -179,19 +166,18 @@ class VendorModel {
     String? returnPolicy,
     String? shippingPolicy,
     String? deliveryTimeframe,
-    List<VendorBranchModel>? branches,
-    List<VendorImageModel>? images,
+    List<WarehouseModel>? warehouses,
   }) {
     return VendorModel(
       id: id,
       userId: userId,
-      storeName: storeName ?? this.storeName,
-      storeSlug: storeSlug,
-      storeDescription: storeDescription ?? this.storeDescription,
-      storeLogo: storeLogo ?? this.storeLogo,
-      storeBanner: storeBanner ?? this.storeBanner,
-      storeEmail: storeEmail ?? this.storeEmail,
-      storePhone: storePhone ?? this.storePhone,
+      businessName: businessName ?? this.businessName,
+      businessSlug: businessSlug,
+      businessDescription: businessDescription ?? this.businessDescription,
+      logo: logo ?? this.logo,
+      banner: banner ?? this.banner,
+      businessEmail: businessEmail ?? this.businessEmail,
+      businessPhone: businessPhone ?? this.businessPhone,
       address: address ?? this.address,
       city: city ?? this.city,
       state: state ?? this.state,
@@ -200,7 +186,6 @@ class VendorModel {
       longitude: longitude ?? this.longitude,
       gstNumber: gstNumber ?? this.gstNumber,
       panNumber: panNumber ?? this.panNumber,
-      fssaiNumber: fssaiNumber ?? this.fssaiNumber,
       businessType: businessType ?? this.businessType,
       website: website ?? this.website,
       status: status ?? this.status,
@@ -218,8 +203,7 @@ class VendorModel {
       shippingPolicy: shippingPolicy ?? this.shippingPolicy,
       deliveryTimeframe: deliveryTimeframe ?? this.deliveryTimeframe,
       createdAt: createdAt,
-      branches: branches ?? this.branches,
-      images: images ?? this.images,
+      warehouses: warehouses ?? this.warehouses,
     );
   }
 }

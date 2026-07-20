@@ -1,6 +1,7 @@
 import '../../domain/repositories/marketplace_repository.dart';
 import '../datasources/remote/marketplace_remote_datasource.dart';
 import '../models/order_model.dart';
+import '../models/order_item_model.dart';
 import '../models/product_model.dart';
 
 class MarketplaceRepositoryImpl implements MarketplaceRepository {
@@ -22,32 +23,21 @@ class MarketplaceRepositoryImpl implements MarketplaceRepository {
     required String vendorId,
     required String shippingAddressId,
     String? couponCode,
+    required List<Map<String, dynamic>> items,
+    required String paymentMethod,
   }) async {
-    try {
-      final data = await _remoteDataSource.placeOrder(
-        vendorId: vendorId,
-        shippingAddressId: shippingAddressId,
-        couponCode: couponCode,
-      );
-      final order = OrderModel.fromJson(data);
-      _cachedOrders.insert(0, order);
-      return order;
-    } catch (_) {
-      final subTotal = _cachedProducts.fold(0.0, (sum, p) => sum + (p.discountPrice ?? p.basePrice));
-      final mockOrder = OrderModel(
-        id: 'ord-mock-${DateTime.now().millisecondsSinceEpoch}',
-        orderNumber: 'ORD-${DateTime.now().year}${DateTime.now().month}-9A${_cachedOrders.length + 1}C',
-        status: 'confirmed',
-        itemsTotal: subTotal,
-        shippingCharge: 50.0,
-        taxAmount: subTotal * 0.18,
-        discountAmount: couponCode != null ? 50.0 : 0.0,
-        finalAmount: subTotal + 50.0 + (subTotal * 0.18) - (couponCode != null ? 50.0 : 0.0),
-        paymentStatus: 'success',
-      );
-      _cachedOrders.insert(0, mockOrder);
-      return mockOrder;
-    }
+    final data = await _remoteDataSource.placeOrder(
+      vendorId: vendorId,
+      shippingAddressId: shippingAddressId,
+      couponCode: couponCode,
+      items: items,
+      paymentMethod: paymentMethod,
+    );
+    final orderList = data['orders'] as List<dynamic>;
+    final orderJson = orderList.first as Map<String, dynamic>;
+    final order = OrderModel.fromJson(orderJson);
+    _cachedOrders.insert(0, order);
+    return order;
   }
 
   @override
@@ -60,6 +50,14 @@ class MarketplaceRepositoryImpl implements MarketplaceRepository {
           shippingCharge: 50.0, taxAmount: 90.0,
           discountAmount: 0.0, finalAmount: 639.0,
           paymentStatus: 'success',
+          items: [
+            OrderItemModel(
+              productId: 'p1',
+              productName: 'Sample Grooming Kit',
+              quantity: 1,
+              price: 499.0,
+            ),
+          ],
         ),
       ];
     }
@@ -78,8 +76,14 @@ class MarketplaceRepositoryImpl implements MarketplaceRepository {
           ? OrderModel(id: o.id, orderNumber: o.orderNumber, status: status,
               itemsTotal: o.itemsTotal, shippingCharge: o.shippingCharge,
               taxAmount: o.taxAmount, discountAmount: o.discountAmount,
-              finalAmount: o.finalAmount, paymentStatus: o.paymentStatus)
+              finalAmount: o.finalAmount, paymentStatus: o.paymentStatus,
+              items: o.items)
           : o;
     }).toList();
+  }
+
+  @override
+  Future<Map<String, dynamic>> getDriverLocation(String orderId) async {
+    return await _remoteDataSource.getDriverLocation(orderId);
   }
 }

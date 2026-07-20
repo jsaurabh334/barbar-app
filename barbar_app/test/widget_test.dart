@@ -77,7 +77,7 @@ void main() {
       final json = {
         'id': 'prod-2',
         'vendor_id': 'vendor-2',
-        'vendor': {'store_name': 'Best Store'},
+        'vendor': {'business_name': 'Best Store'},
         'category_id': 'cat-1',
         'category': {'name': 'Grooming'},
         'name': 'Premium Oil',

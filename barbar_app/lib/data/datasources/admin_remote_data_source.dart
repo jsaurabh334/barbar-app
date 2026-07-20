@@ -163,4 +163,20 @@ class AdminRemoteDataSource {
   Future<void> resolveReport(String reportId, String status) async {
     await apiClient.dio.put('/admin/reports/$reportId/resolve', data: {'status': status});
   }
+
+  Future<Map<String, dynamic>> getDeliveryPresenceSummary() async {
+    final response = await apiClient.dio.get('/admin/delivery/presence/summary');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch presence summary');
+  }
+
+  Future<List<dynamic>> getOnlineDrivers() async {
+    final response = await apiClient.dio.get('/admin/delivery/presence');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return (response.data['data'] as List<dynamic>?) ?? [];
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch online drivers');
+  }
 }

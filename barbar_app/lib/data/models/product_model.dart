@@ -1,3 +1,7 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'product_variant_model.dart';
+
 class ProductModel {
   final String id;
   final String vendorId;
@@ -7,7 +11,8 @@ class ProductModel {
   final String name;
   final String description;
   final String? shortDescription;
-  final String? brand;
+  final String? brandName;
+  final String? brandId;
   final double basePrice;
   final double? discountPrice;
   final int totalStock;
@@ -21,6 +26,10 @@ class ProductModel {
   final String? imageUrl;
   final List<String>? images;
   final List<String>? tags;
+  final bool hasVariants;
+  final List<ProductVariantModel>? variants;
+
+  String? get brand => brandName;
 
   ProductModel({
     required this.id,
@@ -31,7 +40,8 @@ class ProductModel {
     required this.name,
     required this.description,
     this.shortDescription,
-    this.brand,
+    this.brandName,
+    this.brandId,
     required this.basePrice,
     this.discountPrice,
     this.totalStock = 0,
@@ -45,6 +55,8 @@ class ProductModel {
     this.imageUrl,
     this.images,
     this.tags,
+    this.hasVariants = false,
+    this.variants,
   });
 
   double get displayPrice => discountPrice ?? basePrice;
@@ -56,11 +68,23 @@ class ProductModel {
     String? img;
     List<String>? allImages;
     final rawImages = json['images'] as List?;
+    
+    String fixUrl(String url) {
+      if (!kIsWeb && Platform.isAndroid && url.contains('localhost')) {
+        return url.replaceAll('localhost', '10.0.2.2');
+      }
+      return url;
+    }
+
     if (rawImages != null && rawImages.isNotEmpty) {
-      allImages = rawImages.map((e) => (e is Map) ? (e['image_url'] as String?) ?? '' : e.toString()).where((u) => u.isNotEmpty).toList();
+      allImages = rawImages.map((e) {
+        final u = (e is Map) ? (e['image_url'] as String?) ?? '' : e.toString();
+        return u.isNotEmpty ? fixUrl(u) : u;
+      }).where((u) => u.isNotEmpty).toList();
       img = allImages.isNotEmpty ? allImages.first : null;
     } else {
-      img = json['image_url'] as String?;
+      final jsonImg = json['image_url'] as String?;
+      img = jsonImg != null ? fixUrl(jsonImg) : null;
     }
 
     List<String>? tagsList;
@@ -76,7 +100,15 @@ class ProductModel {
 
     String? vName;
     if (json['vendor'] is Map) {
-      vName = json['vendor']['store_name'] as String?;
+      vName = json['vendor']['business_name'] as String?;
+    }
+
+    List<ProductVariantModel>? variantsList;
+    final rawVariants = json['variants'] as List?;
+    if (rawVariants != null) {
+      variantsList = rawVariants
+          .map((e) => ProductVariantModel.fromJson(e as Map<String, dynamic>))
+          .toList();
     }
 
     return ProductModel(
@@ -88,7 +120,8 @@ class ProductModel {
       name: json['name'] as String,
       description: json['description'] as String? ?? '',
       shortDescription: json['short_description'] as String?,
-      brand: json['brand'] as String?,
+      brandName: json['brand_name'] as String? ?? json['brand'] as String?,
+      brandId: json['brand_id'] as String?,
       basePrice: (json['base_price'] as num).toDouble(),
       discountPrice: json['discount_price'] != null ? (json['discount_price'] as num).toDouble() : null,
       totalStock: (json['total_stock'] as num?)?.toInt() ?? 0,
@@ -102,6 +135,8 @@ class ProductModel {
       imageUrl: img,
       images: allImages,
       tags: tagsList,
+      hasVariants: json['has_variants'] as bool? ?? false,
+      variants: variantsList,
     );
   }
 
@@ -116,6 +151,9 @@ class ProductModel {
       'available_stock': availableStock,
       'is_approved': isApproved,
       'image_url': imageUrl,
+      'brand_name': brandName,
+      'brand_id': brandId,
+      'has_variants': hasVariants,
     };
   }
 
@@ -124,14 +162,17 @@ class ProductModel {
       'name': name,
       'description': description,
       'short_description': shortDescription,
-      'brand': brand,
+      'brand_name': brandName,
+      'brand_id': brandId,
       'category_id': categoryId,
       'base_price': basePrice,
       'discount_price': discountPrice,
       'total_stock': totalStock,
       'available_stock': availableStock,
       'low_stock_threshold': lowStockThreshold,
+      'has_variants': hasVariants,
       if (tags != null) 'tags': tags,
+      if (variants != null) 'variants': variants!.map((v) => v.toJson()).toList(),
     };
   }
 }

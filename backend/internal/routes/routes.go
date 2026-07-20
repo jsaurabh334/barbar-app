@@ -13,11 +13,15 @@ import (
 	"github.com/barbar-app/backend/internal/models"
 	"github.com/barbar-app/backend/internal/websocket"
 	"github.com/gin-gonic/gin"
+	deliveryHandler "github.com/barbar-app/backend/internal/handlers/delivery"
 	deliveryPartnerHandler "github.com/barbar-app/backend/internal/handlers/delivery_partner"
+	deliverySvc "github.com/barbar-app/backend/internal/services/delivery"
 	"gorm.io/gorm"
 
 	addressHandler "github.com/barbar-app/backend/internal/handlers/address"
 	adminHandler "github.com/barbar-app/backend/internal/handlers/admin"
+	trackingHandler "github.com/barbar-app/backend/internal/handlers/tracking"
+	trackingSvc "github.com/barbar-app/backend/internal/services/tracking"
 
 	authHandler "github.com/barbar-app/backend/internal/handlers/auth"
 	barberHandler "github.com/barbar-app/backend/internal/handlers/barber"
@@ -27,6 +31,7 @@ import (
 	invoiceHandler "github.com/barbar-app/backend/internal/handlers/invoice"
 	kycHandler "github.com/barbar-app/backend/internal/handlers/kyc"
 	orderHandler "github.com/barbar-app/backend/internal/handlers/order"
+	orderService "github.com/barbar-app/backend/internal/services/order"
 	paymentHandler "github.com/barbar-app/backend/internal/handlers/payment"
 	productHandler "github.com/barbar-app/backend/internal/handlers/product"
 	searchHandler "github.com/barbar-app/backend/internal/handlers/search"
@@ -45,7 +50,7 @@ import (
 	webhookSvc "github.com/barbar-app/backend/internal/services/webhook"
 )
 
-func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, hub *websocket.Hub) *gin.Engine {
+func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, hub *websocket.Hub, notifSvc *notifService.NotificationService, dispatcher notifService.Dispatcher, orderSvc *orderService.OrderService, presenceSvc *deliverySvc.PresenceService) *gin.Engine {
 	router := gin.New()
 
 	// Global middleware
@@ -58,6 +63,13 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 
 	// Serve demo static files
 	router.Static("/static/demo", "./static/demo")
+
+	// Inject base URL into context so handlers can build absolute URLs
+	baseURL := cfg.App.BaseURL
+	router.Use(func(c *gin.Context) {
+		c.Set("base_url", baseURL)
+		c.Next()
+	})
 
 	// Health check
 	router.GET("/health", func(c *gin.Context) {
@@ -77,14 +89,19 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 	authH := authHandler.NewAuthHandler(db, jwtManager)
 	barberH := barberHandler.NewBarberHandler(db, cfg)
 	staffH := barberHandler.NewStaffHandler(db)
-	notifSvc := notifService.NewNotificationService(db, hub)
-	tmplSvc := notifService.NewTemplateService(db)
-	dispatcher := notifService.NewDispatcher(db, hub, tmplSvc)
 	bookingH := bookingHandler.NewBookingHandler(db, dispatcher, hub)
 	vendorH := vendorHandler.NewVendorHandler(db)
 	deliveryPartnerH := deliveryPartnerHandler.NewDeliveryPartnerHandler(db)
 	productH := productHandler.NewProductHandler(db)
 	orderH := orderHandler.NewOrderHandler(db, dispatcher)
+	vendorOrderH := orderHandler.NewVendorOrderHandler(db, orderSvc)
+	presenceH := deliveryHandler.NewPresenceHandler(presenceSvc)
+	locationH := deliveryHandler.NewLocationHandler(presenceSvc, orderSvc)
+	deliveryOrderH := orderHandler.NewDeliveryOrderHandler(db, orderSvc, presenceSvc)
+	earningSvc := deliverySvc.NewEarningService(db)
+	bankSvc := deliverySvc.NewBankAccountService(db)
+	earningH := deliveryPartnerHandler.NewEarningHandler(earningSvc)
+	bankH := deliveryPartnerHandler.NewBankHandler(bankSvc)
 	paymentH := paymentHandler.NewPaymentHandler(db, cfg, dispatcher)
 	walletH := walletHandler.NewWalletHandler(db)
 	cartH := cartHandler.NewCartHandler(db)
@@ -112,6 +129,8 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 	invoiceService := invoiceSvc.NewInvoiceService(db, cfg.App.BaseURL)
 	invoiceH := invoiceHandler.NewInvoiceHandler(invoiceService)
 	reviewH := reviewHandler.NewReviewHandler(db, dispatcher, hub)
+	trackingSvcInstance := trackingSvc.NewService(db, presenceSvc)
+	trackingH := trackingHandler.NewTrackingHandler(trackingSvcInstance)
 
 	// Initialize queue service and start no-show scheduler
 	queueSvc := queueService.NewQueueService(db, hub, dispatcher)
@@ -160,6 +179,13 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 
 			// Search
 			public.GET("/search", searchH.Search)
+
+			// Driver location for order tracking (legacy)
+			public.GET("/orders/:id/driver-location", locationH.GetDriverLocation)
+			public.GET("/orders/:id/eta", locationH.GetOrderETA)
+
+			// Unified tracking endpoint
+			public.GET("/orders/:id/tracking", trackingH.GetTracking)
 		}
 
 		// ==================== Upload routes ====================
@@ -305,6 +331,10 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			vendorRoutes.GET("/dashboard", vendorH.GetDashboard)
 			vendorRoutes.GET("/orders", orderH.ListVendorOrders)
 			vendorRoutes.PUT("/orders/:id/status", orderH.UpdateStatus)
+			vendorRoutes.PUT("/orders/:id/accept", vendorOrderH.AcceptOrder)
+			vendorRoutes.PUT("/orders/:id/reject", vendorOrderH.RejectOrder)
+			vendorRoutes.PUT("/orders/:id/pack", vendorOrderH.PackOrder)
+			vendorRoutes.PUT("/orders/:id/ready-for-pickup", vendorOrderH.ReadyForPickup)
 			vendorRoutes.GET("/products", productH.ListByVendor)
 			vendorRoutes.GET("/sales-report", vendorH.GetSalesReport)
 
@@ -318,46 +348,82 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			vendorRoutes.GET("/documents", vendorH.ListDocuments)
 			vendorRoutes.DELETE("/documents/:id", vendorH.DeleteDocument)
 
-			// Branches
-			vendorRoutes.POST("/branches", vendorH.CreateBranch)
-			vendorRoutes.GET("/branches", vendorH.ListBranches)
-			vendorRoutes.GET("/branches/:id", vendorH.GetBranch)
-			vendorRoutes.PUT("/branches/:id", vendorH.UpdateBranch)
-			vendorRoutes.DELETE("/branches/:id", vendorH.DeleteBranch)
-			vendorRoutes.PUT("/branches/:id/default", vendorH.SetDefaultBranch)
+			// Warehouses (Pickup/Return Locations)
+			vendorRoutes.POST("/warehouses", vendorH.CreateWarehouse)
+			vendorRoutes.GET("/warehouses", vendorH.ListWarehouses)
+			vendorRoutes.GET("/warehouses/:id", vendorH.GetWarehouse)
+			vendorRoutes.PUT("/warehouses/:id", vendorH.UpdateWarehouse)
+			vendorRoutes.DELETE("/warehouses/:id", vendorH.DeleteWarehouse)
+			vendorRoutes.PUT("/warehouses/:id/default", vendorH.SetDefaultWarehouse)
 
-			// Gallery
-			vendorRoutes.POST("/gallery", vendorH.UploadImage)
-			vendorRoutes.GET("/gallery", vendorH.ListImages)
-			vendorRoutes.DELETE("/gallery/:id", vendorH.DeleteImage)
-			vendorRoutes.PUT("/gallery/reorder", vendorH.ReorderImages)
+			// Brands
+			vendorRoutes.POST("/brands", vendorH.CreateBrand)
+			vendorRoutes.GET("/brands", vendorH.ListBrands)
+			vendorRoutes.GET("/brands/:id", vendorH.GetBrand)
+			vendorRoutes.PUT("/brands/:id", vendorH.UpdateBrand)
+			vendorRoutes.DELETE("/brands/:id", vendorH.DeleteBrand)
 
-			// Working Hours (per branch)
-			vendorRoutes.PUT("/branches/:id/hours", vendorH.SetWorkingHours)
-			vendorRoutes.GET("/branches/:id/hours", vendorH.GetWorkingHours)
+			// Purchase History
+			vendorRoutes.POST("/purchases", vendorH.CreatePurchase)
+			vendorRoutes.GET("/purchases", vendorH.ListPurchases)
+		}
 
-			// Holidays (per branch)
-			vendorRoutes.POST("/branches/:id/holidays", vendorH.AddHoliday)
-			vendorRoutes.GET("/branches/:id/holidays", vendorH.ListHolidays)
-			vendorRoutes.DELETE("/branches/:id/holidays/:holiday_id", vendorH.DeleteHoliday)
+		// ==================== Delivery routes ====================
+		deliveryRoutes := v1.Group("/delivery")
+		deliveryRoutes.Use(authMW.Authenticate())
+		{
+			deliveryRoutes.PUT("/orders/:id/assign", deliveryOrderH.AssignDelivery)
+			deliveryRoutes.PUT("/orders/:id/accept", deliveryOrderH.AcceptAssignment)
+			deliveryRoutes.PUT("/orders/:id/reject", deliveryOrderH.RejectAssignment)
+			deliveryRoutes.PUT("/orders/:id/pickup", deliveryOrderH.PickupOrder)
+			deliveryRoutes.PUT("/orders/:id/out-for-delivery", deliveryOrderH.OutForDelivery)
+			deliveryRoutes.PUT("/orders/:id/deliver", deliveryOrderH.DeliverOrder)
+			deliveryRoutes.POST("/orders/:id/verify-otp", deliveryOrderH.VerifyDeliveryOTP)
+			deliveryRoutes.POST("/orders/:id/regenerate-otp", deliveryOrderH.RegenerateOTP)
+			deliveryRoutes.GET("/orders", deliveryOrderH.ListAssignedOrders)
+			deliveryRoutes.GET("/orders/:id", deliveryOrderH.GetDeliveryOrder)
+			deliveryRoutes.POST("/presence/online", presenceH.GoOnline)
+			deliveryRoutes.POST("/presence/offline", presenceH.GoOffline)
+			deliveryRoutes.POST("/presence/heartbeat", presenceH.Heartbeat)
+			deliveryRoutes.GET("/presence/me", presenceH.GetMyPresence)
+			deliveryRoutes.POST("/location", locationH.UpdateLocation)
+			deliveryRoutes.GET("/earnings", earningH.ListEarnings)
+			deliveryRoutes.GET("/earnings/summary", earningH.GetEarningSummary)
+			deliveryRoutes.GET("/bank", bankH.GetBankAccount)
+			deliveryRoutes.POST("/bank", bankH.UpsertBankAccount)
+			deliveryRoutes.PUT("/bank", bankH.UpsertBankAccount)
+			deliveryRoutes.DELETE("/bank", bankH.DeleteBankAccount)
 		}
 
 		// ==================== Product routes ====================
 		productRoutes := v1.Group("/products")
 		productRoutes.Use(authMW.Authenticate())
 		{
-			productRoutes.POST("/", productH.Create)
+			productRoutes.POST("", productH.Create)
 			productRoutes.PUT("/:id", productH.Update)
 			productRoutes.DELETE("/:id", productH.Delete)
 			productRoutes.POST("/:id/reviews", productH.AddReview)
+
+			// Product image management
+			productRoutes.POST("/:id/images", middleware.MaxBodySize(32<<20), productH.UploadProductImages)
+			productRoutes.GET("/:id/images", productH.ListProductImages)
+			productRoutes.PUT("/:id/images/reorder", productH.ReorderProductImages)
+			productRoutes.PUT("/:id/images/:imageId/primary", productH.SetPrimaryProductImage)
+			productRoutes.DELETE("/images/:imageId", productH.DeleteProductImage)
+
+			// Product Variants
+			productRoutes.GET("/:id/variants", productH.ListVariants)
+			productRoutes.POST("/:id/variants", productH.CreateVariant)
+			productRoutes.PUT("/:id/variants/:variantId", productH.UpdateVariant)
+			productRoutes.DELETE("/:id/variants/:variantId", productH.DeleteVariant)
 		}
 
 		// ==================== Order routes ====================
 		orderRoutes := v1.Group("/orders")
 		orderRoutes.Use(authMW.Authenticate())
 		{
-			orderRoutes.POST("/", orderH.PlaceOrder)
-			orderRoutes.GET("/", orderH.ListMyOrders)
+			orderRoutes.POST("", orderH.PlaceOrder)
+			orderRoutes.GET("", orderH.ListMyOrders)
 			orderRoutes.GET("/:id", orderH.Get)
 			orderRoutes.POST("/:id/cancel", orderH.CancelOrder)
 			orderRoutes.GET("/:id/track", orderH.TrackOrder)
@@ -369,19 +435,19 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 		cartRoutes := v1.Group("/cart")
 		cartRoutes.Use(authMW.Authenticate())
 		{
-			cartRoutes.GET("/", cartH.GetCart)
+			cartRoutes.GET("", cartH.GetCart)
 			cartRoutes.POST("/items", cartH.AddItem)
 			cartRoutes.PUT("/items/:item_id", cartH.UpdateQuantity)
 			cartRoutes.DELETE("/items/:item_id", cartH.RemoveItem)
-			cartRoutes.DELETE("/", cartH.ClearCart)
+			cartRoutes.DELETE("", cartH.ClearCart)
 		}
 
 		// ==================== Wishlist routes ====================
 		wishlistRoutes := v1.Group("/wishlist")
 		wishlistRoutes.Use(authMW.Authenticate())
 		{
-			wishlistRoutes.GET("/", wishlistH.GetAll)
-			wishlistRoutes.POST("/", wishlistH.Add)
+			wishlistRoutes.GET("", wishlistH.GetAll)
+			wishlistRoutes.POST("", wishlistH.Add)
 			wishlistRoutes.DELETE("/:product_id", wishlistH.Remove)
 			wishlistRoutes.GET("/:product_id/check", wishlistH.Check)
 		}
@@ -400,7 +466,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 		walletRoutes := v1.Group("/wallet")
 		walletRoutes.Use(authMW.Authenticate())
 		{
-			walletRoutes.GET("/", walletH.GetBalance)
+			walletRoutes.GET("", walletH.GetBalance)
 			walletRoutes.GET("/transactions", walletH.GetTransactions)
 			walletRoutes.POST("/withdrawals", walletH.RequestWithdrawal)
 			walletRoutes.GET("/withdrawals", walletH.ListWithdrawals)
@@ -417,8 +483,8 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 		kycRoutes := v1.Group("/kyc")
 		kycRoutes.Use(authMW.Authenticate())
 		{
-			kycRoutes.POST("/", kycH.SubmitKYC)
-			kycRoutes.GET("/", kycH.GetMyKYC)
+			kycRoutes.POST("", kycH.SubmitKYC)
+			kycRoutes.GET("", kycH.GetMyKYC)
 		}
 
 		// ==================== Notification routes ====================
@@ -507,6 +573,11 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			// Reports
 			adminRoutes.GET("/reports", reviewH.ListAllReports)
 			adminRoutes.PUT("/reports/:id/resolve", reviewH.ResolveReport)
+
+			// Driver assignment
+			adminRoutes.POST("/orders/:id/assign-driver", deliveryOrderH.AssignDriver)
+			adminRoutes.GET("/delivery/presence", presenceH.GetOnlineDrivers)
+			adminRoutes.GET("/delivery/presence/summary", presenceH.GetPresenceSummary)
 
 			// Settings
 			adminRoutes.GET("/settings", adminH.GetSettings)

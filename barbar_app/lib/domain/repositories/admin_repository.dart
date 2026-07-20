@@ -36,4 +36,6 @@ abstract class AdminRepository {
   Future<Map<String, dynamic>> getReviewAnalytics();
   Future<Map<String, dynamic>> getAllReports({int page = 1, int limit = 20, String? status});
   Future<void> resolveReport(String reportId, String status);
+  Future<Map<String, dynamic>> getDeliveryPresenceSummary();
+  Future<List<dynamic>> getOnlineDrivers();
 }

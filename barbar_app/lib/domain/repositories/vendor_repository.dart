@@ -1,10 +1,10 @@
 import '../../data/models/vendor_model.dart';
-import '../../data/models/vendor_branch_model.dart';
-import '../../data/models/vendor_image_model.dart';
-import '../../data/models/vendor_working_hour_model.dart';
-import '../../data/models/vendor_holiday_model.dart';
+import '../../data/models/vendor_warehouse_model.dart';
+import '../../data/models/vendor_brand_model.dart';
 import '../../data/models/product_model.dart';
+import '../../data/models/product_variant_model.dart';
 import '../../data/models/order_model.dart';
+import '../../data/models/vendor_purchase_model.dart';
 
 abstract class VendorRepository {
   // Profile
@@ -13,28 +13,19 @@ abstract class VendorRepository {
   Future<VendorModel> updateProfile(Map<String, dynamic> data);
   Future<Map<String, dynamic>> getDashboard();
 
-  // Branches
-  Future<VendorBranchModel> createBranch(Map<String, dynamic> data);
-  Future<List<VendorBranchModel>> listBranches();
-  Future<VendorBranchModel> getBranch(String branchId);
-  Future<VendorBranchModel> updateBranch(String branchId, Map<String, dynamic> data);
-  Future<void> deleteBranch(String branchId);
-  Future<void> setDefaultBranch(String branchId);
+  // Warehouses
+  Future<WarehouseModel> createWarehouse(Map<String, dynamic> data);
+  Future<List<WarehouseModel>> listWarehouses();
+  Future<WarehouseModel> getWarehouse(String warehouseId);
+  Future<WarehouseModel> updateWarehouse(String warehouseId, Map<String, dynamic> data);
+  Future<void> deleteWarehouse(String warehouseId);
+  Future<void> setDefaultWarehouse(String warehouseId);
 
-  // Gallery
-  Future<VendorImageModel> uploadImage(Map<String, dynamic> data);
-  Future<List<VendorImageModel>> listImages({String? branchId, String? imageType});
-  Future<void> deleteImage(String imageId);
-  Future<void> reorderImages(List<String> imageIds);
-
-  // Working Hours
-  Future<List<VendorWorkingHourModel>> setWorkingHours(String branchId, List<Map<String, dynamic>> hours);
-  Future<List<VendorWorkingHourModel>> getWorkingHours(String branchId);
-
-  // Holidays
-  Future<VendorHolidayModel> addHoliday(String branchId, Map<String, dynamic> data);
-  Future<List<VendorHolidayModel>> listHolidays(String branchId);
-  Future<void> deleteHoliday(String branchId, String holidayId);
+  // Brands
+  Future<List<VendorBrandModel>> getBrands();
+  Future<VendorBrandModel> createBrand(Map<String, dynamic> data);
+  Future<VendorBrandModel> updateBrand(String id, Map<String, dynamic> data);
+  Future<void> deleteBrand(String id);
 
   // Products
   Future<List<ProductModel>> listProducts();
@@ -45,4 +36,19 @@ abstract class VendorRepository {
   // Orders
   Future<List<OrderModel>> listOrders({String? status});
   Future<void> updateOrderStatus(String orderId, String status);
+  Future<OrderModel> getOrderById(String orderId);
+  Future<OrderModel> acceptOrder(String orderId);
+  Future<OrderModel> rejectOrder(String orderId, {String? reason});
+  Future<OrderModel> packOrder(String orderId);
+  Future<OrderModel> readyForPickup(String orderId);
+
+  // Purchases
+  Future<List<VendorPurchaseModel>> getPurchases();
+  Future<VendorPurchaseModel> createPurchase(Map<String, dynamic> data);
+
+  // Product Variants
+  Future<List<ProductVariantModel>> listProductVariants(String productId);
+  Future<ProductVariantModel> createVariant(String productId, Map<String, dynamic> data);
+  Future<ProductVariantModel> updateVariant(String productId, String variantId, Map<String, dynamic> data);
+  Future<void> deleteVariant(String productId, String variantId);
 }

@@ -1,12 +1,12 @@
 import '../../domain/repositories/vendor_repository.dart';
 import '../datasources/remote/vendor_remote_datasource.dart';
 import '../models/vendor_model.dart';
-import '../models/vendor_branch_model.dart';
-import '../models/vendor_image_model.dart';
-import '../models/vendor_working_hour_model.dart';
-import '../models/vendor_holiday_model.dart';
+import '../models/vendor_warehouse_model.dart';
+import '../models/vendor_brand_model.dart';
 import '../models/product_model.dart';
+import '../models/product_variant_model.dart';
 import '../models/order_model.dart';
+import '../models/vendor_purchase_model.dart';
 
 class VendorRepositoryImpl implements VendorRepository {
   final VendorRemoteDataSource _remoteDataSource;
@@ -37,88 +37,62 @@ class VendorRepositoryImpl implements VendorRepository {
   }
 
   @override
-  Future<VendorBranchModel> createBranch(Map<String, dynamic> data) async {
-    final json = await _remoteDataSource.createBranch(data);
-    return VendorBranchModel.fromJson(json);
+  Future<WarehouseModel> createWarehouse(Map<String, dynamic> data) async {
+    final json = await _remoteDataSource.createWarehouse(data);
+    return WarehouseModel.fromJson(json);
   }
 
   @override
-  Future<List<VendorBranchModel>> listBranches() async {
-    final list = await _remoteDataSource.listBranches();
-    return list.map((e) => VendorBranchModel.fromJson(e as Map<String, dynamic>)).toList();
+  Future<List<WarehouseModel>> listWarehouses() async {
+    final list = await _remoteDataSource.listWarehouses();
+    return list.map((e) => WarehouseModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   @override
-  Future<VendorBranchModel> getBranch(String branchId) async {
-    final json = await _remoteDataSource.getBranch(branchId);
-    return VendorBranchModel.fromJson(json);
+  Future<WarehouseModel> getWarehouse(String warehouseId) async {
+    final json = await _remoteDataSource.getWarehouse(warehouseId);
+    return WarehouseModel.fromJson(json);
   }
 
   @override
-  Future<VendorBranchModel> updateBranch(String branchId, Map<String, dynamic> data) async {
-    final json = await _remoteDataSource.updateBranch(branchId, data);
-    return VendorBranchModel.fromJson(json);
+  Future<WarehouseModel> updateWarehouse(String warehouseId, Map<String, dynamic> data) async {
+    final json = await _remoteDataSource.updateWarehouse(warehouseId, data);
+    return WarehouseModel.fromJson(json);
   }
 
   @override
-  Future<void> deleteBranch(String branchId) async {
-    await _remoteDataSource.deleteBranch(branchId);
+  Future<void> deleteWarehouse(String warehouseId) async {
+    await _remoteDataSource.deleteWarehouse(warehouseId);
   }
 
   @override
-  Future<void> setDefaultBranch(String branchId) async {
-    await _remoteDataSource.setDefaultBranch(branchId);
+  Future<void> setDefaultWarehouse(String warehouseId) async {
+    await _remoteDataSource.setDefaultWarehouse(warehouseId);
+  }
+
+  // Brands
+
+  @override
+  Future<List<VendorBrandModel>> getBrands() async {
+    final list = await _remoteDataSource.getBrands();
+    return list.map((e) => VendorBrandModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   @override
-  Future<VendorImageModel> uploadImage(Map<String, dynamic> data) async {
-    final json = await _remoteDataSource.uploadImage(data);
-    return VendorImageModel.fromJson(json);
+  Future<VendorBrandModel> createBrand(Map<String, dynamic> data) async {
+    final json = await _remoteDataSource.createBrand(data);
+    return VendorBrandModel.fromJson(json);
   }
 
   @override
-  Future<List<VendorImageModel>> listImages({String? branchId, String? imageType}) async {
-    final list = await _remoteDataSource.listImages(branchId: branchId, imageType: imageType);
-    return list.map((e) => VendorImageModel.fromJson(e as Map<String, dynamic>)).toList();
+  Future<VendorBrandModel> updateBrand(String id, Map<String, dynamic> data) async {
+    final json = await _remoteDataSource.updateBrand(id, data);
+    return VendorBrandModel.fromJson(json);
   }
 
   @override
-  Future<void> deleteImage(String imageId) async {
-    await _remoteDataSource.deleteImage(imageId);
-  }
-
-  @override
-  Future<void> reorderImages(List<String> imageIds) async {
-    await _remoteDataSource.reorderImages(imageIds);
-  }
-
-  @override
-  Future<List<VendorWorkingHourModel>> setWorkingHours(String branchId, List<Map<String, dynamic>> hours) async {
-    final list = await _remoteDataSource.setWorkingHours(branchId, hours);
-    return list.map((e) => VendorWorkingHourModel.fromJson(e as Map<String, dynamic>)).toList();
-  }
-
-  @override
-  Future<List<VendorWorkingHourModel>> getWorkingHours(String branchId) async {
-    final list = await _remoteDataSource.getWorkingHours(branchId);
-    return list.map((e) => VendorWorkingHourModel.fromJson(e as Map<String, dynamic>)).toList();
-  }
-
-  @override
-  Future<VendorHolidayModel> addHoliday(String branchId, Map<String, dynamic> data) async {
-    final json = await _remoteDataSource.addHoliday(branchId, data);
-    return VendorHolidayModel.fromJson(json);
-  }
-
-  @override
-  Future<List<VendorHolidayModel>> listHolidays(String branchId) async {
-    final list = await _remoteDataSource.listHolidays(branchId);
-    return list.map((e) => VendorHolidayModel.fromJson(e as Map<String, dynamic>)).toList();
-  }
-
-  @override
-  Future<void> deleteHoliday(String branchId, String holidayId) async {
-    await _remoteDataSource.deleteHoliday(branchId, holidayId);
+  Future<void> deleteBrand(String id) async {
+    await _remoteDataSource.deleteBrand(id);
   }
 
   @override
@@ -153,5 +127,74 @@ class VendorRepositoryImpl implements VendorRepository {
   @override
   Future<void> updateOrderStatus(String orderId, String status) async {
     await _remoteDataSource.updateOrderStatus(orderId, status);
+  }
+
+  @override
+  Future<OrderModel> getOrderById(String orderId) async {
+    final json = await _remoteDataSource.getOrderById(orderId);
+    return OrderModel.fromJson(json);
+  }
+
+  @override
+  Future<OrderModel> acceptOrder(String orderId) async {
+    final json = await _remoteDataSource.acceptOrder(orderId);
+    return OrderModel.fromJson(json);
+  }
+
+  @override
+  Future<OrderModel> rejectOrder(String orderId, {String? reason}) async {
+    final json = await _remoteDataSource.rejectOrder(orderId, reason: reason);
+    return OrderModel.fromJson(json);
+  }
+
+  @override
+  Future<OrderModel> packOrder(String orderId) async {
+    final json = await _remoteDataSource.packOrder(orderId);
+    return OrderModel.fromJson(json);
+  }
+
+  @override
+  Future<OrderModel> readyForPickup(String orderId) async {
+    final json = await _remoteDataSource.readyForPickup(orderId);
+    return OrderModel.fromJson(json);
+  }
+
+  // Purchases
+
+  @override
+  Future<List<VendorPurchaseModel>> getPurchases() async {
+    final list = await _remoteDataSource.getPurchases();
+    return list.map((e) => VendorPurchaseModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<VendorPurchaseModel> createPurchase(Map<String, dynamic> data) async {
+    final json = await _remoteDataSource.createPurchase(data);
+    return VendorPurchaseModel.fromJson(json);
+  }
+
+  // Product Variants
+
+  @override
+  Future<List<ProductVariantModel>> listProductVariants(String productId) async {
+    final list = await _remoteDataSource.listProductVariants(productId);
+    return list.map((e) => ProductVariantModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<ProductVariantModel> createVariant(String productId, Map<String, dynamic> data) async {
+    final json = await _remoteDataSource.createVariant(productId, data);
+    return ProductVariantModel.fromJson(json);
+  }
+
+  @override
+  Future<ProductVariantModel> updateVariant(String productId, String variantId, Map<String, dynamic> data) async {
+    final json = await _remoteDataSource.updateVariant(productId, variantId, data);
+    return ProductVariantModel.fromJson(json);
+  }
+
+  @override
+  Future<void> deleteVariant(String productId, String variantId) async {
+    await _remoteDataSource.deleteVariant(productId, variantId);
   }
 }

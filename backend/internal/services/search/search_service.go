@@ -90,7 +90,7 @@ func (s *SearchService) Search(c *gin.Context) {
 		var vendors []models.Vendor
 		var count int64
 		vq := s.db.Model(&models.Vendor{}).Where("status = ? AND is_active = ?", models.VendorStatusApproved, true).
-			Where("store_name ILIKE ? OR city ILIKE ?", likeQuery, likeQuery)
+			Where("business_name ILIKE ? OR city ILIKE ?", likeQuery, likeQuery)
 		vq.Count(&count)
 		total += count
 
@@ -99,7 +99,7 @@ func (s *SearchService) Search(c *gin.Context) {
 			allHits = append(allHits, SearchHit{
 				Type:        "vendor",
 				ID:          v.ID.String(),
-				Title:       v.StoreName,
+				Title:       v.BusinessName,
 				Description: v.City + ", " + v.State,
 				Data:        v,
 			})

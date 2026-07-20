@@ -15,6 +15,9 @@ import (
 	"github.com/barbar-app/backend/internal/database"
 	"github.com/barbar-app/backend/internal/firebase"
 	"github.com/barbar-app/backend/internal/routes"
+	deliverySvc "github.com/barbar-app/backend/internal/services/delivery"
+	notifService "github.com/barbar-app/backend/internal/services/notification"
+	orderService "github.com/barbar-app/backend/internal/services/order"
 	"github.com/barbar-app/backend/internal/utils"
 	"github.com/barbar-app/backend/internal/websocket"
 )
@@ -55,8 +58,21 @@ func main() {
 	hub := websocket.NewHub(cfg, jwtManager)
 	go hub.Run()
 
+	// Initialize notification and order services
+	notifSvc := notifService.NewNotificationService(db, hub)
+	tmplSvc := notifService.NewTemplateService(db)
+	dispatcher := notifService.NewDispatcher(db, hub, tmplSvc)
+	presenceSvc := deliverySvc.NewPresenceService(db, hub)
+	orderSvc := orderService.NewOrderService(db, dispatcher, hub, presenceSvc)
+
+	// Start order assignment expiry worker
+	orderSvc.StartAssignmentWorker(context.Background())
+
+	// Start stale presence cleanup
+	presenceSvc.StartStalePresenceCleanup(context.Background())
+
 	// Setup Router
-	router := routes.SetupRouter(db, cfg, jwtManager, hub)
+	router := routes.SetupRouter(db, cfg, jwtManager, hub, notifSvc, dispatcher, orderSvc, presenceSvc)
 
 	// Create HTTP Server with optimized settings
 	srv := &http.Server{

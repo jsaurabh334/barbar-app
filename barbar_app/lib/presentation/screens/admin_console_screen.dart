@@ -4,6 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:barbar_app/presentation/screens/admin/vendors/admin_vendors_screen.dart';
 import 'package:barbar_app/presentation/bloc/admin/admin_vendors_bloc.dart';
 import 'package:barbar_app/presentation/screens/admin/delivery/admin_delivery_screen.dart';
+import 'package:barbar_app/presentation/screens/admin/admin_delivery_presence_screen.dart';
 import 'package:barbar_app/presentation/bloc/admin/admin_delivery_bloc.dart';
 import 'package:barbar_app/presentation/bloc/admin/admin_customers_bloc.dart';
 import 'package:barbar_app/domain/repositories/admin_repository.dart';
@@ -136,6 +137,7 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
             _buildDrawerItem(LucideIcons.users, 'Customers', 1),
             _buildDrawerItem(LucideIcons.store, 'Vendors', 2),
             _buildDrawerItem(LucideIcons.bike, 'Delivery', 3),
+            _buildDrawerItem(LucideIcons.activity, 'Delivery Drivers', 9),
             _buildDrawerItem(LucideIcons.scale, 'Disputes', 4),
             _buildDrawerItem(LucideIcons.messageSquare, 'Reviews', 5),
             _buildDrawerItem(LucideIcons.flag, 'Reports', 6),
@@ -207,8 +209,12 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
       selected: isSelected,
       selectedTileColor: AppColors.primary.withValues(alpha: 0.1),
       onTap: () {
-        _tabController.animateTo(index);
         Navigator.pop(context); // close drawer
+        if (index == 9) {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDeliveryPresenceScreen()));
+        } else {
+          _tabController.animateTo(index);
+        }
       },
     );
   }

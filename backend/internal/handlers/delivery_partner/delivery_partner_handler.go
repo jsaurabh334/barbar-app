@@ -25,10 +25,11 @@ func NewDeliveryPartnerHandler(db *gorm.DB) *DeliveryPartnerHandler {
 }
 
 type RegisterDeliveryPartnerRequest struct {
-    VehicleType   string  `json:"vehicle_type" binding:"required"`
-    LicenseNumber string  `json:"license_number" binding:"required"`
-    Latitude      float64 `json:"latitude"`
-    Longitude     float64 `json:"longitude"`
+	VehicleType   string  `json:"vehicle_type" binding:"required"`
+	VehicleNumber string  `json:"vehicle_number" binding:"required"`
+	LicenseNumber string  `json:"license_number" binding:"required"`
+	Latitude      float64 `json:"latitude"`
+	Longitude     float64 `json:"longitude"`
 }
 
 // Register creates a new delivery partner profile linked to the authenticated user.
@@ -62,21 +63,23 @@ func (h *DeliveryPartnerHandler) Register(c *gin.Context) {
         return
     }
 
-    partner := models.DeliveryPartner{
-        ID:               uuid.New(),
-        UserID:           userID,
-        VehicleType:      req.VehicleType,
-        LicenseNumber:    req.LicenseNumber,
+	partner := models.DeliveryPartner{
+		ID:               uuid.New(),
+		UserID:           userID,
+		VehicleType:      req.VehicleType,
+		VehicleNumber:    req.VehicleNumber,
+		LicenseNumber:    req.LicenseNumber,
         CurrentLatitude:  req.Latitude,
         CurrentLongitude: req.Longitude,
-        AvailabilityStatus: models.DeliveryPartnerStatusAvailable,
+        Status: models.DeliveryPartnerStatusPending,
         CreatedAt:        time.Now(),
         UpdatedAt:        time.Now(),
     }
 
-    // Attempt to create the delivery partner profile
-    if err := h.db.Create(&partner).Error; err != nil {
-        // Check for duplicate unique constraint violation (user_id)
+    // Wrap partner creation + role update in a transaction
+    tx := h.db.Begin()
+    if err := tx.Create(&partner).Error; err != nil {
+        tx.Rollback()
         if strings.Contains(err.Error(), "UNIQUE constraint failed") || strings.Contains(err.Error(), "duplicate key") {
             utils.BadRequestResponse(c, "Delivery partner profile already exists")
         } else {
@@ -84,6 +87,12 @@ func (h *DeliveryPartnerHandler) Register(c *gin.Context) {
         }
         return
     }
+    if err := tx.Model(&models.User{}).Where("id = ?", userID).Update("role", models.RoleDelivery).Error; err != nil {
+        tx.Rollback()
+        utils.InternalErrorResponse(c, "Failed to update user role")
+        return
+    }
+    tx.Commit()
     utils.CreatedResponse(c, partner)
 }
 

@@ -109,10 +109,4 @@ class DirectoryBloc extends Bloc<DirectoryEvent, DirectoryState> {
     }
   }
 
-  List<CategoryModel> _extractCategories() {
-    if (state is DirectoryLoaded) {
-      return (state as DirectoryLoaded).categories;
-    }
-    return [];
-  }
 }

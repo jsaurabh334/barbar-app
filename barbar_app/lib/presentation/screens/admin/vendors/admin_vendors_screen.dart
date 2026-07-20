@@ -146,7 +146,7 @@ class _VendorCard extends StatelessWidget {
           ),
         ),
         title: Text(
-          vendor.storeName,
+          vendor.businessName,
           style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         subtitle: Column(
@@ -205,7 +205,7 @@ class _VendorCard extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text('Suspend Vendor?', style: TextStyle(color: Colors.white)),
-        content: Text('Are you sure you want to suspend ${vendor.storeName}? Their products will no longer be visible.'),
+        content: Text('Are you sure you want to suspend ${vendor.businessName}? Their products will no longer be visible.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),

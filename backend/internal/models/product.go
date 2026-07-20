@@ -1,6 +1,9 @@
 package models
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+	"time"
+)
 
 type CategoryType string
 
@@ -51,13 +54,14 @@ const (
 type Product struct {
 	BaseModel
 	VendorID          uuid.UUID        `gorm:"type:uuid;index;not null" json:"vendor_id"`
+	BrandID           *uuid.UUID       `gorm:"type:uuid;index" json:"brand_id,omitempty"`
 	CategoryID        uuid.UUID        `gorm:"type:uuid;index" json:"category_id"`
 	SubCategoryID     *uuid.UUID       `gorm:"type:uuid;index" json:"sub_category_id,omitempty"`
 	Name              string           `gorm:"size:255;index" json:"name"`
 	Slug              string           `gorm:"size:255;index" json:"slug"`
 	Description       string           `gorm:"type:text" json:"description,omitempty"`
 	ShortDescription  string           `gorm:"type:text" json:"short_description,omitempty"`
-	Brand             string           `gorm:"size:255" json:"brand,omitempty"`
+	BrandName         string           `gorm:"size:255" json:"brand_name,omitempty"`
 	Condition         ProductCondition `gorm:"size:50;default:new" json:"condition"`
 	BasePrice         float64          `gorm:"not null" json:"base_price"`
 	DiscountPrice     float64          `json:"discount_price,omitempty"`
@@ -86,17 +90,20 @@ type Product struct {
 	SearchKeywords    string           `gorm:"type:tsvector" json:"-"`
 
 	// Relations
-	Vendor   *Vendor          `gorm:"foreignKey:VendorID" json:"vendor,omitempty"`
-	Category *Category        `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
-	Variants []ProductVariant `gorm:"foreignKey:ProductID" json:"variants,omitempty"`
-	Images   []ProductImage   `gorm:"foreignKey:ProductID" json:"images,omitempty"`
-	Reviews  []ProductReview  `gorm:"foreignKey:ProductID" json:"reviews,omitempty"`
+	Vendor     *Vendor          `gorm:"foreignKey:VendorID" json:"vendor,omitempty"`
+	Brand      *Brand           `gorm:"foreignKey:BrandID" json:"brand,omitempty"`
+	Category   *Category        `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
+	Variants   []ProductVariant `gorm:"foreignKey:ProductID" json:"variants,omitempty"`
+	Images     []ProductImage   `gorm:"foreignKey:ProductID" json:"images,omitempty"`
+	Reviews    []ProductReview  `gorm:"foreignKey:ProductID" json:"reviews,omitempty"`
+	Purchases  []Purchase       `gorm:"foreignKey:ProductID" json:"purchases,omitempty"`
 }
 
 type ProductVariant struct {
 	BaseModel
 	ProductID    uuid.UUID `gorm:"type:uuid;index;not null" json:"product_id"`
 	SKU          string    `gorm:"size:255;uniqueIndex" json:"sku"`
+	Barcode      string    `gorm:"size:100;index" json:"barcode,omitempty"`
 	Name         string    `gorm:"size:255" json:"name"`
 	Value        string    `gorm:"size:255" json:"value"`
 	Price        float64   `gorm:"not null" json:"price"`
@@ -111,11 +118,14 @@ type ProductVariant struct {
 
 type ProductImage struct {
 	BaseModel
-	ProductID  uuid.UUID `gorm:"type:uuid;index;not null" json:"product_id"`
-	ImageURL   string    `gorm:"size:500;not null" json:"image_url"`
-	AltText    string    `gorm:"size:255" json:"alt_text,omitempty"`
-	IsPrimary  bool      `gorm:"default:false" json:"is_primary"`
-	SortOrder  int       `gorm:"default:0" json:"sort_order"`
+	ProductID    uuid.UUID `gorm:"type:uuid;index;not null" json:"product_id"`
+	ImageURL     string    `gorm:"size:500;not null" json:"image_url"`
+	ThumbnailURL string    `gorm:"size:500" json:"thumbnail_url,omitempty"`
+	AltText      string    `gorm:"size:255" json:"alt_text,omitempty"`
+	IsPrimary    bool      `gorm:"default:false" json:"is_primary"`
+	SortOrder    int       `gorm:"default:0" json:"sort_order"`
+	FileSize     int64     `gorm:"default:0" json:"file_size,omitempty"`
+	MimeType     string    `gorm:"size:100" json:"mime_type,omitempty"`
 }
 
 type ProductReview struct {
@@ -133,5 +143,47 @@ type ProductReview struct {
 
 	// Relations
 	User    *User    `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Product *Product `gorm:"foreignKey:ProductID" json:"product,omitempty"`
+}
+
+type Brand struct {
+	BaseModel
+	VendorID    uuid.UUID `gorm:"type:uuid;index;not null" json:"vendor_id"`
+	Name        string    `gorm:"size:255;index;not null" json:"name"`
+	Slug        string    `gorm:"size:255;index" json:"slug"`
+	Description string    `gorm:"type:text" json:"description,omitempty"`
+	Logo        string    `gorm:"size:500" json:"logo,omitempty"`
+	IsActive    bool      `gorm:"default:true;index" json:"is_active"`
+	SortOrder   int       `gorm:"default:0" json:"sort_order"`
+
+	// Relations
+	Vendor   *Vendor   `gorm:"foreignKey:VendorID" json:"vendor,omitempty"`
+	Products []Product `gorm:"foreignKey:BrandID" json:"products,omitempty"`
+}
+
+type ProductAttribute struct {
+	BaseModel
+	VendorID    uuid.UUID `gorm:"type:uuid;index;not null" json:"vendor_id"`
+	Name        string    `gorm:"size:255;not null" json:"name"`
+	Values      JSONB     `gorm:"type:jsonb" json:"values"`
+	IsActive    bool      `gorm:"default:true" json:"is_active"`
+	SortOrder   int       `gorm:"default:0" json:"sort_order"`
+}
+
+type Purchase struct {
+	BaseModel
+	VendorID       uuid.UUID  `gorm:"type:uuid;index;not null" json:"vendor_id"`
+	ProductID      uuid.UUID  `gorm:"type:uuid;index;not null" json:"product_id"`
+	VariantID      *uuid.UUID `gorm:"type:uuid;index" json:"variant_id,omitempty"`
+	Quantity       int        `gorm:"not null" json:"quantity"`
+	UnitPrice      float64    `gorm:"not null" json:"unit_price"`
+	TotalPrice     float64    `gorm:"not null" json:"total_price"`
+	SupplierName   string     `gorm:"size:255" json:"supplier_name,omitempty"`
+	InvoiceNumber  string     `gorm:"size:255" json:"invoice_number,omitempty"`
+	Notes          string     `gorm:"type:text" json:"notes,omitempty"`
+	PurchasedAt    time.Time  `json:"purchased_at"`
+
+	// Relations
+	Vendor  *Vendor  `gorm:"foreignKey:VendorID" json:"vendor,omitempty"`
 	Product *Product `gorm:"foreignKey:ProductID" json:"product,omitempty"`
 }

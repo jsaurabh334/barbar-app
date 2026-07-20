@@ -54,10 +54,17 @@ class MarketplaceBloc extends Bloc<MarketplaceEvent, MarketplaceState> {
   Future<void> _onPlaceOrder(PlaceOrder event, Emitter<MarketplaceState> emit) async {
     emit(MarketplaceLoading());
     try {
+      final items = _cart.entries.map((e) => {
+        'product_id': e.key,
+        'quantity': e.value,
+      }).toList();
+
       final order = await _marketplaceRepository.placeOrder(
         vendorId: event.vendorId,
         shippingAddressId: event.shippingAddressId,
         couponCode: event.couponCode,
+        items: items,
+        paymentMethod: 'cod', // Assuming cash on delivery for now
       );
       _cart.clear();
       emit(OrderCreatedSuccess(order));

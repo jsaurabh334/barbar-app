@@ -6,6 +6,7 @@ import '../../data/models/order_model.dart';
 import '../bloc/marketplace/marketplace_bloc.dart';
 import '../bloc/marketplace/marketplace_event.dart';
 import '../bloc/marketplace/marketplace_state.dart';
+import 'customer/customer_order_tracking_screen.dart';
 
 class OrderHistoryScreen extends StatefulWidget {
   const OrderHistoryScreen({super.key});
@@ -113,6 +114,26 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
               ],
             ),
             const SizedBox(height: 12),
+            if (order.items != null && order.items!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const Text('Items', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+              const SizedBox(height: 8),
+              ...order.items!.map((item) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${item.quantity}x', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(item.productName)),
+                        Text('₹${(item.price * item.quantity).toInt()}'),
+                      ],
+                    ),
+                  )),
+              const SizedBox(height: 12),
+              const Divider(color: AppColors.border, height: 1),
+              const SizedBox(height: 12),
+            ],
             _detailRow('Items Total', '₹${order.itemsTotal.toInt()}'),
             _detailRow('Shipping', '₹${order.shippingCharge.toInt()}'),
             if (order.discountAmount > 0) _detailRow('Discount', '-₹${order.discountAmount.toInt()}'),
@@ -135,6 +156,29 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                 ),
               ],
             ),
+            if (order.status == OrderModel.driverAccepted ||
+                order.status == OrderModel.pickedUp ||
+                order.status == OrderModel.outForDelivery) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CustomerOrderTrackingScreen(orderId: order.id),
+                    ),
+                  ),
+                  icon: const Icon(LucideIcons.navigation, size: 16),
+                  label: const Text('Live Track', style: TextStyle(fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

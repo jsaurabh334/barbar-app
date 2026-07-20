@@ -24,7 +24,6 @@ class StaffDetailScreen extends StatefulWidget {
 }
 
 class _StaffDetailScreenState extends State<StaffDetailScreen> {
-  Map<String, dynamic>? _profileData;
   Map<String, dynamic>? _ratingSummary;
   List<ReviewModel> _reviews = [];
   bool _isLoading = true;
@@ -41,7 +40,6 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
       final profile = await repo.getStaffProfile(widget.staff.id);
       final reviewsResult = await repo.getStaffReviews(widget.staff.id, page: 1, limit: 5);
 
-      final data = profile['staff'] as Map<String, dynamic>? ?? {};
       final ratingSummary = profile['rating_summary'] as Map<String, dynamic>?;
       final rawReviews = reviewsResult['data'] is Map
           ? (reviewsResult['data'] as Map)['reviews'] as List?
@@ -49,7 +47,6 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
 
       if (!mounted) return;
       setState(() {
-        _profileData = data;
         _ratingSummary = ratingSummary;
         _reviews = (rawReviews ?? [])
             .map((e) => ReviewModel.fromJson(e as Map<String, dynamic>))

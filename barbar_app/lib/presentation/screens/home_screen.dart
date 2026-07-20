@@ -608,7 +608,7 @@ class _HomeScreenState extends State<HomeScreen> {
       listener: (context, state) {
         if (state is BookingsLoaded) {
           final active = state.bookings.cast<BookingModel?>().firstWhere(
-            (b) => b!.status == 'confirmed' || b!.status == 'in_progress',
+            (b) => b?.status == 'confirmed' || b?.status == 'in_progress',
             orElse: () => null,
           );
           if (active?.id != _activeBooking?.id) {
@@ -621,7 +621,7 @@ class _HomeScreenState extends State<HomeScreen> {
         
         if (state is BookingsLoaded) {
           currentActive = state.bookings.cast<BookingModel?>().firstWhere(
-            (b) => b!.status == 'confirmed' || b!.status == 'in_progress',
+            (b) => b?.status == 'confirmed' || b?.status == 'in_progress',
             orElse: () => null,
           );
         }

@@ -84,10 +84,7 @@ func RunMigrations(db *gorm.DB) {
 		&models.Vendor{},
 		&models.VendorDocument{},
 		&models.VendorBankAccount{},
-		&models.VendorBranch{},
-		&models.VendorWorkingHour{},
-		&models.VendorHoliday{},
-		&models.VendorImage{},
+		&models.Warehouse{},
 
 		// Service/Product-level — FK → Barber, Category, Vendor
 		&models.BarberService{},
@@ -129,6 +126,9 @@ func RunMigrations(db *gorm.DB) {
 		&models.ReviewImage{},
 		&models.ReviewReply{},
 		&models.ReviewReport{},
+
+		// Delivery
+		&models.DeliveryOTP{},
 
 		// Notifications — FK → User
 		&models.Notification{},

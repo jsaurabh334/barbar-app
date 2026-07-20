@@ -23,14 +23,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
   String _selectedMethod = 'upi';
   bool _isProcessing = false;
   bool _cashConfirmed = false;
-  Map<String, dynamic>? _paymentData;
+
 
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<BookingBloc, BookingState>(
       listener: (context, state) {
         if (state is BookingPaymentInitiated) {
-          _paymentData = state.paymentData;
           _openPaymentSheet(state.paymentData);
         } else if (state is BookingPaymentVerified) {
           if (!mounted) return;

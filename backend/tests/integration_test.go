@@ -11,14 +11,17 @@ import (
 
 	"github.com/barbar-app/backend/internal/auth"
 	"github.com/barbar-app/backend/internal/config"
-	"golang.org/x/crypto/bcrypt"
 	"github.com/barbar-app/backend/internal/database"
 	"github.com/barbar-app/backend/internal/models"
 	"github.com/barbar-app/backend/internal/routes"
 	"github.com/barbar-app/backend/internal/utils"
+	deliverySvc "github.com/barbar-app/backend/internal/services/delivery"
+	notifService "github.com/barbar-app/backend/internal/services/notification"
+	orderService "github.com/barbar-app/backend/internal/services/order"
 	"github.com/barbar-app/backend/internal/websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var testRouter *gin.Engine
@@ -61,7 +64,13 @@ func TestMain(m *testing.M) {
 	hub := websocket.NewHub(cfg, jwtManager)
 	go hub.Run()
 
-	testRouter = routes.SetupRouter(db, cfg, jwtManager, hub)
+	notifSvc := notifService.NewNotificationService(db, hub)
+	tmplSvc := notifService.NewTemplateService(db)
+	dispatcher := notifService.NewDispatcher(db, hub, tmplSvc)
+	presenceSvc := deliverySvc.NewPresenceService(db, hub)
+	orderSvc := orderService.NewOrderService(db, dispatcher, hub, presenceSvc)
+
+	testRouter = routes.SetupRouter(db, cfg, jwtManager, hub, notifSvc, dispatcher, orderSvc, presenceSvc)
 
 	os.Exit(m.Run())
 }
@@ -222,11 +231,11 @@ func TestFullVendorFlow(t *testing.T) {
 	custToken := register(t, "Order Customer", custEmail, "+919999999994", "TestPass123!", "customer")
 
 	w := request("POST", "/vendor/register", vendorToken, map[string]interface{}{
-		"store_name": "Test Store",
-		"address":    "456 Market St",
-		"city":       "Bangalore",
-		"state":      "Karnataka",
-		"pincode":    "560001",
+		"business_name": "Test Store",
+		"address":       "456 Market St",
+		"city":          "Bangalore",
+		"state":         "Karnataka",
+		"pincode":       "560001",
 	})
 	if w.Code != 201 {
 		t.Fatalf("Vendor registration failed: %d - %s", w.Code, w.Body.String())
