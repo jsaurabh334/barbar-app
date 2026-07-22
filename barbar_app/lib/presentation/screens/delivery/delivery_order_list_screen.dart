@@ -1,11 +1,13 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/order_model.dart';
 import '../../../domain/repositories/delivery_repository.dart';
+import '../../bloc/delivery/delivery_bloc.dart';
+import '../../bloc/delivery/delivery_event.dart';
+import '../../bloc/delivery/delivery_state.dart';
 import 'delivery_order_detail_screen.dart';
 
 class DeliveryOrderListScreen extends StatefulWidget {
@@ -16,62 +18,23 @@ class DeliveryOrderListScreen extends StatefulWidget {
 }
 
 class _DeliveryOrderListScreenState extends State<DeliveryOrderListScreen> {
-  List<OrderModel>? _orders;
-  bool _loading = true;
-  String? _error;
-
   bool _isOnline = false;
   String _presenceStatus = 'offline';
   Timer? _heartbeatTimer;
-  Timer? _gpsTimer;
 
-  bool get _hasActiveDelivery {
-    if (_orders == null) return false;
-    return _orders!.any((o) =>
-      o.status == OrderModel.driverAccepted ||
-      o.status == OrderModel.pickedUp ||
-      o.status == OrderModel.outForDelivery,
-    );
-  }
+  List<OrderModel> _orders = [];
 
   @override
   void initState() {
     super.initState();
-    _loadOrders();
+    context.read<DeliveryBloc>().add(FetchAssignedOrders());
     _loadPresence();
   }
 
   @override
   void dispose() {
     _heartbeatTimer?.cancel();
-    _gpsTimer?.cancel();
     super.dispose();
-  }
-
-  void _startGpsTimer() {
-    _gpsTimer?.cancel();
-    _gpsTimer = Timer.periodic(const Duration(seconds: 8), (_) async {
-      if (!_isOnline || !_hasActiveDelivery) {
-        _stopGpsTimer();
-        return;
-      }
-      final lat = 21.1938 + (Random().nextDouble() - 0.5) * 0.01;
-      final lng = 81.3509 + (Random().nextDouble() - 0.5) * 0.01;
-      try {
-        await context.read<DeliveryRepository>().sendLocation(
-          latitude: lat,
-          longitude: lng,
-          speed: 10 + Random().nextDouble() * 20,
-          bearing: Random().nextDouble() * 360,
-          timestamp: DateTime.now().toUtc().toIso8601String(),
-        );
-      } catch (_) {}
-    });
-  }
-
-  void _stopGpsTimer() {
-    _gpsTimer?.cancel();
-    _gpsTimer = null;
   }
 
   Future<void> _loadPresence() async {
@@ -90,10 +53,8 @@ class _DeliveryOrderListScreenState extends State<DeliveryOrderListScreen> {
 
   void _startHeartbeat() {
     _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
-      try {
-        await context.read<DeliveryRepository>().heartbeat();
-      } catch (_) {}
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      context.read<DeliveryBloc>().add(SendHeartbeat());
     });
   }
 
@@ -111,7 +72,6 @@ class _DeliveryOrderListScreenState extends State<DeliveryOrderListScreen> {
       } else {
         await context.read<DeliveryRepository>().goOffline();
         _heartbeatTimer?.cancel();
-        _stopGpsTimer();
         if (mounted) {
           setState(() {
             _isOnline = false;
@@ -128,61 +88,57 @@ class _DeliveryOrderListScreenState extends State<DeliveryOrderListScreen> {
     }
   }
 
-  Future<void> _loadOrders() async {
-    setState(() { _loading = true; _error = null; });
-    try {
-      final orders = await context.read<DeliveryRepository>().getAssignedOrders();
-      if (mounted) {
-        setState(() { _orders = orders; _loading = false; });
-        if (_isOnline && _hasActiveDelivery) _startGpsTimer();
-        else _stopGpsTimer();
-      }
-    } catch (e) {
-      if (mounted) setState(() { _error = e.toString().replaceAll('Exception: ', ''); _loading = false; });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Delivery Orders')),
-      body: _buildBody(),
-    );
-  }
+      body: BlocBuilder<DeliveryBloc, DeliveryState>(
+        builder: (context, state) {
+          if (state is DeliveryLoading && state is! DeliveryOrdersLoaded) {
+            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+          }
 
-  Widget _buildBody() {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-    }
-    if (_error != null) {
-      return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(LucideIcons.alertCircle, size: 48, color: AppColors.textSecondary),
-        const SizedBox(height: 16),
-        Text(_error!, style: const TextStyle(color: AppColors.textSecondary)),
-        const SizedBox(height: 16),
-        ElevatedButton(onPressed: _loadOrders, child: const Text('Retry')),
-      ]));
-    }
-    if (_orders == null || _orders!.isEmpty) {
-      return ListView(children: [
-        _buildPresenceToggle(),
-        const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-          SizedBox(height: 40),
-          Icon(LucideIcons.truck, size: 64, color: AppColors.textSecondary),
-          SizedBox(height: 16),
-          Text('No assigned orders', style: TextStyle(color: AppColors.textSecondary)),
-        ])),
-      ]);
-    }
-    return RefreshIndicator(
-      onRefresh: _loadOrders,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildPresenceToggle(),
-          const SizedBox(height: 12),
-          ..._orders!.map((o) => _buildOrderCard(o)),
-        ],
+          if (state is DeliveryFailure) {
+            return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(LucideIcons.alertCircle, size: 48, color: AppColors.textSecondary),
+              const SizedBox(height: 16),
+              Text(state.error, style: const TextStyle(color: AppColors.textSecondary)),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => context.read<DeliveryBloc>().add(FetchAssignedOrders()),
+                child: const Text('Retry'),
+              ),
+            ]));
+          }
+
+          _orders = state is DeliveryOrdersLoaded ? state.orders : [];
+
+          if (_orders.isEmpty) {
+            return ListView(children: [
+              _buildPresenceToggle(),
+              const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                SizedBox(height: 40),
+                Icon(LucideIcons.truck, size: 64, color: AppColors.textSecondary),
+                SizedBox(height: 16),
+                Text('No assigned orders', style: TextStyle(color: AppColors.textSecondary)),
+              ])),
+            ]);
+          }
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              context.read<DeliveryBloc>().add(FetchAssignedOrders());
+            },
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _buildPresenceToggle(),
+                const SizedBox(height: 12),
+                ..._orders.map((o) => _buildOrderCard(o)),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -234,7 +190,7 @@ class _DeliveryOrderListScreenState extends State<DeliveryOrderListScreen> {
           ),
           Switch(
             value: _isOnline,
-            activeColor: AppColors.success,
+            activeTrackColor: AppColors.success,
             onChanged: _toggleOnline,
           ),
         ],
@@ -281,7 +237,7 @@ class _DeliveryOrderListScreenState extends State<DeliveryOrderListScreen> {
                     child: SizedBox(
                       height: 38,
                       child: ElevatedButton.icon(
-                        onPressed: () => _handleAcceptAssignment(order.id),
+                        onPressed: () => context.read<DeliveryBloc>().add(AcceptAssignment(order.id)),
                         icon: const Icon(LucideIcons.checkCircle, size: 16),
                         label: const Text('Accept', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                         style: ElevatedButton.styleFrom(
@@ -297,7 +253,7 @@ class _DeliveryOrderListScreenState extends State<DeliveryOrderListScreen> {
                     child: SizedBox(
                       height: 38,
                       child: ElevatedButton.icon(
-                        onPressed: () => _handleRejectAssignment(order.id),
+                        onPressed: () => context.read<DeliveryBloc>().add(RejectAssignment(order.id)),
                         icon: const Icon(LucideIcons.xCircle, size: 16),
                         label: const Text('Reject', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                         style: ElevatedButton.styleFrom(
@@ -315,42 +271,6 @@ class _DeliveryOrderListScreenState extends State<DeliveryOrderListScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _handleAcceptAssignment(String orderId) async {
-    try {
-      await context.read<DeliveryRepository>().acceptAssignment(orderId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Assignment accepted'), backgroundColor: AppColors.success),
-        );
-        _loadOrders();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: AppColors.error),
-        );
-      }
-    }
-  }
-
-  Future<void> _handleRejectAssignment(String orderId) async {
-    try {
-      await context.read<DeliveryRepository>().rejectAssignment(orderId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Assignment rejected'), backgroundColor: AppColors.success),
-        );
-        _loadOrders();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: AppColors.error),
-        );
-      }
-    }
   }
 
   Widget _statusChip(String status) {

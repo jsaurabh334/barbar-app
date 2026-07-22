@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:barbar_app/presentation/bloc/admin/admin_barber_details_bloc.dart';
 import 'package:barbar_app/domain/repositories/admin_repository.dart';
 import 'package:intl/intl.dart';
+import 'package:barbar_app/core/utils/status_helper.dart';
 
 class AdminBarberDetailsScreen extends StatelessWidget {
   final String barberId;
@@ -289,13 +290,13 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: (barber.verificationStatus == 'approved') ? Colors.green.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
+                                color: StatusHelper.isApproved(barber.verificationStatus) ? Colors.green.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
                                 (barber.verificationStatus ?? 'pending').toUpperCase(),
                                 style: TextStyle(
-                                  color: (barber.verificationStatus == 'approved') ? Colors.green : Colors.orange,
+                                  color: StatusHelper.isApproved(barber.verificationStatus) ? Colors.green : Colors.orange,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -434,7 +435,7 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
                   const SizedBox(height: 32),
 
                   // --- Actions ---
-                  if (barber.verificationStatus == 'pending')
+                  if (StatusHelper.isPending(barber.verificationStatus))
                     Row(
                       children: [
                         Expanded(
@@ -461,7 +462,7 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
                       ],
                     ),
                   
-                  if (barber.verificationStatus == 'approved' && barber.status == 'active')
+                  if (StatusHelper.isApproved(barber.verificationStatus) && StatusHelper.isActive(barber.status))
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(

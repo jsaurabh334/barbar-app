@@ -320,7 +320,7 @@ func (h *OrderHandler) Get(c *gin.Context) {
 	}
 
 	var order models.Order
-	if err := h.db.Preload("Items").Preload("StatusLog").Preload("ShippingAddress").Preload("Payment").First(&order, id).Error; err != nil {
+	if err := h.db.Preload("Items").Preload("StatusLog").Preload("ShippingAddress").Preload("Payment").Preload("DeliveryPartner").First(&order, id).Error; err != nil {
 		utils.NotFoundResponse(c, "Order not found")
 		return
 	}
@@ -370,7 +370,7 @@ func (h *OrderHandler) ListVendorOrders(c *gin.Context) {
 	}
 
 	query.Model(&models.Order{}).Count(&total)
-	query.Preload("Items").Preload("Customer").
+	query.Preload("Items").Preload("Customer").Preload("DeliveryPartner").Preload("StatusLog").Preload("ShippingAddress").
 		Offset((page-1)*pageSize).Limit(pageSize).
 		Order("created_at DESC").Find(&orders)
 
@@ -495,7 +495,10 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 	var req struct {
 		Reason string `json:"reason" binding:"required"`
 	}
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "Invalid input")
+		return
+	}
 
 	var order models.Order
 	if err := h.db.First(&order, id).Error; err != nil {
@@ -668,7 +671,7 @@ func (h *OrderHandler) dispatchOrderEvent(ctx context.Context, order models.Orde
 				Type:       event,
 				ReceiverID: vendor.UserID,
 				Role:       notification.RoleVendor,
-				Data:       map[string]interface{}{"order_id": order.ID.String()},
+				Data:       map[string]interface{}{"entity_id": order.ID.String()},
 			})
 		}
 	case models.NotifOrderAccepted, models.NotifOrderPacked, models.NotifOrderOutForDelivery, models.NotifOrderDelivered:
@@ -676,28 +679,28 @@ func (h *OrderHandler) dispatchOrderEvent(ctx context.Context, order models.Orde
 			Type:       event,
 			ReceiverID: order.CustomerID,
 			Role:       notification.RoleCustomer,
-			Data:       map[string]interface{}{"order_id": order.ID.String()},
+			Data:       map[string]interface{}{"entity_id": order.ID.String()},
 		})
 	case models.NotifOrderReadyForPickup, models.NotifOrderPickedUp:
 		h.dispatcher.Dispatch(ctx, notification.NotificationEvent{
 			Type:       event,
 			ReceiverID: order.CustomerID,
 			Role:       notification.RoleCustomer,
-			Data:       map[string]interface{}{"order_id": order.ID.String()},
+			Data:       map[string]interface{}{"entity_id": order.ID.String()},
 		})
 	case models.NotifOrderAssigned:
 		h.dispatcher.Dispatch(ctx, notification.NotificationEvent{
 			Type:       event,
 			ReceiverID: order.CustomerID,
 			Role:       notification.RoleCustomer,
-			Data:       map[string]interface{}{"order_id": order.ID.String()},
+			Data:       map[string]interface{}{"entity_id": order.ID.String()},
 		})
 		if order.DeliveryPartnerID != nil {
 			h.dispatcher.Dispatch(ctx, notification.NotificationEvent{
 				Type:       event,
 				ReceiverID: *order.DeliveryPartnerID,
 				Role:       notification.RoleDelivery,
-				Data:       map[string]interface{}{"order_id": order.ID.String()},
+				Data:       map[string]interface{}{"entity_id": order.ID.String()},
 			})
 		}
 	case models.NotifOrderConfirmed, models.NotifOrderShipped:
@@ -705,7 +708,7 @@ func (h *OrderHandler) dispatchOrderEvent(ctx context.Context, order models.Orde
 			Type:       event,
 			ReceiverID: order.CustomerID,
 			Role:       notification.RoleCustomer,
-			Data:       map[string]interface{}{"order_id": order.ID.String()},
+			Data:       map[string]interface{}{"entity_id": order.ID.String()},
 		})
 	case models.NotifOrderCancelled:
 		// Notify Customer
@@ -713,7 +716,7 @@ func (h *OrderHandler) dispatchOrderEvent(ctx context.Context, order models.Orde
 			Type:       event,
 			ReceiverID: order.CustomerID,
 			Role:       notification.RoleCustomer,
-			Data:       map[string]interface{}{"order_id": order.ID.String()},
+			Data:       map[string]interface{}{"entity_id": order.ID.String()},
 		})
 		// Notify Vendor
 		var vendor models.Vendor
@@ -722,7 +725,7 @@ func (h *OrderHandler) dispatchOrderEvent(ctx context.Context, order models.Orde
 				Type:       event,
 				ReceiverID: vendor.UserID,
 				Role:       notification.RoleVendor,
-				Data:       map[string]interface{}{"order_id": order.ID.String()},
+				Data:       map[string]interface{}{"entity_id": order.ID.String()},
 			})
 		}
 	}

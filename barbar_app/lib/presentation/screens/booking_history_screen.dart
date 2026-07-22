@@ -71,7 +71,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
             );
           } else if (state is BookingsLoaded) {
             final upcoming = state.bookings.where((b) =>
-              b.status == 'pending' || b.status == 'confirmed' || b.status == 'in_progress'
+              b.status == 'pending' || b.status == 'confirmed' || b.status == 'in_progress' || b.status == 'home_service_pending'
             ).toList();
             final history = state.bookings.where((b) =>
               b.status == 'completed' || b.status == 'cancelled' || b.status == 'no_show'

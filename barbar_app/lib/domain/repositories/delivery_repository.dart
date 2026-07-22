@@ -6,6 +6,7 @@ abstract class DeliveryRepository {
   Future<DeliveryPartnerModel> getProfile();
   Future<List<OrderModel>> getAssignedOrders();
   Future<OrderModel> getOrderById(String orderId);
+  Future<void> claimOrder(String orderId);
   Future<void> acceptAssignment(String orderId);
   Future<void> rejectAssignment(String orderId);
   Future<OrderModel> pickupOrder(String orderId);

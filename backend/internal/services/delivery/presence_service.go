@@ -222,6 +222,70 @@ func (s *PresenceService) ListOnlineDrivers(ctx context.Context) ([]map[string]s
 	return drivers, nil
 }
 
+func (s *PresenceService) GetOnlineDriversNearby(ctx context.Context, lat, lng, radiusKm float64, limit int) ([]map[string]interface{}, error) {
+	drivers, err := s.ListOnlineDrivers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	type driverDist struct {
+		data map[string]interface{}
+		dist float64
+	}
+	var nearby []driverDist
+
+	for _, d := range drivers {
+		// Need to ensure driver is eligible
+		driverID, err := uuid.Parse(d["user_id"])
+		if err != nil {
+			continue
+		}
+		eligible, _ := s.IsEligibleForAssignment(ctx, driverID)
+		if !eligible {
+			continue
+		}
+
+		dLat, _ := strconv.ParseFloat(d["latitude"], 64)
+		dLng, _ := strconv.ParseFloat(d["longitude"], 64)
+
+		if dLat == 0 && dLng == 0 {
+			continue
+		}
+
+		distMeters := haversine(lat, lng, dLat, dLng)
+		distKm := distMeters / 1000
+
+		if distKm <= radiusKm {
+			result := make(map[string]interface{})
+			for k, v := range d {
+				result[k] = v
+			}
+			result["distance_km"] = distKm
+			nearby = append(nearby, driverDist{data: result, dist: distKm})
+		}
+	}
+
+	// Sort by distance
+	for i := 0; i < len(nearby)-1; i++ {
+		for j := i + 1; j < len(nearby); j++ {
+			if nearby[i].dist > nearby[j].dist {
+				nearby[i], nearby[j] = nearby[j], nearby[i]
+			}
+		}
+	}
+
+	if limit > 0 && len(nearby) > limit {
+		nearby = nearby[:limit]
+	}
+
+	var final []map[string]interface{}
+	for _, nd := range nearby {
+		final = append(final, nd.data)
+	}
+
+	return final, nil
+}
+
 func (s *PresenceService) GetPresenceSummary(ctx context.Context) (map[string]int, error) {
 	iter := database.RedisClient.Scan(ctx, 0, "driver:presence:*", 0).Iterator()
 

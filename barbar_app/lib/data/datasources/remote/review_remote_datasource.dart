@@ -17,22 +17,29 @@ class ReviewRemoteDataSource {
     bool isAnonymous = false,
     List<Map<String, dynamic>> images = const [],
   }) async {
-    final response = await _apiClient.dio.post(
-      '/reviews',
-      data: {
-        'booking_id': bookingId,
-        if (staffId != null) 'staff_id': staffId,
-        'shop_rating': shopRating,
-        if (staffRating != null) 'staff_rating': staffRating,
-        'comment': comment,
-        'is_anonymous': isAnonymous,
-        if (images.isNotEmpty) 'images': images,
-      },
-    );
-    if (response.statusCode == 201 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
-      return ReviewModel.fromJson(response.data['data'] as Map<String, dynamic>);
+    try {
+      final response = await _apiClient.dio.post(
+        '/reviews',
+        data: {
+          'booking_id': bookingId,
+          if (staffId != null) 'staff_id': staffId,
+          'shop_rating': shopRating,
+          if (staffRating != null) 'staff_rating': staffRating,
+          'comment': comment,
+          'is_anonymous': isAnonymous,
+          if (images.isNotEmpty) 'images': images,
+        },
+      );
+      if (response.statusCode == 201 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        return ReviewModel.fromJson(response.data['data'] as Map<String, dynamic>);
+      }
+      throw Exception(response.data['error'] ?? 'Failed to create review');
+    } on DioException catch (e) {
+      if (e.response?.data != null && e.response?.data is Map && e.response?.data['error'] != null) {
+        throw Exception(e.response!.data['error']);
+      }
+      throw Exception(e.message ?? 'Failed to create review');
     }
-    throw Exception(response.data['error'] ?? 'Failed to create review');
   }
 
   Future<Map<String, dynamic>> getPublicReviews(

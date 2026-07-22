@@ -29,6 +29,9 @@ func main() {
 
 	// Load configuration
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("Config validation failed: %v", err)
+	}
 
 	// Initialize Firebase Admin SDK
 	firebase.InitFirebase("firebase-service-account.json")

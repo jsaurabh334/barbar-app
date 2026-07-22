@@ -85,7 +85,10 @@ func (h *CouponHandler) Update(c *gin.Context) {
 	}
 
 	var updates map[string]interface{}
-	c.ShouldBindJSON(&updates)
+	if err := c.ShouldBindJSON(&updates); err != nil {
+		utils.BadRequestResponse(c, "Invalid input")
+		return
+	}
 
 	allowed := []string{"description", "value", "min_order_amount", "max_discount", "usage_limit",
 		"is_active", "valid_from", "valid_to", "per_user_limit"}

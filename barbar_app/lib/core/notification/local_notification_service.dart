@@ -1,6 +1,8 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:convert';
+import 'fcm_service.dart';
 
 class LocalNotificationService {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
@@ -17,6 +19,15 @@ class LocalNotificationService {
       settings: initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
         debugPrint('Local notification tapped: ${response.payload}');
+        if (response.payload != null) {
+          try {
+            final data = jsonDecode(response.payload!) as Map<String, dynamic>;
+            final message = RemoteMessage(data: data.cast<String, String>());
+            FCMService.handleMessageAction(message);
+          } catch (e) {
+            debugPrint('Error parsing notification payload: $e');
+          }
+        }
       },
     );
   }
@@ -42,7 +53,7 @@ class LocalNotificationService {
         title: message.notification?.title ?? message.data['title'],
         body: message.notification?.body ?? message.data['body'],
         notificationDetails: notificationDetails,
-        payload: message.data['action'],
+        payload: jsonEncode(message.data),
       );
     } catch (e) {
       debugPrint("Error showing local notification: $e");

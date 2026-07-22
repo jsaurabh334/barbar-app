@@ -163,20 +163,25 @@ func (s *OrderService) TransitionOrder(ctx context.Context, orderID, userID uuid
 			}
 		}
 	case models.OrderStatusReadyForPickup:
-		if fromStatus == models.OrderStatusDriverAssigned && order.DeliveryPartnerID != nil {
+		// Broadcast to nearby online delivery partners
+		if order.DeliveryPartnerID == nil {
+			go s.BroadcastDeliveryOffer(context.Background(), &order)
+		} else if fromStatus == models.OrderStatusDriverAssigned {
 			var assignment models.OrderDeliveryAssignment
 			if err := s.db.Where("order_id = ? AND delivery_user_id = ? AND status = ?",
 				order.ID, *order.DeliveryPartnerID, models.AssignmentPending).
 				Order("created_at DESC").First(&assignment).Error; err == nil {
 				s.db.Model(&assignment).Updates(map[string]interface{}{
-					"status":        models.AssignmentRejected,
-					"rejected_at":   now,
-					"timeout_count": gorm.Expr("timeout_count + 1"),
+					"status":      models.AssignmentRejected,
+					"rejected_at": now,
+					"reason":      note,
 				})
 			}
 			order.DeliveryPartnerID = nil
-			order.AssignedAt = nil
+			// Fallback: Re-broadcast if the driver rejected it
+			go s.BroadcastDeliveryOffer(context.Background(), &order)
 		}
+		order.AssignedAt = nil
 	case models.OrderStatusPickedUp:
 		order.PickedUpAt = &now
 	case models.OrderStatusOutForDelivery:

@@ -52,6 +52,11 @@ const (
 	NotifOrderDriverAssigned   NotificationType = "order_driver_assigned"
 	NotifOrderDriverAccepted   NotificationType = "order_driver_accepted"
 	NotifOrderAssignmentExpired NotificationType = "order_assignment_expired"
+	NotifDeliveryOffer         NotificationType = "delivery_offer"
+	NotifDeliveryApproved     NotificationType = "delivery_approved"
+	NotifDeliveryRejected     NotificationType = "delivery_rejected"
+	NotifDeliverySuspended    NotificationType = "delivery_suspended"
+	NotifDeliveryReactivated  NotificationType = "delivery_reactivated"
 )
 
 type DeliveryStatus string

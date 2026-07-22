@@ -4,6 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../bloc/admin/admin_vendors_bloc.dart';
 import '../../../../data/models/vendor_model.dart';
+import 'admin_vendor_detail_screen.dart';
 
 class AdminVendorsScreen extends StatefulWidget {
   const AdminVendorsScreen({super.key});
@@ -128,7 +129,18 @@ class _VendorCard extends StatelessWidget {
     if (isApproved) statusColor = AppColors.success;
     if (vendor.status == 'suspended') statusColor = AppColors.error;
 
-    return Container(
+    return InkWell(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BlocProvider.value(
+            value: context.read<AdminVendorsBloc>(),
+            child: AdminVendorDetailScreen(vendor: vendor),
+          ),
+        ),
+      ),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -195,6 +207,7 @@ class _VendorCard extends StatelessWidget {
               ),
           ],
         ),
+      ),
       ),
     );
   }

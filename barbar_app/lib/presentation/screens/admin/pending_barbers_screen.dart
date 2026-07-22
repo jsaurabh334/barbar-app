@@ -148,6 +148,23 @@ class _PendingBarbersScreenState extends State<PendingBarbersScreen> {
             );
           }
 
+          if (state is AdminBarbersError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error, color: Colors.red, size: 48),
+                  const SizedBox(height: 8),
+                  Text("Error: ${state.message}"),
+                  TextButton(
+                    onPressed: () => context.read<AdminBarbersBloc>().add(LoadPendingBarbers()),
+                    child: const Text("Retry"),
+                  )
+                ],
+              ),
+            );
+          }
+
           return const Center(child: Text("Initialize state"));
         },
       ),

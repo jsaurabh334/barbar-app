@@ -200,6 +200,16 @@ class VendorRemoteDataSource {
     throw Exception(response.data['error'] ?? 'Failed to set order ready for pickup');
   }
 
+  // ==================== Delivery ====================
+
+  Future<Map<String, dynamic>> getOrderDeliveryInfo(String orderId) async {
+    final response = await _apiClient.dio.get('/vendor/orders/$orderId/delivery');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch delivery info');
+  }
+
   // ==================== Brands ====================
 
   Future<List<dynamic>> getBrands() async {

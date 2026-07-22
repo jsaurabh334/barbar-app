@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../domain/repositories/delivery_repository.dart';
+import '../../bloc/delivery/delivery_bloc.dart';
+import '../../bloc/delivery/delivery_event.dart';
+import '../../bloc/delivery/delivery_state.dart';
 
 class DeliveryBankScreen extends StatefulWidget {
   const DeliveryBankScreen({super.key});
@@ -12,7 +14,6 @@ class DeliveryBankScreen extends StatefulWidget {
 }
 
 class _DeliveryBankScreenState extends State<DeliveryBankScreen> {
-  bool _loading = true;
   bool _editing = false;
   Map<String, dynamic>? _account;
 
@@ -26,7 +27,7 @@ class _DeliveryBankScreenState extends State<DeliveryBankScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    context.read<DeliveryBloc>().add(FetchBankAccount());
   }
 
   @override
@@ -40,17 +41,6 @@ class _DeliveryBankScreenState extends State<DeliveryBankScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() { _loading = true; });
-    try {
-      final repo = context.read<DeliveryRepository>();
-      final account = await repo.getBankAccount();
-      if (mounted) setState(() { _account = account; _loading = false; });
-    } catch (e) {
-      if (mounted) setState(() { _loading = false; });
-    }
-  }
-
   void _startEdit() {
     _nameCtrl.text = _account?['account_holder_name'] ?? '';
     _accCtrl.text = _account?['account_number'] ?? '';
@@ -61,31 +51,20 @@ class _DeliveryBankScreenState extends State<DeliveryBankScreen> {
     setState(() => _editing = true);
   }
 
-  Future<void> _save() async {
-    setState(() => _loading = true);
-    try {
-      final repo = context.read<DeliveryRepository>();
-      final account = await repo.upsertBankAccount({
-        'account_holder_name': _nameCtrl.text.trim(),
-        'account_number': _accCtrl.text.trim(),
-        'ifsc_code': _ifscCtrl.text.trim(),
-        'bank_name': _bankCtrl.text.trim(),
-        'branch_name': _branchCtrl.text.trim(),
-        'upi_id': _upiCtrl.text.trim(),
-      });
-      if (mounted) setState(() { _account = account; _editing = false; _loading = false; });
-    } catch (e) {
-      if (mounted) {
-        setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save: $e'), backgroundColor: AppColors.error),
-        );
-      }
-    }
+  void _save() {
+    context.read<DeliveryBloc>().add(SaveBankAccount({
+      'account_holder_name': _nameCtrl.text.trim(),
+      'account_number': _accCtrl.text.trim(),
+      'ifsc_code': _ifscCtrl.text.trim(),
+      'bank_name': _bankCtrl.text.trim(),
+      'branch_name': _branchCtrl.text.trim(),
+      'upi_id': _upiCtrl.text.trim(),
+    }));
   }
 
-  Future<void> _delete() async {
-    final confirmed = await showDialog<bool>(
+  void _delete() {
+    final bloc = context.read<DeliveryBloc>();
+    showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
@@ -96,40 +75,51 @@ class _DeliveryBankScreenState extends State<DeliveryBankScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete', style: TextStyle(color: AppColors.error))),
         ],
       ),
-    );
-    if (confirmed != true) return;
-
-    setState(() => _loading = true);
-    try {
-      await context.read<DeliveryRepository>().deleteBankAccount();
-      if (mounted) setState(() { _account = null; _editing = false; _loading = false; });
-    } catch (e) {
-      if (mounted) {
-        setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete: $e'), backgroundColor: AppColors.error),
-        );
+    ).then((confirmed) {
+      if (confirmed == true) {
+        bloc.add(DeleteBankAccount());
       }
-    }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text(_editing ? 'Edit Bank Account' : 'Bank Account'),
-        actions: [
-          if (!_editing && _account != null)
-            IconButton(icon: const Icon(LucideIcons.pencil), onPressed: _startEdit),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: _editing ? _buildForm() : _buildDetails(),
-            ),
+    return BlocConsumer<DeliveryBloc, DeliveryState>(
+      listener: (context, state) {
+        if (state is DeliveryBankAccountLoaded) {
+          setState(() => _account = state.account);
+        } else if (state is DeliverySuccess) {
+          if (state.message == 'Bank account saved') {
+            context.read<DeliveryBloc>().add(FetchBankAccount());
+            setState(() => _editing = false);
+          } else if (state.message == 'Bank account deleted') {
+            setState(() { _account = null; _editing = false; });
+          }
+        }
+      },
+      builder: (context, state) {
+        if (state is DeliveryLoading && _account == null && !_editing) {
+          return const Scaffold(
+            backgroundColor: AppColors.background,
+            body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+          );
+        }
+
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          appBar: AppBar(
+            title: Text(_editing ? 'Edit Bank Account' : 'Bank Account'),
+            actions: [
+              if (!_editing && _account != null)
+                IconButton(icon: const Icon(LucideIcons.pencil), onPressed: _startEdit),
+            ],
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: _editing ? _buildForm() : _buildDetails(),
+          ),
+        );
+      },
     );
   }
 

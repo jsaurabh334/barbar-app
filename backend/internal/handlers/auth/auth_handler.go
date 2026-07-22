@@ -1,12 +1,22 @@
 package auth
 
 import (
+	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"fmt"
+	"log"
+	"math/big"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/barbar-app/backend/internal/auth"
 	"github.com/barbar-app/backend/internal/config"
+	"github.com/barbar-app/backend/internal/database"
 	"github.com/barbar-app/backend/internal/models"
 	notifService "github.com/barbar-app/backend/internal/services/notification"
 	"github.com/barbar-app/backend/internal/utils"
@@ -18,10 +28,56 @@ import (
 
 var emailSvc *notifService.EmailService
 var smsSvc *notifService.SMSService
+var hmacSecret string
 
 func InitNotificationServices(cfg *config.Config) {
 	emailSvc = notifService.NewEmailService(&cfg.SMTP)
 	smsSvc = notifService.NewSMSService(&cfg.SMS)
+	hmacSecret = cfg.JWT.Secret
+}
+
+func computeOTPHash(otp string) string {
+	mac := hmac.New(sha256.New, []byte(hmacSecret))
+	mac.Write([]byte(otp))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func generateOTP() (string, error) {
+	const digits = "0123456789"
+	otp := make([]byte, 6)
+	for i := range otp {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(digits))))
+		if err != nil {
+			return "", fmt.Errorf("failed to generate OTP: %w", err)
+		}
+		otp[i] = digits[n.Int64()]
+	}
+	return string(otp), nil
+}
+
+func hashRefreshToken(token string) string {
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
+}
+
+func maxOTPAttemptsReached(phone string) bool {
+	ctx := context.Background()
+	val, err := database.RedisClient.Get(ctx, "otp:attempts:"+phone).Int()
+	if err != nil {
+		return false
+	}
+	return val >= 5
+}
+
+func incrementOTPAttempts(phone string) {
+	ctx := context.Background()
+	database.RedisClient.Incr(ctx, "otp:attempts:"+phone)
+	database.RedisClient.Expire(ctx, "otp:attempts:"+phone, 5*time.Minute)
+}
+
+func resetOTPAttempts(phone string) {
+	ctx := context.Background()
+	database.RedisClient.Del(ctx, "otp:attempts:"+phone)
 }
 
 type AuthHandler struct {
@@ -176,10 +232,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Save session
+	// Save session with hashed refresh token
 	session := models.UserSession{
 		UserID:       user.ID,
-		RefreshToken: tokens.RefreshToken,
+		RefreshToken: hashRefreshToken(tokens.RefreshToken),
 		AccessToken:  tokens.AccessToken,
 		IPAddress:    c.ClientIP(),
 		UserAgent:    c.Request.UserAgent(),
@@ -202,7 +258,12 @@ func (h *AuthHandler) SendOTP(c *gin.Context) {
 	}
 	req.Phone = strings.ReplaceAll(req.Phone, " ", "")
 
-	otp := generateOTP()
+	otp, err := generateOTP()
+	if err != nil {
+		utils.InternalErrorResponse(c, "Failed to generate OTP")
+		return
+	}
+	otpHash := computeOTPHash(otp)
 	expiresAt := time.Now().Add(5 * time.Minute)
 
 	cleanPhone := strings.ReplaceAll(strings.ReplaceAll(req.Phone, "+", ""), " ", "")
@@ -217,19 +278,26 @@ func (h *AuthHandler) SendOTP(c *gin.Context) {
 			Email:        autoEmail,
 			Role:         models.RoleCustomer,
 			Status:       models.UserStatusActive,
-			OTP:          otp,
+			OTP:          otpHash,
 			OTPExpiresAt: &expiresAt,
 		}
 		h.db.Create(&user)
 	} else {
 		h.db.Model(&user).Updates(map[string]interface{}{
-			"otp":           otp,
+			"otp":            otpHash,
 			"otp_expires_at": &expiresAt,
 		})
 	}
 
+	// Reset attempt counter on fresh OTP send
+	resetOTPAttempts(req.Phone)
+
 	// Send SMS via Twilio or similar
 	go sendSMS(req.Phone, otp)
+
+	if os.Getenv("DEV_OTP_DEBUG") == "true" {
+		log.Printf("[DEV_OTP] Phone=%s Code=%s\n", req.Phone, otp)
+	}
 
 	utils.SuccessResponse(c, gin.H{
 		"message": "OTP sent successfully",
@@ -244,18 +312,31 @@ func (h *AuthHandler) VerifyOTP(c *gin.Context) {
 	}
 	req.Phone = strings.ReplaceAll(req.Phone, " ", "")
 
-	var user models.User
-	var err error
-	if req.OTP == "123456" {
-		err = h.db.Where("phone = ?", req.Phone).First(&user).Error
-	} else {
-		err = h.db.Where("phone = ? AND otp = ? AND otp_expires_at > ?", req.Phone, req.OTP, time.Now()).First(&user).Error
+	// Check attempt limit
+	if maxOTPAttemptsReached(req.Phone) {
+		utils.BadRequestResponse(c, "Too many attempts. Request a new OTP.")
+		return
 	}
 
-	if err != nil {
+	otpHash := computeOTPHash(req.OTP)
+
+	var user models.User
+	if err := h.db.Where("phone = ? AND otp = ? AND otp_expires_at > ?", req.Phone, otpHash, time.Now()).First(&user).Error; err != nil {
+		// Increment attempt counter
+		incrementOTPAttempts(req.Phone)
 		utils.BadRequestResponse(c, "Invalid or expired OTP")
 		return
 	}
+
+	// Constant-time comparison safeguard
+	if subtle.ConstantTimeCompare([]byte(user.OTP), []byte(otpHash)) != 1 {
+		incrementOTPAttempts(req.Phone)
+		utils.BadRequestResponse(c, "Invalid or expired OTP")
+		return
+	}
+
+	// Reset attempt counter on success
+	resetOTPAttempts(req.Phone)
 
 	now := time.Now()
 	user.PhoneVerifiedAt = &now
@@ -268,6 +349,18 @@ func (h *AuthHandler) VerifyOTP(c *gin.Context) {
 		utils.InternalErrorResponse(c, "Failed to generate tokens")
 		return
 	}
+
+	// Save session with hashed refresh token
+	session := models.UserSession{
+		UserID:       user.ID,
+		RefreshToken: hashRefreshToken(tokens.RefreshToken),
+		AccessToken:  tokens.AccessToken,
+		IPAddress:    c.ClientIP(),
+		UserAgent:    c.Request.UserAgent(),
+		IsActive:     true,
+		ExpiresAt:    time.Now().Add(7 * 24 * time.Hour),
+	}
+	h.db.Create(&session)
 
 	utils.SuccessResponse(c, gin.H{
 		"user":   user,
@@ -288,6 +381,29 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
+	// Hash incoming refresh token and look up session
+	tokenHash := hashRefreshToken(req.RefreshToken)
+	var session models.UserSession
+	if err := h.db.Where("refresh_token = ? AND is_active = ?", tokenHash, true).First(&session).Error; err != nil {
+		// Token already rotated or revoked — possible theft
+		// Revoke all sessions for this user to be safe
+		now := time.Now()
+		h.db.Model(&models.UserSession{}).Where("user_id = ? AND is_active = ?", claims.UserID, true).
+			Updates(map[string]interface{}{
+				"is_active":  false,
+				"revoked_at": &now,
+			})
+		utils.UnauthorizedResponse(c, "Refresh token has already been used. All sessions revoked for security.")
+		return
+	}
+
+	// Revoke old session
+	now := time.Now()
+	h.db.Model(&session).Updates(map[string]interface{}{
+		"is_active":  false,
+		"revoked_at": &now,
+	})
+
 	var user models.User
 	if err := h.db.First(&user, claims.UserID).Error; err != nil {
 		utils.NotFoundResponse(c, "User not found")
@@ -304,6 +420,18 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		utils.InternalErrorResponse(c, "Failed to generate tokens")
 		return
 	}
+
+	// Save new session with hashed refresh token
+	newSession := models.UserSession{
+		UserID:       user.ID,
+		RefreshToken: hashRefreshToken(tokens.RefreshToken),
+		AccessToken:  tokens.AccessToken,
+		IPAddress:    c.ClientIP(),
+		UserAgent:    c.Request.UserAgent(),
+		IsActive:     true,
+		ExpiresAt:    time.Now().Add(7 * 24 * time.Hour),
+	}
+	h.db.Create(&newSession)
 
 	utils.SuccessResponse(c, gin.H{"tokens": tokens})
 }
@@ -377,6 +505,15 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	}
 
 	h.db.Model(&user).Update("password_hash", string(hashedPassword))
+
+	// Invalidate all active sessions on password change
+	now := time.Now()
+	h.db.Model(&models.UserSession{}).Where("user_id = ? AND is_active = ?", userID, true).
+		Updates(map[string]interface{}{
+			"is_active":  false,
+			"revoked_at": &now,
+		})
+
 	utils.SuccessResponse(c, gin.H{"message": "Password changed successfully"})
 }
 
@@ -422,12 +559,18 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	otp := generateOTP()
+	otp, err := generateOTP()
+	if err != nil {
+		utils.InternalErrorResponse(c, "Failed to generate OTP")
+		return
+	}
+	otpHash := computeOTPHash(otp)
 	expiresAt := time.Now().Add(5 * time.Minute)
 	h.db.Model(&user).Updates(map[string]interface{}{
-		"otp":            otp,
+		"otp":            otpHash,
 		"otp_expires_at": &expiresAt,
 	})
+	resetOTPAttempts(req.Phone)
 
 	if req.Email != "" {
 		go sendEmail(user.Email, "Password Reset OTP", "Your OTP: "+otp)
@@ -449,11 +592,29 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
+	// Check attempt limit
+	if maxOTPAttemptsReached(req.Phone) {
+		utils.BadRequestResponse(c, "Too many attempts. Request a new OTP.")
+		return
+	}
+
+	otpHash := computeOTPHash(req.OTP)
+
 	var user models.User
-	if err := h.db.Where("phone = ? AND otp = ? AND otp_expires_at > ?", req.Phone, req.OTP, time.Now()).First(&user).Error; err != nil {
+	if err := h.db.Where("phone = ? AND otp = ? AND otp_expires_at > ?", req.Phone, otpHash, time.Now()).First(&user).Error; err != nil {
+		incrementOTPAttempts(req.Phone)
 		utils.BadRequestResponse(c, "Invalid or expired OTP")
 		return
 	}
+
+	// Constant-time comparison safeguard
+	if subtle.ConstantTimeCompare([]byte(user.OTP), []byte(otpHash)) != 1 {
+		incrementOTPAttempts(req.Phone)
+		utils.BadRequestResponse(c, "Invalid or expired OTP")
+		return
+	}
+
+	resetOTPAttempts(req.Phone)
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
@@ -550,10 +711,6 @@ func (h *AuthHandler) GetOTPDebug(c *gin.Context) {
 		"expires_at":     user.OTPExpiresAt,
 		"remaining_secs": int(time.Until(*user.OTPExpiresAt).Seconds()),
 	})
-}
-
-func generateOTP() string {
-	return "123456"
 }
 
 func sendSMS(phone, message string) {

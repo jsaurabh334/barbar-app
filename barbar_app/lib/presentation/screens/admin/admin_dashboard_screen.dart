@@ -6,6 +6,7 @@ import 'package:barbar_app/domain/repositories/admin_repository.dart';
 import 'package:barbar_app/presentation/screens/admin/pending_barbers_screen.dart';
 import 'package:barbar_app/presentation/screens/admin/active_barbers_screen.dart';
 import 'package:barbar_app/core/theme/app_theme.dart';
+import 'package:barbar_app/presentation/bloc/admin/admin_barbers_bloc.dart';
 
 class AdminDashboardScreen extends StatelessWidget {
   const AdminDashboardScreen({Key? key}) : super(key: key);
@@ -35,18 +36,7 @@ class _DashboardViewState extends State<_DashboardView> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        title: const Text('Admin Dashboard', style: TextStyle(color: AppColors.textPrimary)),
-        actions: [
-          IconButton(icon: const Icon(Icons.notifications, color: AppColors.textPrimary), onPressed: () {}),
-          const CircleAvatar(
-            backgroundColor: AppColors.primary,
-            child: Icon(Icons.person, color: Colors.black),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
+
       body: RefreshIndicator(
         onRefresh: () async {
           context.read<AdminDashboardBloc>().add(LoadDashboardData());
@@ -143,7 +133,7 @@ class _DashboardViewState extends State<_DashboardView> {
                               value: stats.pendingBarbers.toString(),
                               icon: Icons.store_mall_directory_outlined,
                               color: Colors.orange,
-                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PendingBarbersScreen())),
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BlocProvider(create: (context) => AdminBarbersBloc(adminRepository: context.read<AdminRepository>()), child: const PendingBarbersScreen()))),
                             ),
                             _buildStatCard(
                               context,
@@ -151,7 +141,7 @@ class _DashboardViewState extends State<_DashboardView> {
                               value: stats.approvedBarbers.toString(),
                               icon: Icons.check_circle_outline,
                               color: Colors.green,
-                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ActiveBarbersScreen())),
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BlocProvider(create: (context) => AdminBarbersBloc(adminRepository: context.read<AdminRepository>()), child: const ActiveBarbersScreen()))),
                             ),
                             _buildStatCard(context, title: "Customers", value: stats.totalCustomers.toString(), icon: Icons.people_outline, color: Colors.blue),
                             _buildStatCard(context, title: "Today's Bookings", value: stats.todayBookings.toString(), icon: Icons.calendar_today, color: Colors.purple),
@@ -168,7 +158,9 @@ class _DashboardViewState extends State<_DashboardView> {
                           scrollDirection: Axis.horizontal,
                           child: Row(
                             children: [
-                              _buildActionChip(context, "Approve Barbers", Icons.check),
+                              _buildActionChip(context, "Approve Barbers", Icons.check, onTap: () {
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => BlocProvider(create: (context) => AdminBarbersBloc(adminRepository: context.read<AdminRepository>()), child: const PendingBarbersScreen())));
+                              }),
                               _buildActionChip(context, "Customers", Icons.people),
                               _buildActionChip(context, "Vendors", Icons.storefront),
                               _buildActionChip(context, "Reports", Icons.report),
@@ -256,7 +248,7 @@ class _DashboardViewState extends State<_DashboardView> {
     );
   }
 
-  Widget _buildActionChip(BuildContext context, String label, IconData icon) {
+  Widget _buildActionChip(BuildContext context, String label, IconData icon, {VoidCallback? onTap}) {
     return Padding(
       padding: const EdgeInsets.only(right: 8.0),
       child: ActionChip(
@@ -264,7 +256,7 @@ class _DashboardViewState extends State<_DashboardView> {
         side: const BorderSide(color: AppColors.border),
         avatar: Icon(icon, size: 16, color: AppColors.primary),
         label: Text(label, style: const TextStyle(color: AppColors.textPrimary)),
-        onPressed: () {
+        onPressed: onTap ?? () {
           // Navigate to specific screen based on label
         },
       ),

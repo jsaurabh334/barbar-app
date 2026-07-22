@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/notification/fcm_service.dart';
 import '../../../domain/repositories/auth_repository.dart';
@@ -19,12 +20,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onAppStarted(AppStarted event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
     try {
-      final isLoggedIn = await _authRepository.isLoggedIn();
-      if (isLoggedIn) {
-        final user = await _authRepository.getCachedUser();
+      final result = await _authRepository.isLoggedIn().timeout(const Duration(seconds: 5));
+      if (result) {
+        final user = await _authRepository.getCachedUser().timeout(const Duration(seconds: 3));
         if (user != null) {
           emit(AuthAuthenticated(user));
-          await FCMService.registerDeviceToken();
+          try {
+            await FCMService.registerDeviceToken();
+          } catch (_) {}
           return;
         }
       }

@@ -94,7 +94,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 	deliveryPartnerH := deliveryPartnerHandler.NewDeliveryPartnerHandler(db)
 	productH := productHandler.NewProductHandler(db)
 	orderH := orderHandler.NewOrderHandler(db, dispatcher)
-	vendorOrderH := orderHandler.NewVendorOrderHandler(db, orderSvc)
+	vendorOrderH := orderHandler.NewVendorOrderHandler(db, orderSvc, presenceSvc)
 	presenceH := deliveryHandler.NewPresenceHandler(presenceSvc)
 	locationH := deliveryHandler.NewLocationHandler(presenceSvc, orderSvc)
 	deliveryOrderH := orderHandler.NewDeliveryOrderHandler(db, orderSvc, presenceSvc)
@@ -109,6 +109,12 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 	couponH := couponHandler.NewCouponHandler(db)
 	adminH := adminHandler.NewAdminHandler(db, dispatcher)
 	adminCustomerH := adminHandler.NewAdminCustomerHandler(db)
+	adminBookingH := adminHandler.NewAdminBookingHandler(db, dispatcher, hub)
+	adminOrderH := adminHandler.NewAdminOrderHandler(db, orderSvc)
+	adminSettlementH := adminHandler.NewAdminSettlementHandler(db)
+	adminBannerH := adminHandler.NewAdminBannerHandler(db)
+	adminCampaignH := adminHandler.NewAdminCampaignHandler(db, notifSvc)
+	adminCmsH := adminHandler.NewAdminCmsHandler(db)
 	addressH := addressHandler.NewAddressHandler(db)
 	kycH := kycHandler.NewKYCHandler(db)
 
@@ -186,6 +192,9 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 
 			// Unified tracking endpoint
 			public.GET("/orders/:id/tracking", trackingH.GetTracking)
+
+			// CMS Pages (public)
+			public.GET("/pages/:key", adminCmsH.PublicGetCmsPage)
 		}
 
 		// ==================== Upload routes ====================
@@ -335,6 +344,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			vendorRoutes.PUT("/orders/:id/reject", vendorOrderH.RejectOrder)
 			vendorRoutes.PUT("/orders/:id/pack", vendorOrderH.PackOrder)
 			vendorRoutes.PUT("/orders/:id/ready-for-pickup", vendorOrderH.ReadyForPickup)
+			vendorRoutes.GET("/orders/:id/delivery", vendorOrderH.GetVendorOrderDelivery)
 			vendorRoutes.GET("/products", productH.ListByVendor)
 			vendorRoutes.GET("/sales-report", vendorH.GetSalesReport)
 
@@ -506,7 +516,6 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 		{
 			// Dashboard
 			adminRoutes.GET("/dashboard", adminH.GetDashboard)
-			adminRoutes.GET("/analytics/revenue", adminH.GetRevenueAnalytics)
 			adminRoutes.GET("/system/health", adminH.GetSystemHealth)
 			adminRoutes.GET("/audit-logs", adminH.GetAuditLogs)
 
@@ -541,10 +550,36 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 
 			// Bookings
 			adminRoutes.GET("/bookings", adminH.ListAllBookings)
+			adminRoutes.GET("/bookings/:id", adminBookingH.GetBookingDetail)
+			adminRoutes.PUT("/bookings/:id/cancel", adminBookingH.AdminCancelBooking)
+			adminRoutes.PUT("/bookings/:id/reschedule", adminBookingH.AdminRescheduleBooking)
+			adminRoutes.GET("/bookings/:id/timeline", adminBookingH.GetBookingTimeline)
+
+			// Orders
+			adminRoutes.GET("/orders", adminOrderH.ListAllOrders)
+			adminRoutes.GET("/orders/:id", adminOrderH.GetOrderDetail)
+			adminRoutes.PUT("/orders/:id/status", adminOrderH.UpdateOrderStatus)
+			adminRoutes.GET("/orders/:id/timeline", adminOrderH.GetOrderTimeline)
 
 			// Withdrawals
 			adminRoutes.GET("/withdrawals", adminH.ListWithdrawals)
 			adminRoutes.PUT("/withdrawals/:id/process", adminH.ProcessWithdrawal)
+
+			// Settlements
+			adminRoutes.GET("/settlements", adminSettlementH.ListSettlements)
+			adminRoutes.GET("/settlements/:id", adminSettlementH.GetSettlementDetail)
+			adminRoutes.PUT("/settlements/:id/process", adminSettlementH.ProcessSettlement)
+			adminRoutes.POST("/settlements/bulk-process", adminSettlementH.BulkProcessSettlements)
+
+			// Wallet Administration
+			adminRoutes.GET("/wallets", adminH.AdminListWallets)
+			adminRoutes.GET("/wallets/:id", adminH.AdminGetWalletDetail)
+			adminRoutes.POST("/wallets/:id/credit", adminH.AdminCreditWallet)
+			adminRoutes.POST("/wallets/:id/debit", adminH.AdminDebitWallet)
+			adminRoutes.POST("/wallets/:id/toggle-freeze", adminH.AdminToggleWalletFreeze)
+
+			// Commission Transactions
+			adminRoutes.GET("/commission-transactions", adminH.ListCommissionTransactions)
 
 			// Refunds
 			adminRoutes.GET("/refunds", adminH.ListRefunds)
@@ -578,6 +613,11 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			adminRoutes.POST("/orders/:id/assign-driver", deliveryOrderH.AssignDriver)
 			adminRoutes.GET("/delivery/presence", presenceH.GetOnlineDrivers)
 			adminRoutes.GET("/delivery/presence/summary", presenceH.GetPresenceSummary)
+
+			// Delivery Partner Management
+			adminRoutes.GET("/delivery", adminH.ListDeliveryPartners)
+			adminRoutes.PUT("/delivery/:id/status", adminH.UpdateDeliveryPartnerStatus)
+			adminRoutes.PUT("/delivery/:id/availability", adminH.UpdateDeliveryPartnerAvailability)
 
 			// Settings
 			adminRoutes.GET("/settings", adminH.GetSettings)
@@ -631,6 +671,37 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			adminRoutes.DELETE("/webhooks/:id", webhookH.Delete)
 			adminRoutes.GET("/webhooks/:id/logs", webhookH.GetLogs)
 
+			// Banner Management
+			adminRoutes.GET("/banners", adminBannerH.ListBanners)
+			adminRoutes.GET("/banners/:id", adminBannerH.GetBanner)
+			adminRoutes.POST("/banners", adminBannerH.CreateBanner)
+			adminRoutes.PUT("/banners/:id", adminBannerH.UpdateBanner)
+			adminRoutes.DELETE("/banners/:id", adminBannerH.DeleteBanner)
+			adminRoutes.PUT("/banners/:id/toggle", adminBannerH.ToggleBannerActive)
+
+		// Notification Campaigns
+			adminRoutes.GET("/campaigns", adminCampaignH.ListCampaigns)
+			adminRoutes.GET("/campaigns/:id", adminCampaignH.GetCampaign)
+			adminRoutes.POST("/campaigns", adminCampaignH.CreateCampaign)
+			adminRoutes.PUT("/campaigns/:id", adminCampaignH.UpdateCampaign)
+			adminRoutes.DELETE("/campaigns/:id", adminCampaignH.DeleteCampaign)
+			adminRoutes.POST("/campaigns/:id/send", adminCampaignH.SendCampaign)
+
+			// CMS Pages
+			adminRoutes.GET("/cms", adminCmsH.ListCmsPages)
+			adminRoutes.GET("/cms/:id", adminCmsH.GetCmsPage)
+			adminRoutes.POST("/cms", adminCmsH.CreateCmsPage)
+			adminRoutes.PUT("/cms/:id", adminCmsH.UpdateCmsPage)
+			adminRoutes.DELETE("/cms/:id", adminCmsH.DeleteCmsPage)
+
+			// Analytics
+			adminRoutes.GET("/analytics/revenue", adminH.GetRevenueAnalytics)
+			adminRoutes.GET("/analytics/bookings", adminH.GetBookingAnalytics)
+			adminRoutes.GET("/analytics/orders", adminH.GetOrderAnalytics)
+			adminRoutes.GET("/analytics/customers", adminH.GetCustomerAnalytics)
+			adminRoutes.GET("/analytics/delivery", adminH.GetDeliveryAnalytics)
+			adminRoutes.GET("/analytics/barbers", adminH.GetBarberAnalytics)
+			adminRoutes.GET("/analytics/reviews", reviewH.GetReviewAnalytics)
 			// Analytics CSV Export
 			adminRoutes.GET("/analytics/revenue/csv", searchH.ExportRevenueCSV)
 			adminRoutes.GET("/analytics/users/csv", searchH.ExportUserGrowthCSV)

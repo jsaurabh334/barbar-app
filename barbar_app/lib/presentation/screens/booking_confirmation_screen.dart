@@ -76,7 +76,10 @@ class BookingConfirmationScreen extends StatelessWidget {
                     if (booking.isHomeService) ...[
                       if (booking.homeServiceAddress != null)
                         _detailRow(LucideIcons.mapPin, 'Address',
-                          '${booking.homeServiceAddress!['street'] ?? ""}, ${booking.homeServiceAddress!['city'] ?? ""}'),
+                          [booking.homeServiceAddress!['street'], booking.homeServiceAddress!['city']]
+                              .where((e) => e != null && e.toString().trim().isNotEmpty)
+                              .join(', ')
+                        ),
                       if (booking.travelDistanceKm > 0)
                         _detailRow(LucideIcons.map, 'Distance', '${booking.travelDistanceKm.toStringAsFixed(1)} km'),
                       if (booking.travelCharge > 0)
@@ -170,11 +173,12 @@ class BookingConfirmationScreen extends StatelessWidget {
 
   Widget _detailRow(IconData icon, String label, String value) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Icon(icon, size: 16, color: AppColors.primary),
         const SizedBox(width: 10),
         SizedBox(
-          width: 64,
+          width: 90,
           child: Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
         ),
         Expanded(

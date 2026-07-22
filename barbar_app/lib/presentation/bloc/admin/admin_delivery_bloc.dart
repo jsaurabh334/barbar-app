@@ -1,11 +1,12 @@
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:equatable/equatable.dart';
-import 'package:barbar_app/domain/repositories/admin_repository.dart';
+import 'package:bloc/bloc.dart';
 import 'package:barbar_app/data/models/delivery_partner_model.dart';
+import 'package:barbar_app/domain/repositories/admin_repository.dart';
+import 'package:equatable/equatable.dart';
 
 // --- Events ---
 abstract class AdminDeliveryEvent extends Equatable {
   const AdminDeliveryEvent();
+
   @override
   List<Object?> get props => [];
 }
@@ -13,17 +14,30 @@ abstract class AdminDeliveryEvent extends Equatable {
 class LoadDeliveryPartners extends AdminDeliveryEvent {
   final int page;
   final String? searchQuery;
+  final String? status;
 
-  const LoadDeliveryPartners({this.page = 1, this.searchQuery});
+  const LoadDeliveryPartners({this.page = 1, this.searchQuery, this.status});
 
   @override
-  List<Object?> get props => [page, searchQuery];
+  List<Object?> get props => [page, searchQuery, status];
 }
 
 class UpdateDeliveryStatus extends AdminDeliveryEvent {
   final String partnerId;
   final String status;
-  const UpdateDeliveryStatus(this.partnerId, this.status);
+  final String? reason;
+
+  const UpdateDeliveryStatus(this.partnerId, this.status, {this.reason});
+
+  @override
+  List<Object?> get props => [partnerId, status, reason];
+}
+
+class UpdateDeliveryAvailability extends AdminDeliveryEvent {
+  final String partnerId;
+  final String status;
+
+  const UpdateDeliveryAvailability(this.partnerId, this.status);
 
   @override
   List<Object?> get props => [partnerId, status];
@@ -32,6 +46,7 @@ class UpdateDeliveryStatus extends AdminDeliveryEvent {
 // --- States ---
 abstract class AdminDeliveryState extends Equatable {
   const AdminDeliveryState();
+
   @override
   List<Object?> get props => [];
 }
@@ -48,7 +63,7 @@ class AdminDeliveryLoaded extends AdminDeliveryState {
   const AdminDeliveryLoaded({
     required this.partners,
     required this.currentPage,
-    this.hasReachedMax = false,
+    required this.hasReachedMax,
   });
 
   @override
@@ -70,6 +85,7 @@ class AdminDeliveryBloc extends Bloc<AdminDeliveryEvent, AdminDeliveryState> {
   AdminDeliveryBloc({required this.adminRepository}) : super(AdminDeliveryInitial()) {
     on<LoadDeliveryPartners>(_onLoadDeliveryPartners);
     on<UpdateDeliveryStatus>(_onUpdateDeliveryStatus);
+    on<UpdateDeliveryAvailability>(_onUpdateDeliveryAvailability);
   }
 
   Future<void> _onLoadDeliveryPartners(LoadDeliveryPartners event, Emitter<AdminDeliveryState> emit) async {
@@ -77,8 +93,12 @@ class AdminDeliveryBloc extends Bloc<AdminDeliveryEvent, AdminDeliveryState> {
       emit(AdminDeliveryLoading());
     }
     try {
-      final partners = await adminRepository.getDeliveryPartners(page: event.page, search: event.searchQuery);
-      
+      final partners = await adminRepository.getDeliveryPartners(
+        page: event.page,
+        search: event.searchQuery,
+        status: event.status,
+      );
+
       if (state is AdminDeliveryLoaded && event.page > 1) {
         final currentState = state as AdminDeliveryLoaded;
         emit(AdminDeliveryLoaded(
@@ -103,7 +123,35 @@ class AdminDeliveryBloc extends Bloc<AdminDeliveryEvent, AdminDeliveryState> {
       final currentState = state as AdminDeliveryLoaded;
       try {
         await adminRepository.updateDeliveryPartnerStatus(event.partnerId, event.status);
-        
+
+        final updatedPartners = currentState.partners.map((p) {
+          if (p.id == event.partnerId) {
+            return p.copyWith(
+              status: event.status,
+              rejectionReason: event.status == 'rejected' ? event.reason : null,
+            );
+          }
+          return p;
+        }).toList();
+
+        emit(AdminDeliveryLoaded(
+          partners: updatedPartners,
+          currentPage: currentState.currentPage,
+          hasReachedMax: currentState.hasReachedMax,
+        ));
+      } catch (e) {
+        emit(AdminDeliveryError('Failed to update status: $e'));
+        emit(currentState);
+      }
+    }
+  }
+
+  Future<void> _onUpdateDeliveryAvailability(UpdateDeliveryAvailability event, Emitter<AdminDeliveryState> emit) async {
+    if (state is AdminDeliveryLoaded) {
+      final currentState = state as AdminDeliveryLoaded;
+      try {
+        await adminRepository.updateDeliveryPartnerAvailability(event.partnerId, event.status);
+
         final updatedPartners = currentState.partners.map((p) {
           if (p.id == event.partnerId) {
             return p.copyWith(availabilityStatus: event.status);
@@ -117,7 +165,7 @@ class AdminDeliveryBloc extends Bloc<AdminDeliveryEvent, AdminDeliveryState> {
           hasReachedMax: currentState.hasReachedMax,
         ));
       } catch (e) {
-        emit(AdminDeliveryError('Failed to update status: $e'));
+        emit(AdminDeliveryError('Failed to update availability: $e'));
         emit(currentState);
       }
     }

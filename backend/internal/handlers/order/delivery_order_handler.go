@@ -2,6 +2,7 @@ package order
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/barbar-app/backend/internal/models"
 	deliverySvc "github.com/barbar-app/backend/internal/services/delivery"
@@ -31,10 +32,15 @@ func (h *DeliveryOrderHandler) AssignDelivery(c *gin.Context) {
 		return
 	}
 
-	updated, err := h.service.TransitionOrder(c.Request.Context(), orderID, userID, "delivery", models.OrderStatusDriverAssigned, "")
+	updated, err := h.service.ClaimDeliveryOrder(c.Request.Context(), orderID, userID)
 	if err != nil {
 		utils.BadRequestResponse(c, err.Error())
 		return
+	}
+
+	if err := h.presenceSvc.SetBusy(context.Background(), userID, orderID); err != nil {
+		// Log the error but don't fail the request since assignment was successful
+		fmt.Printf("AssignDelivery: failed to mark driver %s busy: %v\n", userID, err)
 	}
 
 	utils.SuccessResponse(c, updated)

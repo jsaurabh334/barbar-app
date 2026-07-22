@@ -33,6 +33,11 @@ class DeliveryRepositoryImpl implements DeliveryRepository {
   }
 
   @override
+  Future<void> claimOrder(String orderId) async {
+    await _remoteDataSource.claimOrder(orderId);
+  }
+
+  @override
   Future<void> acceptAssignment(String orderId) async {
     await _remoteDataSource.acceptAssignment(orderId);
   }

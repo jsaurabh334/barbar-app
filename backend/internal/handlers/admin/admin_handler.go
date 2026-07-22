@@ -2,6 +2,7 @@ package admin
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/barbar-app/backend/internal/models"
@@ -360,7 +361,7 @@ func (h *AdminHandler) ApproveVendor(c *gin.Context) {
 		CommissionRate  float64 `json:"commission_rate"`
 		Remarks         string  `json:"remarks"`
 	}
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil { utils.BadRequestResponse(c, "Invalid input"); return }
 
 	updates := map[string]interface{}{
 		"status": models.VendorStatus(req.Status),
@@ -385,6 +386,190 @@ func (h *AdminHandler) ApproveVendor(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, gin.H{"message": "Vendor " + req.Status})
+}
+
+// ================ Delivery Partner Management ================
+func (h *AdminHandler) ListDeliveryPartners(c *gin.Context) {
+	page, pageSize := utils.GetPageParams(c)
+
+	var partners []models.DeliveryPartner
+	var total int64
+
+	query := h.db.Model(&models.DeliveryPartner{}).Preload("User")
+	if status := c.Query("status"); status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if search := c.Query("search"); search != "" {
+		query = query.Joins("JOIN users ON users.id = delivery_partners.user_id").
+			Where("users.full_name ILIKE ? OR users.phone ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	query.Count(&total)
+	query.Offset((page-1)*pageSize).Limit(pageSize).Order("created_at DESC").Find(&partners)
+
+	utils.PaginatedResponse(c, partners, page, pageSize, total)
+}
+
+func (h *AdminHandler) UpdateDeliveryPartnerStatus(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid delivery partner ID")
+		return
+	}
+
+	var req struct {
+		Status string `json:"status" binding:"required,oneof=approved rejected suspended"`
+		Reason string `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "Status is required. Valid values: approved, rejected, suspended")
+		return
+	}
+
+	var partner models.DeliveryPartner
+	if err := h.db.First(&partner, id).Error; err != nil {
+		utils.NotFoundResponse(c, "Delivery partner not found")
+		return
+	}
+
+	// Validate transition using model constants
+	var allowed bool
+	switch partner.Status {
+	case string(models.DeliveryPartnerStatusPending):
+		allowed = req.Status == string(models.DeliveryPartnerStatusApproved) || req.Status == string(models.DeliveryPartnerStatusRejected)
+	case string(models.DeliveryPartnerStatusApproved):
+		allowed = req.Status == string(models.DeliveryPartnerStatusSuspended)
+	case string(models.DeliveryPartnerStatusSuspended):
+		allowed = req.Status == string(models.DeliveryPartnerStatusApproved)
+	case string(models.DeliveryPartnerStatusRejected):
+		allowed = false
+	}
+	if !allowed {
+		utils.BadRequestResponse(c, fmt.Sprintf("Cannot transition from %s to %s", partner.Status, req.Status))
+		return
+	}
+
+	if partner.Status == req.Status {
+		utils.BadRequestResponse(c, "Status is already "+req.Status)
+		return
+	}
+
+	now := time.Now()
+
+	// Build audit log payload using proper marshaling
+	auditPayload, _ := json.Marshal(map[string]interface{}{
+		"old_status": partner.Status,
+		"new_status": req.Status,
+		"reason":     req.Reason,
+	})
+
+	// Execute in transaction
+	tx := h.db.Begin()
+
+	updates := map[string]interface{}{
+		"status": req.Status,
+	}
+	if req.Status == string(models.DeliveryPartnerStatusApproved) {
+		updates["approved_at"] = &now
+		updates["rejection_reason"] = ""
+		updates["suspended_at"] = nil
+	} else if req.Status == string(models.DeliveryPartnerStatusRejected) {
+		updates["rejection_reason"] = req.Reason
+		updates["approved_at"] = nil
+		updates["suspended_at"] = nil
+	} else if req.Status == string(models.DeliveryPartnerStatusSuspended) {
+		updates["suspended_at"] = &now
+	}
+
+	if err := tx.Model(&partner).Updates(updates).Error; err != nil {
+		tx.Rollback()
+		utils.InternalErrorResponse(c, "Failed to update delivery partner status")
+		return
+	}
+
+	// Update user role on approval
+	if req.Status == string(models.DeliveryPartnerStatusApproved) {
+		if err := tx.Model(&models.User{}).Where("id = ?", partner.UserID).Update("role", models.RoleDelivery).Error; err != nil {
+			tx.Rollback()
+			utils.InternalErrorResponse(c, "Failed to update user role")
+			return
+		}
+	}
+
+	// Create audit log
+	auditLog := models.AuditLog{
+		UserID:     c.MustGet("user").(uuid.UUID),
+		Action:     fmt.Sprintf("delivery_%s", req.Status),
+		EntityType: "delivery_partner",
+		EntityID:   partner.ID.String(),
+		NewValues:  models.JSONB(auditPayload),
+	}
+	if err := tx.Create(&auditLog).Error; err != nil {
+		tx.Rollback()
+		utils.InternalErrorResponse(c, "Failed to create audit log")
+		return
+	}
+
+	tx.Commit()
+
+	// Send notification (outside transaction)
+	if h.dispatcher != nil {
+		var notifType models.NotificationType
+		switch req.Status {
+		case string(models.DeliveryPartnerStatusApproved):
+			notifType = models.NotifDeliveryApproved
+		case string(models.DeliveryPartnerStatusRejected):
+			notifType = models.NotifDeliveryRejected
+		case string(models.DeliveryPartnerStatusSuspended):
+			notifType = models.NotifDeliverySuspended
+		}
+		if notifType != "" {
+			h.dispatcher.Dispatch(c.Request.Context(), notification.NotificationEvent{
+				Type:       notifType,
+				ReceiverID: partner.UserID,
+				Role:       notification.RoleDelivery,
+				Data:       map[string]interface{}{"partner_id": partner.ID.String(), "reason": req.Reason},
+			})
+		}
+	}
+
+	utils.SuccessResponse(c, gin.H{"message": "Delivery partner " + req.Status})
+}
+
+func (h *AdminHandler) UpdateDeliveryPartnerAvailability(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid delivery partner ID")
+		return
+	}
+
+	var req struct {
+		Status string `json:"status" binding:"required,oneof=available busy offline"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "Status is required. Valid values: available, busy, offline")
+		return
+	}
+
+	result := h.db.Model(&models.DeliveryPartner{}).Where("id = ?", id).Update("availability_status", req.Status)
+	if result.RowsAffected == 0 {
+		utils.NotFoundResponse(c, "Delivery partner not found")
+		return
+	}
+
+	// Audit log
+	auditPayload, _ := json.Marshal(map[string]interface{}{
+		"availability_status": req.Status,
+	})
+	h.db.Create(&models.AuditLog{
+		UserID:     c.MustGet("user").(uuid.UUID),
+		Action:     fmt.Sprintf("delivery_availability_%s", req.Status),
+		EntityType: "delivery_partner",
+		EntityID:   id.String(),
+		NewValues:  models.JSONB(auditPayload),
+	})
+
+	utils.SuccessResponse(c, gin.H{"message": "Availability updated to " + req.Status})
 }
 
 // ================ Product Moderation ================
@@ -422,7 +607,7 @@ func (h *AdminHandler) ApproveProduct(c *gin.Context) {
 		IsApproved bool `json:"is_approved"`
 		IsActive   bool `json:"is_active"`
 	}
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil { utils.BadRequestResponse(c, "Invalid input"); return }
 
 	h.db.Model(&models.Product{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"is_approved": req.IsApproved,
@@ -463,7 +648,7 @@ func (h *AdminHandler) ProcessWithdrawal(c *gin.Context) {
 		AdminNotes string `json:"admin_notes"`
 		UTRNumber  string `json:"utr_number"`
 	}
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil { utils.BadRequestResponse(c, "Invalid input"); return }
 
 	var withdrawal models.WithdrawalRequest
 	if err := h.db.First(&withdrawal, id).Error; err != nil {
@@ -566,7 +751,7 @@ func (h *AdminHandler) ProcessRefund(c *gin.Context) {
 		Amount   float64 `json:"amount"`
 		Notes    string  `json:"notes"`
 	}
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil { utils.BadRequestResponse(c, "Invalid input"); return }
 
 	var refund models.RefundRequest
 	if err := h.db.First(&refund, id).Error; err != nil {
@@ -624,7 +809,7 @@ func (h *AdminHandler) ResolveDispute(c *gin.Context) {
 		Status     string `json:"status" binding:"required,oneof=resolved closed escalated"`
 		Resolution string `json:"resolution"`
 	}
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil { utils.BadRequestResponse(c, "Invalid input"); return }
 
 	h.db.Model(&models.Dispute{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status":     models.DisputeStatus(req.Status),
@@ -740,7 +925,7 @@ func (h *AdminHandler) UpdateCategory(c *gin.Context) {
 	}
 
 	var updates map[string]interface{}
-	c.ShouldBindJSON(&updates)
+	if err := c.ShouldBindJSON(&updates); err != nil { utils.BadRequestResponse(c, "Invalid input"); return }
 
 	allowed := []string{"name", "description", "image", "icon", "sort_order", "is_active", "is_featured"}
 	filtered := make(map[string]interface{})
@@ -762,7 +947,7 @@ func (h *AdminHandler) ToggleFeature(c *gin.Context) {
 		VendorID  *uuid.UUID `json:"vendor_id"`
 		IsFeatured bool      `json:"is_featured"`
 	}
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil { utils.BadRequestResponse(c, "Invalid input"); return }
 
 	if req.ProductID != nil {
 		h.db.Model(&models.Product{}).Where("id = ?", *req.ProductID).Update("is_featured", req.IsFeatured)
@@ -850,7 +1035,7 @@ func (h *AdminHandler) UpdateSubCategory(c *gin.Context) {
 	}
 
 	var updates map[string]interface{}
-	c.ShouldBindJSON(&updates)
+	if err := c.ShouldBindJSON(&updates); err != nil { utils.BadRequestResponse(c, "Invalid input"); return }
 
 	allowed := []string{"name", "description", "image", "sort_order", "is_active", "category_id"}
 	filtered := make(map[string]interface{})
@@ -863,6 +1048,419 @@ func (h *AdminHandler) UpdateSubCategory(c *gin.Context) {
 	h.db.Model(&sub).Updates(filtered)
 	h.db.First(&sub, id)
 	utils.SuccessResponse(c, sub)
+}
+
+// ================ Wallet Administration ================
+func (h *AdminHandler) AdminListWallets(c *gin.Context) {
+	page, pageSize := utils.GetPageParams(c)
+
+	type WalletRecord struct {
+		ID            uuid.UUID  `json:"id"`
+		UserID        *uuid.UUID `json:"user_id,omitempty"`
+		VendorID      *uuid.UUID `json:"vendor_id,omitempty"`
+		OwnerName     string     `json:"owner_name"`
+		OwnerType     string     `json:"owner_type"`
+		Balance       float64    `json:"balance"`
+		LockedBalance float64    `json:"locked_balance"`
+		IsActive      bool       `json:"is_active"`
+	}
+
+	var wallets []*models.Wallet
+	var total int64
+
+	query := h.db.Model(&models.Wallet{})
+
+	if ownerType := c.Query("type"); ownerType != "" {
+		switch ownerType {
+		case "customer":
+			query = query.Where("user_id IS NOT NULL AND vendor_id IS NULL")
+		case "vendor":
+			query = query.Where("vendor_id IS NOT NULL")
+		case "delivery":
+			query = query.Where("user_id IS NOT NULL")
+		}
+	}
+	if active := c.Query("is_active"); active != "" {
+		query = query.Where("is_active = ?", active == "true")
+	}
+
+	query.Count(&total)
+	query.Offset((page - 1) * pageSize).Limit(pageSize).Order("created_at DESC").Find(&wallets)
+
+	records := make([]WalletRecord, len(wallets))
+	for i, w := range wallets {
+		records[i] = WalletRecord{
+			ID:            w.ID,
+			UserID:        w.UserID,
+			VendorID:      w.VendorID,
+			Balance:       w.Balance,
+			LockedBalance: w.LockedBalance,
+			IsActive:      w.IsActive,
+		}
+		if w.VendorID != nil {
+			var vendor models.Vendor
+			if err := h.db.First(&vendor, w.VendorID).Error; err == nil {
+				records[i].OwnerName = vendor.BusinessName
+				records[i].OwnerType = "vendor"
+			}
+		} else if w.UserID != nil {
+			var user models.User
+			if err := h.db.First(&user, w.UserID).Error; err == nil {
+				records[i].OwnerName = user.FullName
+				records[i].OwnerType = string(user.Role)
+			}
+		}
+	}
+
+	utils.PaginatedResponse(c, records, page, pageSize, total)
+}
+
+func (h *AdminHandler) AdminGetWalletDetail(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid wallet ID")
+		return
+	}
+
+	var wallet models.Wallet
+	if err := h.db.First(&wallet, id).Error; err != nil {
+		utils.NotFoundResponse(c, "Wallet not found")
+		return
+	}
+
+	var transactions []models.WalletTransaction
+	h.db.Where("wallet_id = ?", id).Order("created_at DESC").Limit(50).Find(&transactions)
+
+	utils.SuccessResponse(c, gin.H{
+		"wallet":       wallet,
+		"transactions": transactions,
+	})
+}
+
+func (h *AdminHandler) AdminCreditWallet(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid wallet ID")
+		return
+	}
+
+	var req struct {
+		Amount      float64 `json:"amount" binding:"required,gt=0"`
+		Description string  `json:"description"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "Invalid input")
+		return
+	}
+
+	var wallet models.Wallet
+	if err := h.db.First(&wallet, id).Error; err != nil {
+		utils.NotFoundResponse(c, "Wallet not found")
+		return
+	}
+
+	h.db.Model(&wallet).Updates(map[string]interface{}{
+		"balance":        gorm.Expr("balance + ?", req.Amount),
+		"total_credited": gorm.Expr("total_credited + ?", req.Amount),
+	})
+
+	h.db.Create(&models.WalletTransaction{
+		WalletID:       wallet.ID,
+		TxnType:        models.TxnTypeCredit,
+		Amount:         req.Amount,
+		RunningBalance: wallet.Balance + req.Amount,
+		ReferenceType:  models.TxnRefAdjustment,
+		Description:    req.Description,
+		Status:         "completed",
+	})
+
+	utils.SuccessResponse(c, gin.H{"message": "Wallet credited"})
+}
+
+func (h *AdminHandler) AdminDebitWallet(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid wallet ID")
+		return
+	}
+
+	var req struct {
+		Amount      float64 `json:"amount" binding:"required,gt=0"`
+		Description string  `json:"description"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "Invalid input")
+		return
+	}
+
+	var wallet models.Wallet
+	if err := h.db.First(&wallet, id).Error; err != nil {
+		utils.NotFoundResponse(c, "Wallet not found")
+		return
+	}
+
+	if wallet.Balance < req.Amount {
+		utils.BadRequestResponse(c, "Insufficient balance")
+		return
+	}
+
+	h.db.Model(&wallet).Updates(map[string]interface{}{
+		"balance":       gorm.Expr("balance - ?", req.Amount),
+		"total_debited": gorm.Expr("total_debited + ?", req.Amount),
+	})
+
+	h.db.Create(&models.WalletTransaction{
+		WalletID:       wallet.ID,
+		TxnType:        models.TxnTypeDebit,
+		Amount:         req.Amount,
+		RunningBalance: wallet.Balance - req.Amount,
+		ReferenceType:  models.TxnRefAdjustment,
+		Description:    req.Description,
+		Status:         "completed",
+	})
+
+	utils.SuccessResponse(c, gin.H{"message": "Wallet debited"})
+}
+
+func (h *AdminHandler) AdminToggleWalletFreeze(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid wallet ID")
+		return
+	}
+
+	var wallet models.Wallet
+	if err := h.db.First(&wallet, id).Error; err != nil {
+		utils.NotFoundResponse(c, "Wallet not found")
+		return
+	}
+
+	newStatus := !wallet.IsActive
+	h.db.Model(&wallet).Update("is_active", newStatus)
+
+	status := "frozen"
+	if newStatus {
+		status = "unfrozen"
+	}
+	utils.SuccessResponse(c, gin.H{"message": "Wallet " + status})
+}
+
+// ================ Commission Transactions ================
+func (h *AdminHandler) ListCommissionTransactions(c *gin.Context) {
+	page, pageSize := utils.GetPageParams(c)
+
+	var txns []models.CommissionTransaction
+	var total int64
+
+	query := h.db.Model(&models.CommissionTransaction{})
+	if vendorID := c.Query("vendor_id"); vendorID != "" {
+		query = query.Where("vendor_id = ?", vendorID)
+	}
+	if status := c.Query("status"); status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if dateFrom := c.Query("date_from"); dateFrom != "" {
+		query = query.Where("created_at >= ?", dateFrom)
+	}
+	if dateTo := c.Query("date_to"); dateTo != "" {
+		query = query.Where("created_at <= ?", dateTo)
+	}
+
+	query.Count(&total)
+	query.Offset((page - 1) * pageSize).Limit(pageSize).Order("created_at DESC").Find(&txns)
+
+	utils.PaginatedResponse(c, txns, page, pageSize, total)
+}
+
+// ================ Analytics: Bookings ================
+func (h *AdminHandler) GetBookingAnalytics(c *gin.Context) {
+	period := c.DefaultQuery("period", "month")
+	now := time.Now()
+	var since time.Time
+	switch period {
+	case "week": since = now.AddDate(0, 0, -7)
+	case "month": since = now.AddDate(0, -1, 0)
+	case "year": since = now.AddDate(-1, 0, 0)
+	default: since = now.AddDate(0, -1, 0)
+	}
+
+	type BookingTrend struct {
+		Date      string `json:"date"`
+		Completed int64  `json:"completed"`
+		Cancelled int64  `json:"cancelled"`
+		Pending   int64  `json:"pending"`
+		Total     int64  `json:"total"`
+	}
+	var records []BookingTrend
+	h.db.Raw(`
+		SELECT DATE(created_at) as date,
+			COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) as completed,
+			COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) as cancelled,
+			COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) as pending,
+			COUNT(*) as total
+		FROM bookings WHERE created_at >= ?
+		GROUP BY DATE(created_at) ORDER BY date ASC
+	`, since).Scan(&records)
+
+	var totals struct {
+		Total     int64   `json:"total_bookings"`
+		Completed int64   `json:"completed"`
+		Cancelled int64   `json:"cancelled"`
+		Revenue   float64 `json:"total_revenue"`
+	}
+	h.db.Model(&models.Booking{}).Where("created_at >= ?", since).Count(&totals.Total)
+	h.db.Model(&models.Booking{}).Where("status = ? AND created_at >= ?", "completed", since).Count(&totals.Completed)
+	h.db.Model(&models.Booking{}).Where("status = ? AND created_at >= ?", "cancelled", since).Count(&totals.Cancelled)
+	h.db.Model(&models.Booking{}).Where("status = ? AND created_at >= ?", "completed", since).Select("COALESCE(SUM(final_price), 0)").Scan(&totals.Revenue)
+
+	utils.SuccessResponse(c, gin.H{"period": period, "records": records, "totals": totals})
+}
+
+// ================ Analytics: Orders ================
+func (h *AdminHandler) GetOrderAnalytics(c *gin.Context) {
+	period := c.DefaultQuery("period", "month")
+	now := time.Now()
+	var since time.Time
+	switch period {
+	case "week": since = now.AddDate(0, 0, -7)
+	case "month": since = now.AddDate(0, -1, 0)
+	case "year": since = now.AddDate(-1, 0, 0)
+	default: since = now.AddDate(0, -1, 0)
+	}
+
+	type OrderTrend struct {
+		Date        string  `json:"date"`
+		Delivered   int64   `json:"delivered"`
+		Cancelled   int64   `json:"cancelled"`
+		Pending     int64   `json:"pending"`
+		Total       int64   `json:"total"`
+		Revenue     float64 `json:"revenue"`
+	}
+	var records []OrderTrend
+	h.db.Raw(`
+		SELECT DATE(created_at) as date,
+			COALESCE(SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END), 0) as delivered,
+			COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) as cancelled,
+			COALESCE(SUM(CASE WHEN status NOT IN ('delivered','cancelled') THEN 1 ELSE 0 END), 0) as pending,
+			COUNT(*) as total,
+			COALESCE(SUM(CASE WHEN status = 'delivered' THEN final_amount ELSE 0 END), 0) as revenue
+		FROM orders WHERE created_at >= ?
+		GROUP BY DATE(created_at) ORDER BY date ASC
+	`, since).Scan(&records)
+
+	var totals struct {
+		Total     int64   `json:"total_orders"`
+		Delivered int64   `json:"delivered"`
+		Revenue   float64 `json:"total_revenue"`
+	}
+	h.db.Model(&models.Order{}).Where("created_at >= ?", since).Count(&totals.Total)
+	h.db.Model(&models.Order{}).Where("status = ? AND created_at >= ?", "delivered", since).Count(&totals.Delivered)
+	h.db.Model(&models.Order{}).Where("status = ? AND created_at >= ?", "delivered", since).Select("COALESCE(SUM(final_amount), 0)").Scan(&totals.Revenue)
+
+	utils.SuccessResponse(c, gin.H{"period": period, "records": records, "totals": totals})
+}
+
+// ================ Analytics: Customer Growth ================
+func (h *AdminHandler) GetCustomerAnalytics(c *gin.Context) {
+	period := c.DefaultQuery("period", "month")
+	now := time.Now()
+	var since time.Time
+	switch period {
+	case "week": since = now.AddDate(0, 0, -7)
+	case "month": since = now.AddDate(0, -1, 0)
+	case "year": since = now.AddDate(-1, 0, 0)
+	default: since = now.AddDate(0, -1, 0)
+	}
+
+	type CustomerTrend struct {
+		Date      string `json:"date"`
+		NewUsers  int64  `json:"new_users"`
+		Total     int64  `json:"total"`
+	}
+	var records []CustomerTrend
+	h.db.Raw(`
+		SELECT DATE(created_at) as date, COUNT(*) as new_users,
+			SUM(COUNT(*)) OVER (ORDER BY DATE(created_at)) as total
+		FROM users WHERE role = 'customer' AND created_at >= ?
+		GROUP BY DATE(created_at) ORDER BY date ASC
+	`, since).Scan(&records)
+
+	var totals struct {
+		TotalCustomers int64 `json:"total_customers"`
+		NewCustomers   int64 `json:"new_customers"`
+	}
+	h.db.Model(&models.User{}).Where("role = ?", "customer").Count(&totals.TotalCustomers)
+	h.db.Model(&models.User{}).Where("role = ? AND created_at >= ?", "customer", since).Count(&totals.NewCustomers)
+
+	utils.SuccessResponse(c, gin.H{"period": period, "records": records, "totals": totals})
+}
+
+// ================ Analytics: Delivery ================
+func (h *AdminHandler) GetDeliveryAnalytics(c *gin.Context) {
+	type DeliveryStats struct {
+		TotalPartners    int64   `json:"total_partners"`
+		Online           int64   `json:"online"`
+		Busy             int64   `json:"busy"`
+		Offline          int64   `json:"offline"`
+		TotalDeliveries  int64   `json:"total_deliveries"`
+		AvgRating        float64 `json:"avg_rating"`
+	}
+	var stats DeliveryStats
+	h.db.Model(&models.DeliveryPartner{}).Count(&stats.TotalPartners)
+	h.db.Model(&models.DeliveryPartner{}).Where("availability_status = ?", "available").Count(&stats.Online)
+	h.db.Model(&models.DeliveryPartner{}).Where("availability_status = ?", "busy").Count(&stats.Busy)
+	h.db.Model(&models.DeliveryPartner{}).Where("availability_status = ?", "offline").Count(&stats.Offline)
+	h.db.Model(&models.DeliveryPartner{}).Select("COALESCE(AVG(rating), 0)").Scan(&stats.AvgRating)
+	h.db.Model(&models.Order{}).Where("delivery_partner_id IS NOT NULL AND status = ?", "delivered").Count(&stats.TotalDeliveries)
+
+	utils.SuccessResponse(c, stats)
+}
+
+// ================ Analytics: Barber Performance ================
+func (h *AdminHandler) GetBarberAnalytics(c *gin.Context) {
+	type BarberStat struct {
+		TotalBarbers     int64   `json:"total_barbers"`
+		Approved         int64   `json:"approved"`
+		Pending          int64   `json:"pending"`
+		AvgRating        float64 `json:"avg_rating"`
+		TotalBookings    int64   `json:"total_bookings"`
+		TotalRevenue     float64 `json:"total_revenue"`
+	}
+	var stats BarberStat
+	h.db.Model(&models.Barber{}).Count(&stats.TotalBarbers)
+	h.db.Model(&models.Barber{}).Where("verification_status = ?", "approved").Count(&stats.Approved)
+	h.db.Model(&models.Barber{}).Where("verification_status = ?", "pending").Count(&stats.Pending)
+	h.db.Model(&models.Barber{}).Select("COALESCE(AVG(rating), 0)").Scan(&stats.AvgRating)
+	h.db.Model(&models.Booking{}).Where("barber_id IS NOT NULL AND status = ?", "completed").Count(&stats.TotalBookings)
+	h.db.Model(&models.Booking{}).Where("barber_id IS NOT NULL AND status = ?", "completed").Select("COALESCE(SUM(final_price), 0)").Scan(&stats.TotalRevenue)
+
+	type TopBarber struct {
+		ID       uuid.UUID `json:"id"`
+		ShopName string    `json:"shop_name"`
+		Bookings int64     `json:"bookings"`
+		Revenue  float64   `json:"revenue"`
+		Rating   float64   `json:"rating"`
+	}
+	var topBarbers []TopBarber
+	h.db.Raw(`
+		SELECT b.id, b.shop_name,
+			COALESCE(bk.cnt, 0) as bookings,
+			COALESCE(bk.rev, 0) as revenue,
+			COALESCE(b.rating, 0) as rating
+		FROM barbers b
+		LEFT JOIN (
+			SELECT barber_id, COUNT(*) as cnt, COALESCE(SUM(final_price), 0) as rev
+			FROM bookings WHERE status = 'completed'
+			GROUP BY barber_id
+		) bk ON bk.barber_id = b.id
+		WHERE b.verification_status = 'approved'
+		ORDER BY revenue DESC LIMIT 10
+	`).Scan(&topBarbers)
+
+	utils.SuccessResponse(c, gin.H{
+		"stats": stats,
+		"top_barbers": topBarbers,
+	})
 }
 
 func (h *AdminHandler) DeleteSubCategory(c *gin.Context) {
@@ -967,7 +1565,7 @@ func (h *AdminHandler) UpdateTaxSetting(c *gin.Context) {
 	}
 
 	var updates map[string]interface{}
-	c.ShouldBindJSON(&updates)
+	if err := c.ShouldBindJSON(&updates); err != nil { utils.BadRequestResponse(c, "Invalid input"); return }
 
 	allowed := []string{"name", "rate", "type", "description", "is_active", "applicable_to",
 		"hsn_code", "sac_code", "cgst_rate", "sgst_rate", "igst_rate", "cess_rate", "sort_order"}
@@ -1168,7 +1766,7 @@ func (h *AdminHandler) UpdateNotificationTemplate(c *gin.Context) {
 		IsActive *bool       `json:"is_active"`
 		Channel  *string     `json:"channel"`
 	}
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil { utils.BadRequestResponse(c, "Invalid input"); return }
 
 	updates := map[string]interface{}{}
 	if req.Name != nil { updates["name"] = *req.Name }
@@ -1230,7 +1828,7 @@ func (h *AdminHandler) VerifyKYCDocument(c *gin.Context) {
 		Status       string `json:"status" binding:"required,oneof=approved rejected"`
 		RejectReason string `json:"reject_reason"`
 	}
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil { utils.BadRequestResponse(c, "Invalid input"); return }
 
 	var doc models.KYCDocument
 	if err := h.db.First(&doc, id).Error; err != nil {
@@ -1300,7 +1898,7 @@ func (h *AdminHandler) VerifyBarberDocument(c *gin.Context) {
 		Status  string `json:"status" binding:"required,oneof=approved rejected"`
 		Remarks string `json:"remarks"`
 	}
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil { utils.BadRequestResponse(c, "Invalid input"); return }
 
 	var doc models.BarberDocument
 	if err := h.db.First(&doc, id).Error; err != nil {
@@ -1350,7 +1948,7 @@ func (h *AdminHandler) VerifyVendorDocument(c *gin.Context) {
 		Status  string `json:"status" binding:"required,oneof=approved rejected"`
 		Remarks string `json:"remarks"`
 	}
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil { utils.BadRequestResponse(c, "Invalid input"); return }
 
 	var doc models.VendorDocument
 	if err := h.db.First(&doc, id).Error; err != nil {

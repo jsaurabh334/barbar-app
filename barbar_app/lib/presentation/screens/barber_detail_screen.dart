@@ -519,26 +519,17 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
                         } else if (state is BookingFailure) {
                           final errMsg = state.error.replaceAll('Exception: ', '');
                           final isStaffIssue = errMsg.toLowerCase().contains('staff') || errMsg.toLowerCase().contains('available');
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(errMsg),
-                              backgroundColor: Colors.red,
-                              duration: const Duration(seconds: 5),
-                              action: isStaffIssue && _selectedStaffId != null
-                                  ? SnackBarAction(
-                                      label: 'Try Any Available',
-                                      textColor: Colors.white,
-                                      onPressed: () {
-                                        setState(() {
-                                          _selectedStaffId = null;
-                                          _selectedTimeSlot = null;
-                                        });
-                                        _fetchSlots();
-                                      },
-                                    )
-                                  : null,
-                            ),
-                          );
+                          if (isStaffIssue && _selectedStaffId != null) {
+                            _showStaffUnavailableSheet(context, errMsg);
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(errMsg),
+                                backgroundColor: Colors.red,
+                                duration: const Duration(seconds: 5),
+                              ),
+                            );
+                          }
                         }
                       },
                       builder: (context, state) {
@@ -1134,5 +1125,84 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
             homeServiceAddressId: _homeServiceAddressId,
           ),
         );
+  }
+
+  void _showStaffUnavailableSheet(BuildContext context, String errorMsg) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 48,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Icon(LucideIcons.userX, size: 48, color: Colors.redAccent),
+              const SizedBox(height: 16),
+              const Text(
+                'Staff Unavailable',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                errorMsg,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: const BorderSide(color: AppColors.border),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text('Cancel', style: TextStyle(color: AppColors.textPrimary)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        setState(() {
+                          _selectedStaffId = null;
+                          _selectedTimeSlot = null;
+                        });
+                        _fetchSlots();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text('Try Any Available', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

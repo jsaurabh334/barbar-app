@@ -109,6 +109,7 @@ func RunMigrations(db *gorm.DB) {
 		&models.OrderItem{},
 		&models.OrderStatusLog{},
 		&models.ShippingAddress{},
+		&models.Purchase{},
 		&models.Payment{},
 		&models.PaymentGatewayLog{},
 		&models.Invoice{},
@@ -129,6 +130,8 @@ func RunMigrations(db *gorm.DB) {
 
 		// Delivery
 		&models.DeliveryOTP{},
+		&models.OrderDeliveryAssignment{},
+		&models.DeliveryPartnerBankAccount{},
 
 		// Notifications — FK → User
 		&models.Notification{},
@@ -140,6 +143,15 @@ func RunMigrations(db *gorm.DB) {
 		// Webhook — FK → Vendor, Barber
 		&models.WebhookEndpoint{},
 		&models.WebhookEvent{},
+
+		// Banner — standalone CMS
+		&models.Banner{},
+
+		// Notification Campaign
+		&models.NotificationCampaign{},
+
+		// CMS Pages
+		&models.CmsPage{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)

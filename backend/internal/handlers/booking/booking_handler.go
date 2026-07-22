@@ -448,7 +448,10 @@ func (h *BookingHandler) Cancel(c *gin.Context) {
 	var req struct {
 		Reason string `json:"reason"`
 	}
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "Invalid input")
+		return
+	}
 
 	now := time.Now()
 	originalStatus := booking.Status
@@ -754,10 +757,14 @@ func (h *BookingHandler) GetMyQueuePosition(c *gin.Context) {
 	}
 
 	// Calculate current queue position & wait time
+	todayStart := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Now().Location())
+	todayEnd := todayStart.Add(24 * time.Hour)
+
 	var aheadBookings []models.Booking
-	h.db.Where("staff_id = ? AND status IN ? AND (queue_position < ? OR (queue_position = ? AND created_at < ?)) AND id != ?",
+	h.db.Where("staff_id = ? AND status IN ? AND scheduled_start >= ? AND scheduled_start < ? AND (queue_position < ? OR (queue_position = ? AND created_at < ?)) AND id != ?",
 		booking.StaffID,
 		[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
+		todayStart, todayEnd,
 		booking.QueuePosition, booking.QueuePosition, booking.CreatedAt, booking.ID).
 		Order("queue_position ASC, scheduled_start ASC").
 		Find(&aheadBookings)
@@ -1034,7 +1041,10 @@ func (h *BookingHandler) RejectHomeService(c *gin.Context) {
 	var req struct {
 		Reason string `json:"reason"`
 	}
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "Invalid input")
+		return
+	}
 
 	now := time.Now()
 	oldStatus := booking.Status

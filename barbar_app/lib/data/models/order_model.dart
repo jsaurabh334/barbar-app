@@ -95,8 +95,8 @@ class OrderModel {
               .map((e) => OrderItemModel.fromJson(e as Map<String, dynamic>))
               .toList()
           : null,
-      customerName: json['customer_name'] as String?,
-      customerPhone: json['customer_phone'] as String?,
+      customerName: json['customer_name'] as String? ?? (json['customer'] as Map<String, dynamic>?)?['full_name'] as String?,
+      customerPhone: json['customer_phone'] as String? ?? (json['customer'] as Map<String, dynamic>?)?['phone'] as String?,
       shippingAddress: json['shipping_address'] as Map<String, dynamic>?,
       deliveryPartnerId: json['delivery_partner_id'] as String?,
       assignedAt: json['assigned_at'] != null ? DateTime.tryParse(json['assigned_at'] as String) : null,

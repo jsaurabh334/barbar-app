@@ -64,6 +64,14 @@ class DeliveryRemoteDataSource {
     throw Exception(response.data['error'] ?? 'Failed to accept assignment');
   }
 
+  Future<void> claimOrder(String orderId) async {
+    final response = await _apiClient.dio.put('/delivery/orders/$orderId/assign');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to claim order');
+  }
+
   Future<void> rejectAssignment(String orderId) async {
     final response = await _apiClient.dio.put('/delivery/orders/$orderId/reject');
     if (response.statusCode == 200 && response.data['status'] == 'success') {

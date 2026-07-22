@@ -42,6 +42,9 @@ abstract class VendorRepository {
   Future<OrderModel> packOrder(String orderId);
   Future<OrderModel> readyForPickup(String orderId);
 
+  // Delivery
+  Future<Map<String, dynamic>> getOrderDeliveryInfo(String orderId);
+
   // Purchases
   Future<List<VendorPurchaseModel>> getPurchases();
   Future<VendorPurchaseModel> createPurchase(Map<String, dynamic> data);

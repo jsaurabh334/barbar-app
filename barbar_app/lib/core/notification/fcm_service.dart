@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -6,6 +7,12 @@ import '../../domain/repositories/notification_repository.dart';
 import '../navigation/navigation_service.dart';
 import '../../presentation/screens/notifications_screen.dart';
 import '../../presentation/screens/wallet_screen.dart';
+import '../../presentation/screens/vendor/vendor_order_detail_screen.dart';
+import '../../presentation/screens/vendor/vendor_order_list_screen.dart';
+import '../../presentation/screens/customer/customer_order_tracking_screen.dart';
+import '../../presentation/screens/order_history_screen.dart';
+import '../../presentation/screens/delivery/delivery_order_detail_screen.dart';
+import '../../presentation/screens/delivery/delivery_offer_screen.dart';
 import 'local_notification_service.dart';
 
 @pragma('vm:entry-point')
@@ -16,17 +23,19 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 }
 
 class FCMService {
-  static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  static FirebaseMessaging? _messaging;
   static NotificationRepository? _repository;
+
+  static FirebaseMessaging get _instance => _messaging ??= FirebaseMessaging.instance;
 
   static Future<void> initialize(NotificationRepository repository) async {
     try {
       _repository = repository;
-      await Firebase.initializeApp();
+      await Firebase.initializeApp().timeout(const Duration(seconds: 5));
 
       FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-      _messaging.onTokenRefresh.listen(_onTokenRefresh);
+      _instance.onTokenRefresh.listen(_onTokenRefresh);
 
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         debugPrint('Got a message whilst in the foreground!');
@@ -35,24 +44,26 @@ class FCMService {
 
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
         debugPrint('A new onMessageOpenedApp event was published!');
-        _handleMessageAction(message);
+        handleMessageAction(message);
       });
 
-      RemoteMessage? initialMessage = await FirebaseMessaging.instance.getInitialMessage();
-      if (initialMessage != null) {
-        Future.delayed(const Duration(milliseconds: 500), () {
-          _handleMessageAction(initialMessage);
-        });
-      }
+      try {
+        RemoteMessage? initialMessage = await FirebaseMessaging.instance.getInitialMessage().timeout(const Duration(seconds: 3));
+        if (initialMessage != null) {
+          Future.delayed(const Duration(milliseconds: 500), () {
+            handleMessageAction(initialMessage);
+          });
+        }
+      } catch (_) {}
 
     } catch (e) {
-      debugPrint("Error initializing Firebase: $e");
+      debugPrint("FCM init skipped: $e");
     }
   }
 
   static Future<String?> getToken() async {
     try {
-      return await _messaging.getToken();
+      return await _instance.getToken();
     } catch (e) {
       debugPrint("Error getting FCM token: $e");
       return null;
@@ -98,7 +109,7 @@ class FCMService {
     }
   }
 
-  static void _handleMessageAction(RemoteMessage message) {
+  static void handleMessageAction(RemoteMessage message) {
     final data = message.data;
     final action = data['action'] as String?;
     final entityId = data['entity_id'] as String?;
@@ -113,9 +124,36 @@ class FCMService {
       case 'OPEN_WALLET':
         screen = const WalletScreen();
         break;
+      case 'OPEN_VENDOR_ORDER':
+        if (entityId != null) {
+          screen = VendorOrderDetailScreen(orderId: entityId);
+        } else {
+          screen = const VendorOrderListScreen(isPushed: true);
+        }
+        break;
+      case 'OPEN_ORDER':
+        if (entityId != null) {
+          screen = CustomerOrderTrackingScreen(orderId: entityId);
+        } else {
+          screen = const OrderHistoryScreen();
+        }
+        break;
+      case 'NEW_DELIVERY_AVAILABLE':
+        if (entityId != null) {
+          screen = DeliveryOfferScreen(orderId: entityId);
+        } else {
+          screen = const NotificationsScreen();
+        }
+        break;
+      case 'OPEN_DELIVERY_ORDER':
+        if (entityId != null) {
+          screen = DeliveryOrderDetailScreen(orderId: entityId);
+        } else {
+          screen = const NotificationsScreen();
+        }
+        break;
       case 'OPEN_BOOKING':
       case 'OPEN_QUEUE':
-      case 'OPEN_ORDER':
       case 'OPEN_REVIEW':
       case 'OPEN_NOTIFICATIONS':
       default:

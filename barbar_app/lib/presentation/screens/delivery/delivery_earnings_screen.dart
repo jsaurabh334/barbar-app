@@ -3,7 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../domain/repositories/delivery_repository.dart';
+import '../../bloc/delivery/delivery_bloc.dart';
+import '../../bloc/delivery/delivery_event.dart';
+import '../../bloc/delivery/delivery_state.dart';
 
 class DeliveryEarningsScreen extends StatefulWidget {
   const DeliveryEarningsScreen({super.key});
@@ -13,27 +15,10 @@ class DeliveryEarningsScreen extends StatefulWidget {
 }
 
 class _DeliveryEarningsScreenState extends State<DeliveryEarningsScreen> {
-  Map<String, dynamic>? _summary;
-  List<Map<String, dynamic>> _earnings = [];
-  bool _loading = true;
-  String? _error;
-
   @override
   void initState() {
     super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    setState(() { _loading = true; _error = null; });
-    try {
-      final repo = context.read<DeliveryRepository>();
-      final summary = await repo.getEarningSummary();
-      final earnings = await repo.getEarnings(limit: 50);
-      if (mounted) setState(() { _summary = summary; _earnings = earnings; _loading = false; });
-    } catch (e) {
-      if (mounted) setState(() { _error = e.toString(); _loading = false; });
-    }
+    context.read<DeliveryBloc>().add(FetchEarningSummary());
   }
 
   @override
@@ -45,65 +30,81 @@ class _DeliveryEarningsScreenState extends State<DeliveryEarningsScreen> {
         actions: [
           IconButton(
             icon: const Icon(LucideIcons.refreshCw),
-            onPressed: _loadData,
+            onPressed: () => context.read<DeliveryBloc>().add(FetchEarningSummary()),
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-          : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(_error!, style: const TextStyle(color: AppColors.error), textAlign: TextAlign.center),
-                      const SizedBox(height: 16),
-                      ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
-                    ],
+      body: BlocBuilder<DeliveryBloc, DeliveryState>(
+        builder: (context, state) {
+          if (state is DeliveryLoading && state is! DeliveryEarningsLoaded) {
+            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+          }
+
+          if (state is DeliveryFailure) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(state.error, style: const TextStyle(color: AppColors.error), textAlign: TextAlign.center),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => context.read<DeliveryBloc>().add(FetchEarningSummary()),
+                    child: const Text('Retry'),
                   ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadData,
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildSummaryCards(),
-                        const SizedBox(height: 24),
-                        const Text('Earning History', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                        const SizedBox(height: 12),
-                        ..._earnings.map((e) => _buildEarningTile(e)),
-                        if (_earnings.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.all(32),
-                            child: Text('No earnings yet', style: TextStyle(color: AppColors.textSecondary), textAlign: TextAlign.center),
-                          ),
-                      ],
+                ],
+              ),
+            );
+          }
+
+          final earnings = state is DeliveryEarningsLoaded ? state.earnings : <Map<String, dynamic>>[];
+          final summary = state is DeliveryEarningsLoaded ? state.summary : null;
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              context.read<DeliveryBloc>().add(FetchEarningSummary());
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildSummaryCards(summary),
+                  const SizedBox(height: 24),
+                  const Text('Earning History', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                  const SizedBox(height: 12),
+                  ...earnings.map((e) => _buildEarningTile(e)),
+                  if (earnings.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Text('No earnings yet', style: TextStyle(color: AppColors.textSecondary), textAlign: TextAlign.center),
                     ),
-                  ),
-                ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildSummaryCards() {
+  Widget _buildSummaryCards(Map<String, dynamic>? summary) {
     final f = NumberFormat.currency(symbol: '\u20b9', decimalDigits: 0);
     return Column(
       children: [
         Row(
           children: [
-            _summaryCard('Total Earnings', f.format(_summary?['total_earnings'] ?? 0), LucideIcons.wallet, AppColors.primary),
+            _summaryCard('Total Earnings', f.format(summary?['total_earnings'] ?? 0), LucideIcons.wallet, AppColors.primary),
             const SizedBox(width: 12),
-            _summaryCard('This Month', f.format(_summary?['this_month'] ?? 0), LucideIcons.calendar, AppColors.success),
+            _summaryCard('This Month', f.format(summary?['this_month'] ?? 0), LucideIcons.calendar, AppColors.success),
           ],
         ),
         const SizedBox(height: 12),
         Row(
           children: [
-            _summaryCard('This Week', f.format(_summary?['this_week'] ?? 0), LucideIcons.trendingUp, AppColors.info),
+            _summaryCard('This Week', f.format(summary?['this_week'] ?? 0), LucideIcons.trendingUp, AppColors.info),
             const SizedBox(width: 12),
-            _summaryCard('Pending', f.format(_summary?['pending_amount'] ?? 0), LucideIcons.clock, AppColors.warning),
+            _summaryCard('Pending', f.format(summary?['pending_amount'] ?? 0), LucideIcons.clock, AppColors.warning),
           ],
         ),
       ],

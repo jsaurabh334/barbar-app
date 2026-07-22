@@ -3,10 +3,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart' show LucideIcons;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../domain/repositories/delivery_repository.dart';
 import '../../bloc/auth/auth_bloc.dart';
 import '../../bloc/auth/auth_event.dart';
 import '../../bloc/auth/auth_state.dart';
+import '../../bloc/delivery/delivery_bloc.dart';
+import '../../bloc/delivery/delivery_event.dart';
+import '../../bloc/delivery/delivery_state.dart';
 
 class DeliveryRegistrationScreen extends StatefulWidget {
   const DeliveryRegistrationScreen({super.key});
@@ -115,55 +117,73 @@ class _DeliveryRegistrationScreenState extends State<DeliveryRegistrationScreen>
     }
 
     setState(() => _loading = true);
-    try {
-      final repo = context.read<DeliveryRepository>();
-      await repo.register({
-        'vehicle_type': _selectedVehicleType,
-        'vehicle_number': _vehicleNumberCtrl.text.trim(),
-        'license_number': _licenseNumberCtrl.text.trim(),
-      });
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Registration submitted for approval!'), backgroundColor: AppColors.success),
-      );
-      context.read<AuthBloc>().add(LogoutRequested());
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Registration failed: $e'), backgroundColor: AppColors.error),
-      );
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+    final deliveryBloc = context.read<DeliveryBloc>();
+
+    // Step 1: Register delivery partner (vehicle info)
+    deliveryBloc.add(RegisterDelivery({
+      'vehicle_type': _selectedVehicleType,
+      'vehicle_number': _vehicleNumberCtrl.text.trim(),
+      'license_number': _licenseNumberCtrl.text.trim(),
+    }));
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Delivery Partner Registration'),
-        leading: _step > 0
-            ? IconButton(
-                icon: const Icon(LucideIcons.arrowLeft),
-                onPressed: () => setState(() => _step--),
-              )
-            : null,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildStepIndicator(),
-            const SizedBox(height: 24),
-            if (_step == 0) _buildBasicInfoStep(),
-            if (_step == 1) _buildVehicleStep(),
-            if (_step == 2) _buildBankStep(),
-            if (_step == 3) _buildKycStep(),
-            if (_step == 4) _buildReviewStep(),
-          ],
+    return BlocListener<DeliveryBloc, DeliveryState>(
+      listener: (context, state) {
+        if (state is DeliverySuccess) {
+          if (state.message == 'Registration submitted for approval') {
+            // Step 2: Save bank details
+            context.read<DeliveryBloc>().add(SaveBankAccount({
+              'account_holder_name': _accHolderCtrl.text.trim(),
+              'account_number': _accNumberCtrl.text.trim(),
+              'ifsc_code': _ifscCtrl.text.trim(),
+              'bank_name': _bankNameCtrl.text.trim(),
+            }));
+          } else if (state.message == 'Bank account saved') {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Registration submitted for approval!'), backgroundColor: AppColors.success),
+            );
+            context.read<AuthBloc>().add(LogoutRequested());
+          }
+        } else if (state is DeliveryFailure) {
+          setState(() => _loading = false);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Registration failed: ${state.error}'), backgroundColor: AppColors.error),
+            );
+          }
+        } else if (state is DeliveryLoading) {
+          setState(() => _loading = true);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: const Text('Delivery Partner Registration'),
+          leading: _step > 0
+              ? IconButton(
+                  icon: const Icon(LucideIcons.arrowLeft),
+                  onPressed: () => setState(() => _step--),
+                )
+              : null,
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildStepIndicator(),
+              const SizedBox(height: 24),
+              if (_step == 0) _buildBasicInfoStep(),
+              if (_step == 1) _buildVehicleStep(),
+              if (_step == 2) _buildBankStep(),
+              if (_step == 3) _buildKycStep(),
+              if (_step == 4) _buildReviewStep(),
+            ],
+          ),
         ),
       ),
     );
@@ -256,7 +276,7 @@ class _DeliveryRegistrationScreenState extends State<DeliveryRegistrationScreen>
         const Text('Enter your delivery vehicle information', style: TextStyle(color: AppColors.textSecondary)),
         const SizedBox(height: 24),
         DropdownButtonFormField<String>(
-          value: _selectedVehicleType,
+          initialValue: _selectedVehicleType,
           dropdownColor: AppColors.surface,
           style: const TextStyle(color: Colors.white),
           decoration: InputDecoration(

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"sync"
@@ -121,10 +122,19 @@ type AppConfig struct {
 	SupportEmail     string
 	SupportPhone     string
 	Upload           UploadConfig
+	DeliveryBroadcastRadiusKm   int
+	DeliveryBroadcastTimeoutSec int
 }
 
 func (c *Config) IsDevMode() bool {
 	return c.Server.Mode != "release"
+}
+
+func (c *Config) Validate() error {
+	if c.JWT.Secret == "" {
+		return fmt.Errorf("JWT_SECRET environment variable is required")
+	}
+	return nil
 }
 
 func Load() *Config {
@@ -135,7 +145,7 @@ func Load() *Config {
 			Mode:         getEnv("GIN_MODE", "debug"),
 			ReadTimeout:  30 * time.Second,
 			WriteTimeout: 30 * time.Second,
-			AllowOrigins: getEnv("ALLOW_ORIGINS", "*"),
+			AllowOrigins: getEnv("ALLOW_ORIGINS", ""),
 		},
 		Database: DatabaseConfig{
 			Host:            getEnv("DB_HOST", "localhost"),
@@ -155,7 +165,7 @@ func Load() *Config {
 			DB:       getEnvInt("REDIS_DB", 0),
 		},
 		JWT: JWTConfig{
-			Secret:          getEnv("JWT_SECRET", "super-secret-key-change-in-production"),
+			Secret:          getEnv("JWT_SECRET", ""),
 			AccessTokenTTL:  15 * time.Minute,
 			RefreshTokenTTL: 7 * 24 * time.Hour,
 			Issuer:          "barbar-app",
@@ -207,6 +217,8 @@ func Load() *Config {
 			TaxRate:         0.18,
 			SupportEmail:    "support@barbar.app",
 			SupportPhone:    "+919999999999",
+			DeliveryBroadcastRadiusKm:   getEnvInt("DELIVERY_BROADCAST_RADIUS_KM", 5),
+			DeliveryBroadcastTimeoutSec: getEnvInt("DELIVERY_BROADCAST_TIMEOUT_SEC", 120),
 			Upload: UploadConfig{
 				Dir:     getEnv("UPLOAD_DIR", "uploads"),
 				MaxSize: int64(getEnvInt("UPLOAD_MAX_SIZE_MB", 10)) * 1024 * 1024,

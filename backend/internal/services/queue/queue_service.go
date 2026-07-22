@@ -22,11 +22,19 @@ func NewQueueService(db *gorm.DB, hub *websocket.Hub, dispatcher notification.Di
 	return &QueueService{db: db, hub: hub, dispatcher: dispatcher}
 }
 
+func todayStartEnd() (time.Time, time.Time) {
+	now := time.Now()
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	return start, start.Add(24 * time.Hour)
+}
+
 func (s *QueueService) RecalculatePositions(barberID uuid.UUID) {
+	todayStart, todayEnd := todayStartEnd()
 	var bookings []models.Booking
-	s.db.Where("barber_id = ? AND status IN ?",
+	s.db.Where("barber_id = ? AND status IN ? AND scheduled_start >= ? AND scheduled_start < ?",
 		barberID,
 		[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
+		todayStart, todayEnd,
 	).Order("staff_id ASC, queue_position ASC, scheduled_start ASC, created_at ASC").Find(&bookings)
 
 	// Group by staffID
@@ -49,15 +57,17 @@ func (s *QueueService) RecalculatePositions(barberID uuid.UUID) {
 	}
 }
 func (s *QueueService) RecalculateWaitTimes(barberID uuid.UUID) {
+	todayStart, todayEnd := todayStartEnd()
 	var barber models.Barber
 	if err := s.db.First(&barber, barberID).Error; err != nil {
 		return
 	}
 
 	var bookings []models.Booking
-	s.db.Where("barber_id = ? AND status IN ?",
+	s.db.Where("barber_id = ? AND status IN ? AND scheduled_start >= ? AND scheduled_start < ?",
 		barberID,
 		[]models.BookingStatus{models.BookingStatusInProgress, models.BookingStatusPending, models.BookingStatusConfirmed},
+		todayStart, todayEnd,
 	).Order("staff_id ASC, queue_position ASC, scheduled_start ASC, created_at ASC").Find(&bookings)
 
 	staffQueues := make(map[string][]models.Booking)
@@ -118,15 +128,17 @@ type QueueStatus struct {
 }
 
 func (s *QueueService) GetQueueStatus(barberID uuid.UUID) *QueueStatus {
+	todayStart, todayEnd := todayStartEnd()
 	var barber models.Barber
 	if err := s.db.First(&barber, barberID).Error; err != nil {
 		return nil
 	}
 
 	var bookings []models.Booking
-	s.db.Where("barber_id = ? AND status IN ?",
+	s.db.Where("barber_id = ? AND status IN ? AND scheduled_start >= ? AND scheduled_start < ?",
 		barberID,
 		[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
+		todayStart, todayEnd,
 	).Preload("Customer").Order("staff_id ASC, queue_position ASC, scheduled_start ASC").Find(&bookings)
 
 	entries := make([]QueueEntry, len(bookings))
@@ -264,15 +276,17 @@ func (s *QueueService) AutoCancelNoShows(barberID uuid.UUID, graceMinutes int) i
 }
 
 func (s *QueueService) GetEstimatedWait(barberID uuid.UUID, bookingID uuid.UUID) (int, int, error) {
+	todayStart, todayEnd := todayStartEnd()
 	var booking models.Booking
 	if err := s.db.First(&booking, bookingID).Error; err != nil {
 		return 0, 0, err
 	}
 
 	var aheadBookings []models.Booking
-	s.db.Where("barber_id = ? AND status IN ? AND (queue_position < ? OR (queue_position = ? AND created_at < ?)) AND id != ?",
+	s.db.Where("barber_id = ? AND status IN ? AND scheduled_start >= ? AND scheduled_start < ? AND (queue_position < ? OR (queue_position = ? AND created_at < ?)) AND id != ?",
 		barberID,
 		[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
+		todayStart, todayEnd,
 		booking.QueuePosition, booking.QueuePosition, booking.CreatedAt, booking.ID).
 		Order("queue_position ASC, scheduled_start ASC").
 		Find(&aheadBookings)

@@ -67,17 +67,21 @@ func (h *AdminCustomerHandler) ListCustomers(c *gin.Context) {
 
 // GetCustomerDetails handles GET /admin/customers/:id
 func (h *AdminCustomerHandler) GetCustomerDetails(c *gin.Context) {
-	id := c.Param("id")
+	customerID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid customer ID")
+		return
+	}
 
 	var customer models.User
-	if err := h.db.Unscoped().Where("id = ? AND role = ?", id, models.RoleCustomer).First(&customer).Error; err != nil {
+	if err := h.db.Unscoped().Where("id = ? AND role = ?", customerID, models.RoleCustomer).First(&customer).Error; err != nil {
 		utils.ErrorResponse(c, 404, "Customer not found")
 		return
 	}
 
 	// Fetch Wallet
 	var wallet models.Wallet
-	if err := h.db.Where("user_id = ?", id).First(&wallet).Error; err != nil && err != gorm.ErrRecordNotFound {
+	if err := h.db.Where("user_id = ?", customerID).First(&wallet).Error; err != nil && err != gorm.ErrRecordNotFound {
 		// Ignore not found, wallet may be empty
 	}
 
@@ -88,7 +92,7 @@ func (h *AdminCustomerHandler) GetCustomerDetails(c *gin.Context) {
 
 	// Fetch Bookings
 	var bookings []models.Booking
-	h.db.Preload("Barber").Where("user_id = ?", id).Order("created_at DESC").Limit(10).Find(&bookings)
+	h.db.Preload("Barber").Where("user_id = ?", customerID).Order("created_at DESC").Limit(10).Find(&bookings)
 
 	// Fetch Reviews (mock for now if no model exists)
 	var reviews []interface{}
@@ -97,12 +101,12 @@ func (h *AdminCustomerHandler) GetCustomerDetails(c *gin.Context) {
 	var totalBookings, completed, cancelled int64
 	var spent float64
 
-	h.db.Model(&models.Booking{}).Where("user_id = ?", id).Count(&totalBookings)
-	h.db.Model(&models.Booking{}).Where("user_id = ? AND status = ?", id, models.BookingStatusCompleted).Count(&completed)
-	h.db.Model(&models.Booking{}).Where("user_id = ? AND status = ?", id, models.BookingStatusCancelled).Count(&cancelled)
+	h.db.Model(&models.Booking{}).Where("user_id = ?", customerID).Count(&totalBookings)
+	h.db.Model(&models.Booking{}).Where("user_id = ? AND status = ?", customerID, models.BookingStatusCompleted).Count(&completed)
+	h.db.Model(&models.Booking{}).Where("user_id = ? AND status = ?", customerID, models.BookingStatusCancelled).Count(&cancelled)
 	
 	// Assuming bookings have price or final_amount, using raw query to sum
-	h.db.Model(&models.Booking{}).Where("user_id = ? AND status = ?", id, models.BookingStatusCompleted).Select("COALESCE(SUM(total_amount), 0)").Scan(&spent)
+	h.db.Model(&models.Booking{}).Where("user_id = ? AND status = ?", customerID, models.BookingStatusCompleted).Select("COALESCE(SUM(total_amount), 0)").Scan(&spent)
 
 	stats := map[string]interface{}{
 		"total_bookings": totalBookings,
@@ -128,8 +132,12 @@ func (h *AdminCustomerHandler) GetCustomerDetails(c *gin.Context) {
 
 // BlockCustomer handles PUT /admin/customers/:id/block
 func (h *AdminCustomerHandler) BlockCustomer(c *gin.Context) {
-	id := c.Param("id")
-	if err := h.db.Model(&models.User{}).Where("id = ? AND role = ?", id, models.RoleCustomer).Update("status", "blocked").Error; err != nil {
+	customerID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid customer ID")
+		return
+	}
+	if err := h.db.Model(&models.User{}).Where("id = ? AND role = ?", customerID, models.RoleCustomer).Update("status", "blocked").Error; err != nil {
 		utils.ErrorResponse(c, 500, "Failed to block customer")
 		return
 	}
@@ -138,8 +146,12 @@ func (h *AdminCustomerHandler) BlockCustomer(c *gin.Context) {
 
 // UnblockCustomer handles PUT /admin/customers/:id/unblock
 func (h *AdminCustomerHandler) UnblockCustomer(c *gin.Context) {
-	id := c.Param("id")
-	if err := h.db.Model(&models.User{}).Where("id = ? AND role = ?", id, models.RoleCustomer).Update("status", "active").Error; err != nil {
+	customerID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid customer ID")
+		return
+	}
+	if err := h.db.Model(&models.User{}).Where("id = ? AND role = ?", customerID, models.RoleCustomer).Update("status", "active").Error; err != nil {
 		utils.ErrorResponse(c, 500, "Failed to unblock customer")
 		return
 	}
@@ -148,9 +160,13 @@ func (h *AdminCustomerHandler) UnblockCustomer(c *gin.Context) {
 
 // DeleteCustomer handles PUT /admin/customers/:id/delete (Soft Delete)
 func (h *AdminCustomerHandler) DeleteCustomer(c *gin.Context) {
-	id := c.Param("id")
+	customerID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid customer ID")
+		return
+	}
 	// Using gorm's Delete method on a model with DeletedAt will automatically do a soft delete.
-	if err := h.db.Where("id = ? AND role = ?", id, models.RoleCustomer).Delete(&models.User{}).Error; err != nil {
+	if err := h.db.Where("id = ? AND role = ?", customerID, models.RoleCustomer).Delete(&models.User{}).Error; err != nil {
 		utils.ErrorResponse(c, 500, "Failed to delete customer")
 		return
 	}

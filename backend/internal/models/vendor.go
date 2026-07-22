@@ -138,5 +138,5 @@ type Warehouse struct {
 	DisplayOrder int             `gorm:"default:0" json:"display_order"`
 
 	// Relations
-	Vendor Vendor `gorm:"foreignKey:VendorID" json:"vendor,omitempty"`
+	Vendor *Vendor `gorm:"foreignKey:VendorID" json:"vendor,omitempty"`
 }

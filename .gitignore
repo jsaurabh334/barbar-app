@@ -66,4 +66,8 @@ firebase-service-account.json
 google-services.json
 # Local configuration files
 local.properties
+# Local Docker overrides (may contain secrets)
+docker-compose.override.yml
+# SSL certificates (local dev only — production certs delivered out of band)
+ssl/
 # End of .gitignore

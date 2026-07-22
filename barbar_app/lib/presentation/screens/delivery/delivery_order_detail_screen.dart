@@ -5,6 +5,10 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/order_model.dart';
 import '../../../domain/repositories/delivery_repository.dart';
+import '../../bloc/delivery/delivery_bloc.dart';
+import '../../bloc/delivery/delivery_event.dart';
+import '../../bloc/delivery/delivery_state.dart';
+import 'delivery_otp_screen.dart';
 
 class DeliveryOrderDetailScreen extends StatefulWidget {
   final String orderId;
@@ -17,8 +21,6 @@ class DeliveryOrderDetailScreen extends StatefulWidget {
 
 class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   OrderModel? _order;
-  bool _loading = true;
-  String? _error;
   bool _actionLoading = false;
   double? _etaMinutes;
   double? _distanceKm;
@@ -26,15 +28,16 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _loadOrder();
+    _load();
   }
 
-  Future<void> _loadOrder() async {
-    setState(() { _loading = true; _error = null; });
+  void _load() {
+    context.read<DeliveryBloc>().add(FetchOrderDetail(widget.orderId));
+    _loadEta();
+  }
+
+  Future<void> _loadEta() async {
     try {
-      final order = await context.read<DeliveryRepository>().getOrderById(widget.orderId);
-      if (mounted) setState(() { _order = order; _loading = false; });
-      // Load ETA silently
       final eta = await context.read<DeliveryRepository>().getOrderETA(widget.orderId);
       if (mounted) {
         setState(() {
@@ -42,56 +45,41 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
           _distanceKm = (eta['distance_km'] as num?)?.toDouble();
         });
       }
-    } catch (e) {
-      if (mounted) setState(() { _error = e.toString().replaceAll('Exception: ', ''); _loading = false; });
-    }
-  }
-
-  Future<void> _executeAction(Future<OrderModel> Function() action) async {
-    setState(() => _actionLoading = true);
-    try {
-      final order = await action();
-      if (mounted) {
-        setState(() { _order = order; _actionLoading = false; });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Status updated'), backgroundColor: AppColors.success),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _actionLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: AppColors.error),
-        );
-      }
-    }
+    } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Delivery Order')),
-      body: _buildBody(),
-    );
-  }
+      body: BlocBuilder<DeliveryBloc, DeliveryState>(
+        builder: (context, state) {
+          if (state is DeliveryLoading && _order == null && !_actionLoading) {
+            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+          }
 
-  Widget _buildBody() {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-    }
-    if (_error != null) {
-      return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(LucideIcons.alertCircle, size: 48, color: AppColors.textSecondary),
-        const SizedBox(height: 16),
-        Text(_error!, style: const TextStyle(color: AppColors.textSecondary)),
-        const SizedBox(height: 16),
-        ElevatedButton(onPressed: _loadOrder, child: const Text('Retry')),
-      ]));
-    }
-    if (_order == null) {
-      return const SizedBox.shrink();
-    }
-    return _buildContent(_order!);
+          if (state is DeliveryFailure && _order == null) {
+            return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(LucideIcons.alertCircle, size: 48, color: AppColors.textSecondary),
+              const SizedBox(height: 16),
+              Text(state.error, style: const TextStyle(color: AppColors.textSecondary)),
+              const SizedBox(height: 16),
+              ElevatedButton(onPressed: _load, child: const Text('Retry')),
+            ]));
+          }
+
+          if (state is DeliveryOrderDetailLoaded) {
+            _order = state.order;
+          }
+
+          if (_order == null) {
+            return const SizedBox.shrink();
+          }
+
+          return _buildContent(_order!);
+        },
+      ),
+    );
   }
 
   Widget _buildContent(OrderModel order) {
@@ -355,14 +343,17 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
       return const Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
 
-    final repo = context.read<DeliveryRepository>();
+    final bloc = context.read<DeliveryBloc>();
 
     switch (order.status) {
       case OrderModel.driverAssigned:
         return Row(children: [
           Expanded(
             child: ElevatedButton.icon(
-              onPressed: () => _executeAction(() => repo.acceptAssignment(order.id).then((_) => repo.getOrderById(order.id))),
+              onPressed: () {
+                bloc.add(AcceptAssignment(order.id));
+                setState(() => _actionLoading = true);
+              },
               icon: const Icon(LucideIcons.checkCircle, size: 18),
               label: const Text('ACCEPT', style: TextStyle(fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
@@ -376,7 +367,10 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
           const SizedBox(width: 12),
           Expanded(
             child: ElevatedButton.icon(
-              onPressed: () => _executeAction(() => repo.rejectAssignment(order.id).then((_) => repo.getOrderById(order.id))),
+              onPressed: () {
+                bloc.add(RejectAssignment(order.id));
+                setState(() => _actionLoading = true);
+              },
               icon: const Icon(LucideIcons.xCircle, size: 18),
               label: const Text('REJECT', style: TextStyle(fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
@@ -393,7 +387,10 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
         return SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: () => _executeAction(() => repo.pickupOrder(order.id)),
+            onPressed: () {
+              bloc.add(PickupOrder(order.id));
+              setState(() => _actionLoading = true);
+            },
             icon: const Icon(LucideIcons.package, size: 18),
             label: const Text('PICKUP ORDER', style: TextStyle(fontWeight: FontWeight.bold)),
             style: ElevatedButton.styleFrom(
@@ -408,7 +405,10 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
         return SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: () => _executeAction(() => repo.outForDelivery(order.id)),
+            onPressed: () {
+              bloc.add(OutForDelivery(order.id));
+              setState(() => _actionLoading = true);
+            },
             icon: const Icon(LucideIcons.navigation, size: 18),
             label: const Text('OUT FOR DELIVERY', style: TextStyle(fontWeight: FontWeight.bold)),
             style: ElevatedButton.styleFrom(
@@ -423,7 +423,24 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
         return SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: () => _executeAction(() => repo.deliverOrder(order.id)),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => DeliveryOtpScreen(
+                    orderId: order.id,
+                    title: 'Delivery OTP',
+                    subtitle: 'Ask the customer for the OTP to confirm delivery',
+                    otpType: 'delivery',
+                  ),
+                ),
+              ).then((verified) {
+                if (verified == true) {
+                  bloc.add(DeliverOrder(order.id));
+                  setState(() => _actionLoading = true);
+                }
+              });
+            },
             icon: const Icon(LucideIcons.checkCircle, size: 18),
             label: const Text('CONFIRM DELIVERY', style: TextStyle(fontWeight: FontWeight.bold)),
             style: ElevatedButton.styleFrom(
@@ -442,11 +459,13 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
           ),
-          child: const Row(children: [
-            Icon(LucideIcons.checkCircle, color: AppColors.success, size: 20),
-            SizedBox(width: 12),
-            Text('Order Delivered', style: TextStyle(color: AppColors.success, fontWeight: FontWeight.bold)),
-          ]),
+          child: const Row(
+            children: [
+              Icon(LucideIcons.checkCircle, color: AppColors.success, size: 20),
+              SizedBox(width: 12),
+              Text('Order Delivered', style: TextStyle(color: AppColors.success, fontWeight: FontWeight.bold)),
+            ],
+          ),
         );
       default:
         return const SizedBox.shrink();

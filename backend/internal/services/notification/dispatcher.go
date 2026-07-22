@@ -27,6 +27,7 @@ const (
 	ActionOpenBooking = "OPEN_BOOKING"
 	ActionOpenQueue   = "OPEN_QUEUE"
 	ActionOpenOrder   = "OPEN_ORDER"
+	ActionOpenVendorOrder = "OPEN_VENDOR_ORDER"
 	ActionOpenProduct = "OPEN_PRODUCT"
 	ActionOpenReview  = "OPEN_REVIEW"
 	ActionOpenProfile = "OPEN_PROFILE"
@@ -70,6 +71,11 @@ var NotificationMatrix = map[models.NotificationType][]string{
 	models.NotifOrderOutForDelivery: {RoleCustomer},
 	models.NotifOrderDelivered:      {RoleCustomer},
 	models.NotifOrderCancelled:      {RoleCustomer, RoleVendor},
+	models.NotifDeliveryOffer:       {RoleDelivery},
+	models.NotifDeliveryApproved:    {RoleDelivery},
+	models.NotifDeliveryRejected:    {RoleDelivery},
+	models.NotifDeliverySuspended:   {RoleDelivery},
+	models.NotifDeliveryReactivated: {RoleDelivery},
 	models.NotifWithdrawalApproved:  {RoleBarber, RoleVendor},
 	models.NotifWithdrawalProcessed: {RoleBarber, RoleVendor},
 	models.NotifWithdrawalRejected:  {RoleBarber, RoleVendor},
@@ -100,7 +106,6 @@ func (d *notificationDispatcher) Dispatch(ctx context.Context, event Notificatio
 	// Find target roles for this event
 	targetRoles, exists := NotificationMatrix[event.Type]
 	if !exists {
-		// Fallback: If not in matrix, but we have a receiver and role, try sending directly
 		if event.ReceiverID != uuid.Nil && event.Role != "" {
 			targetRoles = []string{event.Role}
 		} else {
@@ -109,26 +114,33 @@ func (d *notificationDispatcher) Dispatch(ctx context.Context, event Notificatio
 		}
 	}
 
+	if event.ReceiverID == uuid.Nil {
+		log.Printf("Dispatcher: Broadcast to roles %v not fully implemented yet for event %s", targetRoles, event.Type)
+		return
+	}
+
+	// Look up the recipient user
+	var user models.User
+	if err := d.db.First(&user, event.ReceiverID).Error; err != nil {
+		log.Printf("Dispatcher: User %s not found for event %s", event.ReceiverID, event.Type)
+		return
+	}
+
+	// Verify user's role is allowed for this notification type
+	roleAllowed := false
 	for _, targetRole := range targetRoles {
-		// If ReceiverID is specified, we check if they match the role
-		if event.ReceiverID != uuid.Nil {
-			var user models.User
-			if err := d.db.Where("id = ? AND role = ?", event.ReceiverID, targetRole).First(&user).Error; err == nil {
-				d.sendToUser(ctx, user.ID, targetRole, event)
-			} else {
-				// If we just have user ID but user role is different, or if we want to bypass exact role check
-				if err := d.db.First(&user, event.ReceiverID).Error; err == nil {
-					// We can still send it if we really need to, but matrix restricts it.
-					// Let's strictly send if it's the intended receiver.
-					d.sendToUser(ctx, user.ID, string(user.Role), event)
-				}
-			}
-		} else {
-			// Broadcast to ALL users of this role? Usually not what we want for bookings, but maybe for promos.
-			// MVP: we expect ReceiverID to be populated for transactional events.
-			log.Printf("Dispatcher: Broadcast to role %s not fully implemented yet for event %s", targetRole, event.Type)
+		if string(user.Role) == targetRole {
+			roleAllowed = true
+			break
 		}
 	}
+	if !roleAllowed {
+		log.Printf("Dispatcher: User %s role %s not in allowed roles %v for event %s",
+			event.ReceiverID, user.Role, targetRoles, event.Type)
+		return
+	}
+
+	d.sendToUser(ctx, user.ID, string(user.Role), event)
 }
 
 func (d *notificationDispatcher) sendToUser(ctx context.Context, userID uuid.UUID, role string, event NotificationEvent) {
@@ -198,8 +210,13 @@ func (d *notificationDispatcher) buildMessageFallback(event NotificationEvent) (
 	
 	switch event.Type {
 	case models.NotifBookingRequest:
-		title = "New Booking Request"
-		body = "A new booking has been requested."
+		if event.Role == RoleCustomer {
+			title = "Booking Requested"
+			body = "Your booking request has been submitted successfully."
+		} else {
+			title = "New Booking Request"
+			body = "A new booking has been requested."
+		}
 		action = ActionOpenBooking
 		priority = models.PriorityHigh
 	case models.NotifBookingConfirmed:
@@ -259,7 +276,7 @@ func (d *notificationDispatcher) buildMessageFallback(event NotificationEvent) (
 	case models.NotifOrderPlaced:
 		title = "New Order Received"
 		body = "You have received a new order."
-		action = ActionOpenOrder
+		action = ActionOpenVendorOrder
 		priority = models.PriorityHigh
 	case models.NotifOrderAccepted:
 		title = "Order Accepted"
@@ -325,6 +342,26 @@ func (d *notificationDispatcher) buildMessageFallback(event NotificationEvent) (
 		title = "Order Cancelled"
 		body = "The order has been cancelled."
 		action = ActionOpenOrder
+		priority = models.PriorityHigh
+	case models.NotifDeliveryApproved:
+		title = "Application Approved"
+		body = "Your delivery partner application has been approved! You can now start delivering orders."
+		action = ActionOpenProfile
+		priority = models.PriorityHigh
+	case models.NotifDeliveryRejected:
+		title = "Application Rejected"
+		body = "Your delivery partner application was rejected."
+		action = ActionOpenProfile
+		priority = models.PriorityHigh
+	case models.NotifDeliverySuspended:
+		title = "Account Suspended"
+		body = "Your delivery partner account has been suspended."
+		action = ActionOpenProfile
+		priority = models.PriorityHigh
+	case models.NotifDeliveryReactivated:
+		title = "Account Reactivated"
+		body = "Your delivery partner account has been reactivated."
+		action = ActionOpenProfile
 		priority = models.PriorityHigh
 	case models.NotifWithdrawalApproved:
 		title = "Withdrawal Approved"

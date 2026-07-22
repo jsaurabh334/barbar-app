@@ -40,7 +40,7 @@ type User struct {
 	FCMToken        string     `gorm:"size:500" json:"fcm_token,omitempty"`
 	LastLoginAt     *time.Time `json:"last_login_at,omitempty"`
 	LastActiveAt    *time.Time `json:"last_active_at,omitempty"`
-	OTP             string     `gorm:"size:10" json:"-"`
+	OTP             string     `gorm:"size:128" json:"-"`
 	OTPExpiresAt    *time.Time `json:"-"`
 	OTPVerified     bool       `gorm:"default:false" json:"otp_verified"`
 	TwoFactorEnabled bool     `gorm:"default:false" json:"two_factor_enabled"`

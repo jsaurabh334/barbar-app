@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'service_model.dart';
 
 class BookingModel {
@@ -83,7 +84,16 @@ class BookingModel {
       shopName: parsedShopName,
       services: serviceList,
       isHomeService: json['is_home_service'] as bool? ?? false,
-      homeServiceAddress: json['home_service_address'] as Map<String, dynamic>?,
+      homeServiceAddress: () {
+        final val = json['home_service_address'];
+        if (val is Map<String, dynamic>) return val;
+        if (val is String && val.isNotEmpty) {
+          try {
+            return jsonDecode(val) as Map<String, dynamic>;
+          } catch (_) {}
+        }
+        return null;
+      }(),
       travelDistanceKm: (json['travel_distance_km'] as num?)?.toDouble() ?? 0,
       travelCharge: (json['travel_charge'] as num?)?.toDouble() ?? 0,
       customer: json['customer'] as Map<String, dynamic>?,

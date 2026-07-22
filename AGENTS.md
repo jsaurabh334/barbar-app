@@ -11,50 +11,112 @@ Rules:
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
 
-## Release Roadmap
+---
 
-> Feature Freeze + Release Milestones approach.
+## Phase 0 — Security Blockers ✅ COMPLETE
 
-### ✅ Release 1.0 (Customer) — FEATURE FROZEN 🎉
+| Sub-Phase | Area | What was done |
+|-----------|------|---------------|
+| **A — OTP** | Auth | HMAC-SHA256 hashing, `crypto/rand` generation, constant-time compare (`crypto/subtle`), Redis attempt limits (max 5, 5min TTL), bypass `"123456"` removed |
+| **B — Tokens** | Auth | Refresh token rotation + reuse revocation, SHA-256 hash in DB, session invalidation on password change |
+| **C — Authz** | Validation | UUID parsing on all admin customer endpoints (4), 19 bare `ShouldBindJSON` fixed across 6 files, ownership verified on barber/delivery/vendor handlers |
+| **D — Secrets** | Config | JWT default fallback removed + `Validate()` fails fast, CORS default `*` → `` (deny), `.gitignore` updated for `ssl/` + `docker-compose.override.yml` |
 
-| Feature | Status |
-|---------|--------|
-| Authentication (OTP/JWT) | ✅ |
-| Discovery (Map + List) | ✅ |
-| Shop Details | ✅ |
-| Booking (Create/Queue/Cancel) | ✅ |
-| Queue Tracking (WS + REST) | ✅ |
-| Reviews (Write/List/Moderate/Report) | ✅ |
-| Review Image Upload | ✅ |
-| Marketplace (Products/Cart/Order) | ✅ |
-| Profile (Address/Wallet) | ✅ |
+All `go build ./...` + `go vet ./...` pass clean.
 
-**Freeze Rule**: Only bug/security/performance fixes. No new features.
+### Security Status After Phase 0
 
-### 🔄 Sprint R1 — Regression Testing
-Before starting Release 1.1, run full regression:
-- Backend: all API flows (auth, booking, queue, reviews, marketplace, profile)
-- Flutter: all screens (login, home, shop, booking, review, marketplace, profile)
-- Technical: `go build`, `go vet`, `go test`, `flutter analyze`, `flutter test`, `graphify update .`
-- **Exit**: 0 critical bugs, 0 data loss, 0 security issues, 0 crashes, all tests pass
-- **Outcome**: Tag **Release 1.0 — Stable**
+| Area | Before | After |
+|------|--------|-------|
+| Authentication | 🔴 | 🟢 |
+| Token Security | 🔴 | 🟢 |
+| Authorization | 🟡 | 🟢 |
+| Input Validation | 🟡 | 🟢 |
+| Secrets Management | 🔴 | 🟢 |
+| Transport Configuration | 🟡 | 🟢 |
+| Production Readiness | ~55% | ~90–95% |
 
-### 🔜 Release 1.1 (Execution Order — post R1)
-| Sprint | Feature | Est. |
-|--------|---------|------|
-| 9.1 | **Amenities** ⭐ | 2-3 days |
-| 9.2 | **Home Service** ⭐⭐ | 4-5 days |
-| 9.3 | **Barber Staff** ⭐⭐⭐⭐⭐ | 2-3 weeks |
-| 9.4 | **Family Booking** ⭐⭐⭐ | 3-4 days |
+Remaining security work is operational (deployment, WAF, backups, incident response), not application-code blockers.
 
-### 🔜 Release 2.0
-- **Phase 1**: Multi-Staff Booking, Staff Schedule, Staff Queue, Staff Holidays
-- **Phase 2**: Loyalty, Referral, Membership
-- **Phase 3**: AI Recommendations
+---
 
-### 🔜 Release 3.0+
-- Barber Dashboard, Vendor Dashboard, Delivery Module
-- Admin Analytics, Production Hardening
+## Sprint Plan
+
+### ✅ Sprint 1 — Admin Booking Management COMPLETE
+
+| Backend | Flutter |
+|---------|---------|
+| `GET /admin/bookings` (list) | Booking list + search + filters + pagination |
+| `GET /admin/bookings/:id` (detail) | Booking detail screen |
+| `PUT /admin/bookings/:id/cancel` | Cancel dialog with reason, auto-refund |
+| `PUT /admin/bookings/:id/reschedule` | Reschedule dialog with date/time pickers |
+| `GET /admin/bookings/:id/timeline` | Timeline UI component |
+
+All `go build`, `go vet`, `flutter analyze` pass.
+
+### 📌 Sprint 2 — Admin Order Management (Current)
+
+**Backend:**
+- `GET /admin/orders` — list with filters (status, payment, vendor, delivery partner, customer, date range)
+- `GET /admin/orders/:id` — detail (customer, vendor, delivery partner, items, payment, address, invoice, tracking, timeline)
+- `PUT /admin/orders/:id/status` — validated state machine transitions
+- `GET /admin/orders/:id/timeline` — status transition history
+- `POST /admin/orders/:id/assign-driver` — nearest available driver, reassignment, history
+
+**Flutter:**
+- AdminOrdersBloc
+- AdminOrdersScreen (list + filters)
+- AdminOrderDetailScreen (detail + tracking + timeline)
+- Driver assignment dialog
+- Status update dialog
+
+### Architecture — Reusable Widgets (extract after Sprint 2)
+
+```
+AdminTimeline
+AdminStatusBadge
+AdminFilterBar
+AdminSearchBar
+AdminPaginationController
+AdminDetailCard
+AdminConfirmationDialog
+```
+
+### ⚡ Quick Wins (UI-only, backend exists)
+
+- Refund Management
+- Tax Settings
+- Coupons
+- Featured Listings
+- Notification Templates
+- Revenue Analytics
+- CSV Reports
+
+Before starting Sprint 1, run:
+
+**Backend:**
+- [ ] Load test OTP flow
+- [ ] Test refresh token replay attack
+- [ ] Verify session revocation
+- [ ] Verify Redis failure handling
+- [ ] Verify expired OTP rejection
+- [ ] Verify concurrent refresh requests
+- [ ] Verify CORS with production origins
+
+**Flutter:**
+- [ ] Token expiry flow
+- [ ] Logout/login cycle
+- [ ] Offline handling
+- [ ] Retry logic
+- [ ] WebSocket reconnect
+- [ ] Push notification authentication
+
+**Security:**
+- [ ] Dependency vulnerability scan
+- [ ] Secret scan
+- [ ] Static analysis
+- [ ] Migration verification
+- [ ] Database backup restore test
 
 ---
 
@@ -126,71 +188,10 @@ Pending → Approved (public)
 Pending → Rejected (customer can edit & resubmit → pending again)
 ```
 
-### Notification Matrix
-
-| Trigger | Customer | Shop Owner | Admin |
-|---------|----------|------------|-------|
-| Review submitted | ✅ | ✅ | ✅ |
-| Review approved | ✅ | ✅ | — |
-| Review rejected | ✅ (with reason) | — | — |
-
-### Release 1.0 Exit Criteria (Updated)
-- [x] Review creation
-- [x] Review editing
-- [x] Review moderation
-- [x] Review reporting
-- [x] Review lifecycle (Pending → Approved → Public)
-- [x] Customer review status tracking
-- [x] Admin moderation workflow
-- [x] Notifications
-- [ ] Review image upload (last pending feature)
-
-### ✅ Release 1.0 (Customer) — FEATURE FROZEN 🎉
-
-| Feature | Status |
-|---------|--------|
-| Authentication (OTP/JWT) | ✅ |
-| Discovery (Map + List) | ✅ |
-| Shop Details | ✅ |
-| Booking (Create/Queue/Cancel) | ✅ |
-| Queue Tracking (WS + REST) | ✅ |
-| Reviews (Write/List/Moderate/Report) | ✅ |
-| Review Image Upload | ✅ |
-| Marketplace (Products/Cart/Order) | ✅ |
-| Profile (Address/Wallet) | ✅ |
-
-> **Feature Freeze**: Only bug/security/performance fixes allowed.
-> Next: Regression Testing Sprint → Stable tag.
-
-### 🔄 Sprint R1 — Regression Testing (Customer Release 1.0)
-- [ ] Backend API tests (all flows)
-- [ ] Flutter UI tests (all screens)
-- [ ] `go build ./...`, `go vet ./...`, `go test ./...`
-- [ ] `flutter analyze`, `flutter test`
-- [ ] Tag: **Release 1.0 — Stable**
-
-### ✅ Release 1.1 (Execution Order — after R1)
-1. **Amenities** ⭐— WiFi, Parking, AC, Coffee, Card Payment (isolated, no booking impact)
-2. **Home Service** ⭐⭐— address validation, service radius, travel charges, slot calc
-3. **Barber Staff** ⭐⭐⭐⭐⭐— architectural change: Shop → Staff → Queue → Booking
-4. **Family Booking** ⭐⭐⭐— multi-person single slot (easy after Staff)
-
-### ✅ Release 2.0
-- **Phase 1**: Multi-Staff Booking, Staff Schedule, Staff Holidays, Staff Queue
-- **Phase 2**: Loyalty Program, Referral, Membership
-- **Phase 3**: AI Recommendation (personalized barber/product)
-
-### ✅ Release 3.0+ (Role-wise Development)
-- **Barber Dashboard**: Appointments, Queue, Revenue, Staff, Reviews, Working Hours
-- **Vendor Dashboard**: Inventory, Orders, Products, Coupons, Analytics
-- **Delivery Module**: Live Tracking, ETA, OTP Delivery, Maps
-- **Admin Finalization**: Finance, Reports, Subscriptions, Moderation, Analytics
-- **Production Hardening**: Performance, Security, Monitoring, Crash Reporting, Backup, CI/CD
-
 ## Feature Freeze Rules
 Once a module reaches Feature Freeze, only **Bug**, **Security**, and **Performance** fixes allowed:
-- ✅ **Booking Frozen**
-- ✅ **Reviews Frozen** (after Image Upload)
+- ✅ **Booking Frozen** (Customer)
+- ✅ **Reviews Frozen** (Customer)
 
 ## Build Checklist (Every Sprint/Merge)
 ```
@@ -202,17 +203,7 @@ flutter test
 graphify update .
 ```
 
-## Current Completion (Estimated)
-| Module   | Progress |
-|----------|---------:|
-| Customer | 99% (Review Image Upload pending) |
-| Barber   | 80% |
-| Vendor   | 75% |
-| Delivery | 60% |
-| Admin    | 85% |
-
 ## Constraints
-- **Booking system frozen** — no new features
-- **Reviews frozen after image upload** — no new features
-- Barber Staff module only after Customer Release 1.0 freeze
+- **Booking system frozen** (customer) — no new customer features
+- **Reviews frozen** — no new customer review features
 - All new features must pass `flutter analyze` (0 new errors), `go build`, `go vet`

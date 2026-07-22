@@ -36,6 +36,32 @@ class SuspendVendor extends AdminVendorsEvent {
   List<Object?> get props => [vendorId];
 }
 
+class RejectVendor extends AdminVendorsEvent {
+  final String vendorId;
+  final String? remarks;
+  const RejectVendor(this.vendorId, {this.remarks});
+
+  @override
+  List<Object?> get props => [vendorId, remarks];
+}
+
+class ReactivateVendor extends AdminVendorsEvent {
+  final String vendorId;
+  const ReactivateVendor(this.vendorId);
+
+  @override
+  List<Object?> get props => [vendorId];
+}
+
+class ToggleVendorFeatured extends AdminVendorsEvent {
+  final String vendorId;
+  final bool isFeatured;
+  const ToggleVendorFeatured(this.vendorId, this.isFeatured);
+
+  @override
+  List<Object?> get props => [vendorId, isFeatured];
+}
+
 // --- States ---
 abstract class AdminVendorsState extends Equatable {
   const AdminVendorsState();
@@ -70,6 +96,14 @@ class AdminVendorsError extends AdminVendorsState {
   List<Object?> get props => [message];
 }
 
+class AdminVendorsActionSuccess extends AdminVendorsState {
+  final String message;
+  const AdminVendorsActionSuccess(this.message);
+
+  @override
+  List<Object?> get props => [message];
+}
+
 // --- Bloc ---
 class AdminVendorsBloc extends Bloc<AdminVendorsEvent, AdminVendorsState> {
   final AdminRepository adminRepository;
@@ -77,7 +111,10 @@ class AdminVendorsBloc extends Bloc<AdminVendorsEvent, AdminVendorsState> {
   AdminVendorsBloc({required this.adminRepository}) : super(AdminVendorsInitial()) {
     on<LoadVendors>(_onLoadVendors);
     on<ApproveVendor>(_onApproveVendor);
+    on<RejectVendor>(_onRejectVendor);
     on<SuspendVendor>(_onSuspendVendor);
+    on<ReactivateVendor>(_onReactivateVendor);
+    on<ToggleVendorFeatured>(_onToggleVendorFeatured);
   }
 
   Future<void> _onLoadVendors(LoadVendors event, Emitter<AdminVendorsState> emit) async {
@@ -110,8 +147,40 @@ class AdminVendorsBloc extends Bloc<AdminVendorsEvent, AdminVendorsState> {
     await _updateVendorStatus(event.vendorId, 'approved', emit);
   }
 
+  Future<void> _onRejectVendor(RejectVendor event, Emitter<AdminVendorsState> emit) async {
+    try {
+      await adminRepository.rejectVendor(event.vendorId, remarks: event.remarks);
+      emit(const AdminVendorsActionSuccess('Vendor rejected'));
+      add(const LoadVendors());
+    } catch (e) {
+      emit(AdminVendorsError(e.toString()));
+    }
+  }
+
   Future<void> _onSuspendVendor(SuspendVendor event, Emitter<AdminVendorsState> emit) async {
     await _updateVendorStatus(event.vendorId, 'suspended', emit);
+  }
+
+  Future<void> _onReactivateVendor(ReactivateVendor event, Emitter<AdminVendorsState> emit) async {
+    try {
+      await adminRepository.reactivateVendor(event.vendorId);
+      emit(const AdminVendorsActionSuccess('Vendor reactivated'));
+      add(const LoadVendors());
+    } catch (e) {
+      emit(AdminVendorsError(e.toString()));
+    }
+  }
+
+  Future<void> _onToggleVendorFeatured(ToggleVendorFeatured event, Emitter<AdminVendorsState> emit) async {
+    try {
+      // Use the features/toggle endpoint for is_featured
+      await adminRepository.toggleVendorFeature(vendorId: event.vendorId, isFeatured: event.isFeatured);
+      final statusText = event.isFeatured ? 'featured' : 'unfeatured';
+      emit(AdminVendorsActionSuccess('Vendor $statusText'));
+      add(const LoadVendors());
+    } catch (e) {
+      emit(AdminVendorsError(e.toString()));
+    }
   }
 
   Future<void> _updateVendorStatus(String vendorId, String status, Emitter<AdminVendorsState> emit) async {

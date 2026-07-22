@@ -555,7 +555,10 @@ func (h *PaymentHandler) Refund(c *gin.Context) {
 		Amount float64 `json:"amount"`
 		Reason string  `json:"reason"`
 	}
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "Invalid input")
+		return
+	}
 
 	var payment models.Payment
 	if err := h.db.First(&payment, paymentID).Error; err != nil {

@@ -64,6 +64,7 @@ import 'presentation/screens/delivery/delivery_shell.dart';
 import 'domain/repositories/vendor_repository.dart';
 import 'presentation/screens/vendor/vendor_shell.dart';
 import 'presentation/bloc/vendor/vendor_bloc.dart';
+import 'presentation/bloc/delivery/delivery_bloc.dart';
 
 import 'core/navigation/navigation_service.dart';
 import 'core/notification/fcm_service.dart';
@@ -260,6 +261,9 @@ class MyApp extends StatelessWidget {
           ),
           BlocProvider<VendorBloc>(
             create: (context) => VendorBloc(vendorRepository),
+          ),
+          BlocProvider<DeliveryBloc>(
+            create: (context) => DeliveryBloc(deliveryRepository),
           ),
         ],
         child: MaterialApp(

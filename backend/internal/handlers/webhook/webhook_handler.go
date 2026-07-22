@@ -110,7 +110,10 @@ func (h *WebhookHandler) Update(c *gin.Context) {
 		RetryCount  *int     `json:"retry_count"`
 		TimeoutSec  *int     `json:"timeout_sec"`
 	}
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "Invalid input")
+		return
+	}
 
 	updates := map[string]interface{}{}
 	if req.URL != nil { updates["url"] = *req.URL }
