@@ -132,6 +132,8 @@ func RunMigrations(db *gorm.DB) {
 		&models.DeliveryOTP{},
 		&models.OrderDeliveryAssignment{},
 		&models.DeliveryPartnerBankAccount{},
+		&models.DeliveryEarning{},
+		&models.DeliveryPresenceLog{},
 
 		// Notifications — FK → User
 		&models.Notification{},

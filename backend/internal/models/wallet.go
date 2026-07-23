@@ -74,7 +74,7 @@ type WithdrawalRequest struct {
 	AdminNotes       string                   `gorm:"type:text" json:"admin_notes,omitempty"`
 	ProcessedAt      *time.Time               `json:"processed_at,omitempty"`
 	TransactionRef   string                   `gorm:"size:255" json:"transaction_ref,omitempty"`
-	UTRNnumber       string                   `gorm:"size:100" json:"utr_number,omitempty"`
+	UTRNumber        string                   `gorm:"size:100;column:utr_nnumber" json:"utr_number,omitempty"`
 	RejectReason     string                   `gorm:"type:text" json:"reject_reason,omitempty"`
 }
 

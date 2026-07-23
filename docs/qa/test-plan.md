@@ -97,13 +97,26 @@
 ### 7. Delivery
 | # | Test Case | Role | Steps | Expected Result | Pass/Fail |
 |---| --------- | ---- | ----- | --------------- | --------- |
-| 7.1 | View available deliveries | Delivery | Dashboard → Available | Available deliveries listed | |
-| 7.2 | Accept delivery | Delivery | Tap delivery → Accept | Delivery claimed | |
-| 7.3 | Live tracking | Delivery | Active delivery → GPS tracking | Location updates in real-time | |
-| 7.4 | Mark as picked up | Delivery | Arrive at vendor → Mark picked up | Status updated | |
-| 7.5 | Mark as delivered | Delivery | Arrive at customer → Mark delivered | Delivery completed | |
-| 7.6 | Delivery history | Delivery | Profile → History | Past deliveries listed | |
-| 7.7 | Broadcast dispatch | Admin | Order → Auto-dispatch | Offers sent to nearby drivers | |
+| 7.1 | View available deliveries | Delivery | Dashboard → Available | Available deliveries listed | ✅ |
+| 7.2 | Claim delivery order | Delivery | Tap delivery → Claim | Status → driver_assigned | ✅ |
+| 7.3 | Accept assignment | Delivery | Accept assigned order | Status → driver_accepted | ✅ |
+| 7.4 | Reject assignment | Delivery | Reject assigned order | Order unassigned | ✅ |
+| 7.5 | Live tracking / GPS location | Delivery | Send coordinates | Location updated in presence | ✅ |
+| 7.6 | Mark as picked up | Delivery | Arrive at vendor → Mark picked up | Status → picked_up | ✅ |
+| 7.7 | Mark as out for delivery | Delivery | Leave vendor → Out for delivery | Status → out_for_delivery | ✅ |
+| 7.8 | Mark as delivered | Delivery | Arrive at customer → Deliver | Status → delivered, wallet credited | ✅ |
+| 7.9 | Delivery OTP verification | Delivery | Enter customer OTP | OTP validated | ✅ |
+| 7.10 | Delivery earnings | Delivery | Profile → Earnings | Earnings list + summary | ✅ |
+| 7.11 | Go online/offline | Delivery | Toggle presence | Presence status changes | ✅ |
+| 7.12 | Heartbeat | Delivery | Send heartbeat | Presence timestamp updates | ✅ |
+| 7.13 | Manage bank account (CRUD) | Delivery | Bank → Add/View/Update/Delete | Bank account management works | ✅ |
+| 7.14 | View assigned orders list | Delivery | Orders → List | Current/previous orders listed | ✅ |
+| 7.15 | View delivery order detail | Delivery | Tap order → Detail | Customer info + tracking + warehouse | ✅ |
+| 7.16 | Broadcast dispatch | Admin | Order → Auto-dispatch | Offers sent to nearby drivers | ✅ |
+| 7.17 | Admin: list delivery partners | Admin | Delivery → List | All partners listed with status | ✅ |
+| 7.18 | Admin: approve/suspend partner | Admin | Delivery → Activate/Suspend | Partner status changes | ✅ |
+| 7.19 | Admin: view online drivers | Admin | Delivery Presence → Online | Online drivers with location | ✅ |
+| 7.20 | Admin: assign driver to order | Admin | Order → Assign Driver | Driver assigned, notified | ✅ |
 
 ### 8. Vendor
 | # | Test Case | Role | Steps | Expected Result | Pass/Fail |

@@ -113,26 +113,48 @@ func (h *AdminSettlementHandler) ProcessSettlement(c *gin.Context) {
 		return
 	}
 
+	if withdrawal.Status == models.WithdrawProcessed {
+		utils.BadRequestResponse(c, "Settlement is already processed")
+		return
+	}
+	if withdrawal.Status == models.WithdrawRejected {
+		utils.BadRequestResponse(c, "Settlement is already rejected")
+		return
+	}
+	if withdrawal.Status != models.WithdrawPending && req.Status == "processed" {
+		utils.BadRequestResponse(c, "Only pending settlements can be processed")
+		return
+	}
+
 	updates := map[string]interface{}{
-		"status":     models.WithdrawalRequestStatus(req.Status),
-		"admin_id":   adminID,
+		"status":      models.WithdrawalRequestStatus(req.Status),
+		"admin_id":    adminID,
 		"admin_notes": req.AdminNotes,
 	}
 
 	switch req.Status {
 	case "processed":
 		updates["processed_at"] = time.Now()
-		updates["utr_number"] = req.UTRNumber
-		h.db.Model(&models.Wallet{}).Where("vendor_id = ?", withdrawal.VendorID).
-			Update("locked_balance", gorm.Expr("locked_balance - ?", withdrawal.Amount))
+		updates["utr_nnumber"] = req.UTRNumber
+		if err := h.db.Model(&models.Wallet{}).Where("vendor_id = ?", withdrawal.VendorID).
+			Update("locked_balance", gorm.Expr("locked_balance - ?", withdrawal.Amount)).Error; err != nil {
+			utils.BadRequestResponse(c, "Failed to update wallet")
+			return
+		}
 	case "rejected":
-		h.db.Model(&models.Wallet{}).Where("vendor_id = ?", withdrawal.VendorID).Updates(map[string]interface{}{
+		if err := h.db.Model(&models.Wallet{}).Where("vendor_id = ?", withdrawal.VendorID).Updates(map[string]interface{}{
 			"balance":        gorm.Expr("balance + ?", withdrawal.Amount),
 			"locked_balance": gorm.Expr("locked_balance - ?", withdrawal.Amount),
-		})
+		}).Error; err != nil {
+			utils.BadRequestResponse(c, "Failed to update wallet")
+			return
+		}
 	}
 
-	h.db.Model(&withdrawal).Updates(updates)
+	if err := h.db.Model(&withdrawal).Updates(updates).Error; err != nil {
+		utils.InternalErrorResponse(c, "Failed to update settlement")
+		return
+	}
 	utils.SuccessResponse(c, gin.H{"message": "Settlement " + req.Status})
 }
 
@@ -165,6 +187,11 @@ func (h *AdminSettlementHandler) BulkProcessSettlements(c *gin.Context) {
 			continue
 		}
 
+		if withdrawal.Status == models.WithdrawProcessed || withdrawal.Status == models.WithdrawRejected {
+			failed++
+			continue
+		}
+
 		updates := map[string]interface{}{
 			"status":   models.WithdrawalRequestStatus(req.Status),
 			"admin_id": adminID,
@@ -172,17 +199,26 @@ func (h *AdminSettlementHandler) BulkProcessSettlements(c *gin.Context) {
 
 		if req.Status == "processed" {
 			updates["processed_at"] = time.Now()
-			updates["utr_number"] = req.UTRNumber
-			h.db.Model(&models.Wallet{}).Where("vendor_id = ?", withdrawal.VendorID).
-				Update("locked_balance", gorm.Expr("locked_balance - ?", withdrawal.Amount))
+			updates["utr_nnumber"] = req.UTRNumber
+			if err := h.db.Model(&models.Wallet{}).Where("vendor_id = ?", withdrawal.VendorID).
+				Update("locked_balance", gorm.Expr("locked_balance - ?", withdrawal.Amount)).Error; err != nil {
+				failed++
+				continue
+			}
 		} else if req.Status == "rejected" {
-			h.db.Model(&models.Wallet{}).Where("vendor_id = ?", withdrawal.VendorID).Updates(map[string]interface{}{
+			if err := h.db.Model(&models.Wallet{}).Where("vendor_id = ?", withdrawal.VendorID).Updates(map[string]interface{}{
 				"balance":        gorm.Expr("balance + ?", withdrawal.Amount),
 				"locked_balance": gorm.Expr("locked_balance - ?", withdrawal.Amount),
-			})
+			}).Error; err != nil {
+				failed++
+				continue
+			}
 		}
 
-		h.db.Model(&withdrawal).Updates(updates)
+		if err := h.db.Model(&withdrawal).Updates(updates).Error; err != nil {
+			failed++
+			continue
+		}
 		processed++
 	}
 

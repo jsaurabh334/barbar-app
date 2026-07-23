@@ -1159,6 +1159,11 @@ func (h *AdminHandler) AdminCreditWallet(c *gin.Context) {
 		return
 	}
 
+	if !wallet.IsActive {
+		utils.BadRequestResponse(c, "Wallet is frozen")
+		return
+	}
+
 	h.db.Model(&wallet).Updates(map[string]interface{}{
 		"balance":        gorm.Expr("balance + ?", req.Amount),
 		"total_credited": gorm.Expr("total_credited + ?", req.Amount),
@@ -1196,6 +1201,11 @@ func (h *AdminHandler) AdminDebitWallet(c *gin.Context) {
 	var wallet models.Wallet
 	if err := h.db.First(&wallet, id).Error; err != nil {
 		utils.NotFoundResponse(c, "Wallet not found")
+		return
+	}
+
+	if !wallet.IsActive {
+		utils.BadRequestResponse(c, "Wallet is frozen")
 		return
 	}
 
