@@ -135,7 +135,7 @@ func (h *AdminSettlementHandler) ProcessSettlement(c *gin.Context) {
 	switch req.Status {
 	case "processed":
 		updates["processed_at"] = time.Now()
-		updates["utr_nnumber"] = req.UTRNumber
+		updates["utr_number"] = req.UTRNumber
 		if err := h.db.Model(&models.Wallet{}).Where("vendor_id = ?", withdrawal.VendorID).
 			Update("locked_balance", gorm.Expr("locked_balance - ?", withdrawal.Amount)).Error; err != nil {
 			utils.BadRequestResponse(c, "Failed to update wallet")
@@ -199,7 +199,7 @@ func (h *AdminSettlementHandler) BulkProcessSettlements(c *gin.Context) {
 
 		if req.Status == "processed" {
 			updates["processed_at"] = time.Now()
-			updates["utr_nnumber"] = req.UTRNumber
+			updates["utr_number"] = req.UTRNumber
 			if err := h.db.Model(&models.Wallet{}).Where("vendor_id = ?", withdrawal.VendorID).
 				Update("locked_balance", gorm.Expr("locked_balance - ?", withdrawal.Amount)).Error; err != nil {
 				failed++
