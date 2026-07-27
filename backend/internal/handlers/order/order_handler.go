@@ -146,7 +146,7 @@ func (h *OrderHandler) PlaceOrder(c *gin.Context) {
 		}
 	}
 
-	// Handle wallet
+	// Handle wallet (deducted inside transaction below)
 	var walletUsed float64
 	if req.WalletAmount > 0 {
 		var wallet models.Wallet
@@ -156,16 +156,6 @@ func (h *OrderHandler) PlaceOrder(c *gin.Context) {
 				walletUsed = netPayable
 			} else {
 				walletUsed = req.WalletAmount
-			}
-			if walletUsed > 0 {
-				h.db.Model(&wallet).Update("balance", gorm.Expr("balance - ?", walletUsed))
-				h.db.Create(&models.WalletTransaction{
-					WalletID: wallet.ID,
-					TxnType:  models.TxnTypeDebit,
-					Amount:   walletUsed,
-					ReferenceType: models.TxnRefOrder,
-					Description: "Order payment via wallet",
-				})
 			}
 		}
 	}
@@ -192,6 +182,33 @@ func (h *OrderHandler) PlaceOrder(c *gin.Context) {
 	}
 
 	tx := h.db.Begin()
+
+	// Wallet deduction inside transaction
+	if walletUsed > 0 {
+		var wallet models.Wallet
+		if err := tx.Where("user_id = ?", customerID).First(&wallet).Error; err != nil {
+			tx.Rollback()
+			utils.InternalErrorResponse(c, "Wallet not found")
+			return
+		}
+		if err := tx.Model(&wallet).Update("balance", gorm.Expr("balance - ?", walletUsed)).Error; err != nil {
+			tx.Rollback()
+			utils.InternalErrorResponse(c, "Failed to deduct wallet")
+			return
+		}
+		if err := tx.Create(&models.WalletTransaction{
+			WalletID:      wallet.ID,
+			TxnType:       models.TxnTypeDebit,
+			Amount:        walletUsed,
+			ReferenceType: models.TxnRefOrder,
+			Description:   "Order payment via wallet",
+		}).Error; err != nil {
+			tx.Rollback()
+			utils.InternalErrorResponse(c, "Failed to create wallet transaction")
+			return
+		}
+	}
+
 	var orders []models.Order
 
 	for _, vi := range vendorMap {
