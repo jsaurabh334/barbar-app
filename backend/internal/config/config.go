@@ -81,8 +81,9 @@ type SMSConfig struct {
 }
 
 type RazorpayConfig struct {
-	KeyID     string
-	KeySecret string
+	KeyID          string
+	KeySecret      string
+	WebhookSecret  string
 }
 
 type StripeConfig struct {
@@ -115,6 +116,7 @@ type AppConfig struct {
 	BaseURL          string
 	DefaultPageSize  int
 	MaxPageSize      int
+	EarlyStartWindowMin int
 	Currency         string
 	CommissionRate   float64
 	PlatformFee      float64
@@ -183,8 +185,9 @@ func Load() *Config {
 			FromNumber: getEnv("TWILIO_FROM_NUMBER", ""),
 		},
 		Razorpay: RazorpayConfig{
-			KeyID:     getEnv("RAZORPAY_KEY_ID", ""),
-			KeySecret: getEnv("RAZORPAY_KEY_SECRET", ""),
+			KeyID:          getEnv("RAZORPAY_KEY_ID", ""),
+			KeySecret:      getEnv("RAZORPAY_KEY_SECRET", ""),
+			WebhookSecret:  getEnv("RAZORPAY_WEBHOOK_SECRET", ""),
 		},
 		Stripe: StripeConfig{
 			SecretKey:      getEnv("STRIPE_SECRET_KEY", ""),
@@ -211,7 +214,8 @@ func Load() *Config {
 			BaseURL:         getEnv("BASE_URL", "http://localhost:8080"),
 			DefaultPageSize: 20,
 			MaxPageSize:     100,
-			Currency:        "INR",
+			EarlyStartWindowMin: getEnvInt("EARLY_START_WINDOW_MIN", 15),
+			Currency:        getEnv("CURRENCY", "INR"),
 			CommissionRate:  0.10,
 			PlatformFee:     5.00,
 			TaxRate:         0.18,

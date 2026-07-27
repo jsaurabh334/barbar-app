@@ -319,8 +319,12 @@ func (h *PaymentHandler) PaymentWebhook(c *gin.Context) {
 	switch gateway {
 	case "razorpay":
 		signature := c.GetHeader("X-Razorpay-Signature")
-		if signature != "" && h.cfg.Razorpay.KeySecret != "" {
-			expected := hmacSHA256(string(body), h.cfg.Razorpay.KeySecret)
+		webhookSecret := h.cfg.Razorpay.WebhookSecret
+		if webhookSecret == "" {
+			webhookSecret = h.cfg.Razorpay.KeySecret
+		}
+		if signature != "" && webhookSecret != "" {
+			expected := hmacSHA256(string(body), webhookSecret)
 			if subtle.ConstantTimeCompare([]byte(signature), []byte(expected)) != 1 {
 				logEntry.Status = "failed_verification"
 				json.Unmarshal(body, &logEntry.Response)
@@ -632,14 +636,8 @@ func (h *PaymentHandler) Refund(c *gin.Context) {
 func (h *PaymentHandler) createRazorpayOrder(amount float64, receipt string) (map[string]interface{}, error) {
 	amountPaise := int64(amount * 100)
 
-	// Dev mode: return mock order when Razorpay not configured
 	if h.cfg.Razorpay.KeyID == "" || h.cfg.Razorpay.KeySecret == "" {
-		return map[string]interface{}{
-			"id":       "mock_order_" + receipt,
-			"amount":   amountPaise,
-			"currency": "INR",
-			"status":   "created",
-		}, nil
+		return nil, fmt.Errorf("razorpay not configured")
 	}
 
 	reqBody := map[string]interface{}{
@@ -650,26 +648,45 @@ func (h *PaymentHandler) createRazorpayOrder(amount float64, receipt string) (ma
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 
-	req, _ := http.NewRequest("POST", "https://api.razorpay.com/v1/orders", bytes.NewBuffer(bodyBytes))
-	req.SetBasicAuth(h.cfg.Razorpay.KeyID, h.cfg.Razorpay.KeySecret)
-	req.Header.Set("Content-Type", "application/json")
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(1<<attempt) * time.Second)
+		}
 
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("razorpay API error: %w", err)
+		req, _ := http.NewRequest("POST", "https://api.razorpay.com/v1/orders", bytes.NewBuffer(bodyBytes))
+		req.SetBasicAuth(h.cfg.Razorpay.KeyID, h.cfg.Razorpay.KeySecret)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Razorpay-Idempotency", receipt+"_"+uuid.New().String()[:8])
+
+		client := &http.Client{Timeout: 15 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("razorpay API error: %w", err)
+			continue
+		}
+
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+
+		if resp.StatusCode >= 500 {
+			lastErr = fmt.Errorf("razorpay error %d: %s", resp.StatusCode, string(errMsg(result)))
+			continue
+		}
+		if resp.StatusCode >= 400 {
+			return nil, fmt.Errorf("razorpay error %d: %s", resp.StatusCode, string(errMsg(result)))
+		}
+
+		return result, nil
 	}
-	defer resp.Body.Close()
 
-	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
+	return nil, lastErr
+}
 
-	if resp.StatusCode >= 400 {
-		errMsg, _ := json.Marshal(result)
-		return nil, fmt.Errorf("razorpay error %d: %s", resp.StatusCode, string(errMsg))
-	}
-
-	return result, nil
+func errMsg(result map[string]interface{}) []byte {
+	errMsg, _ := json.Marshal(result)
+	return errMsg
 }
 
 func (h *PaymentHandler) processRazorpayRefund(paymentID string, amount float64, reason string) (string, error) {
@@ -683,29 +700,43 @@ func (h *PaymentHandler) processRazorpayRefund(paymentID string, amount float64,
 		reqBody["notes"] = map[string]string{"reason": reason}
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
-
 	url := fmt.Sprintf("https://api.razorpay.com/v1/payments/%s/refund", paymentID)
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(bodyBytes))
-	req.SetBasicAuth(h.cfg.Razorpay.KeyID, h.cfg.Razorpay.KeySecret)
-	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("razorpay refund error: %w", err)
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(1<<attempt) * time.Second)
+		}
+
+		req, _ := http.NewRequest("POST", url, bytes.NewBuffer(bodyBytes))
+		req.SetBasicAuth(h.cfg.Razorpay.KeyID, h.cfg.Razorpay.KeySecret)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Razorpay-Idempotency", "refund_"+paymentID[:8]+"_"+uuid.New().String()[:8])
+
+		client := &http.Client{Timeout: 15 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("razorpay refund error: %w", err)
+			continue
+		}
+
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+
+		if resp.StatusCode >= 500 {
+			lastErr = fmt.Errorf("razorpay refund error %d: %s", resp.StatusCode, string(errMsg(result)))
+			continue
+		}
+		if resp.StatusCode >= 400 {
+			return "", fmt.Errorf("razorpay refund error %d: %s", resp.StatusCode, string(errMsg(result)))
+		}
+
+		refundID, _ := result["id"].(string)
+		return refundID, nil
 	}
-	defer resp.Body.Close()
 
-	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
-
-	if resp.StatusCode >= 400 {
-		errMsg, _ := json.Marshal(result)
-		return "", fmt.Errorf("razorpay refund error %d: %s", resp.StatusCode, string(errMsg))
-	}
-
-	refundID, _ := result["id"].(string)
-	return refundID, nil
+	return "", lastErr
 }
 
 // ==================== Stripe API ====================
@@ -713,61 +744,83 @@ func (h *PaymentHandler) processRazorpayRefund(paymentID string, amount float64,
 func (h *PaymentHandler) createStripePaymentIntent(amount float64, metadataID string) (map[string]interface{}, error) {
 	amountCents := int64(amount * 100)
 
-	// Dev mode: return mock PaymentIntent when Stripe not configured
 	if h.cfg.Stripe.SecretKey == "" {
-		return map[string]interface{}{
-			"id":            "mock_pi_" + metadataID,
-			"amount":        amountCents,
-			"currency":      "inr",
-			"status":        "requires_payment_method",
-			"client_secret": "mock_secret_" + metadataID,
-		}, nil
+		return nil, fmt.Errorf("stripe not configured")
 	}
 
 	form := fmt.Sprintf("amount=%d&currency=inr&metadata[payment_id]=%s&automatic_payment_methods[enabled]=true", amountCents, metadataID)
-	req, _ := http.NewRequest("POST", "https://api.stripe.com/v1/payment_intents", bytes.NewBufferString(form))
-	req.Header.Set("Authorization", "Bearer "+h.cfg.Stripe.SecretKey)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("stripe API error: %w", err)
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(1<<attempt) * time.Second)
+		}
+
+		req, _ := http.NewRequest("POST", "https://api.stripe.com/v1/payment_intents", bytes.NewBufferString(form))
+		req.Header.Set("Authorization", "Bearer "+h.cfg.Stripe.SecretKey)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Idempotency-Key", metadataID+"_"+uuid.New().String()[:8])
+
+		client := &http.Client{Timeout: 15 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("stripe API error: %w", err)
+			continue
+		}
+
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+
+		if resp.StatusCode >= 500 {
+			lastErr = fmt.Errorf("stripe error %d: %s", resp.StatusCode, string(errMsg(result)))
+			continue
+		}
+		if resp.StatusCode >= 400 {
+			return nil, fmt.Errorf("stripe error %d: %s", resp.StatusCode, string(errMsg(result)))
+		}
+
+		return result, nil
 	}
-	defer resp.Body.Close()
 
-	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
-
-	if resp.StatusCode >= 400 {
-		errMsg, _ := json.Marshal(result)
-		return nil, fmt.Errorf("stripe error %d: %s", resp.StatusCode, string(errMsg))
-	}
-
-	return result, nil
+	return nil, lastErr
 }
 
 func (h *PaymentHandler) getStripePaymentIntent(piID string) (map[string]interface{}, error) {
 	url := fmt.Sprintf("https://api.stripe.com/v1/payment_intents/%s", piID)
-	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("Authorization", "Bearer "+h.cfg.Stripe.SecretKey)
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("stripe API error: %w", err)
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(1<<attempt) * time.Second)
+		}
+
+		req, _ := http.NewRequest("GET", url, nil)
+		req.Header.Set("Authorization", "Bearer "+h.cfg.Stripe.SecretKey)
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("stripe API error: %w", err)
+			continue
+		}
+
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+
+		if resp.StatusCode >= 500 {
+			lastErr = fmt.Errorf("stripe error %d: %s", resp.StatusCode, string(errMsg(result)))
+			continue
+		}
+		if resp.StatusCode >= 400 {
+			return nil, fmt.Errorf("stripe error %d: %s", resp.StatusCode, string(errMsg(result)))
+		}
+
+		return result, nil
 	}
-	defer resp.Body.Close()
 
-	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
-
-	if resp.StatusCode >= 400 {
-		errMsg, _ := json.Marshal(result)
-		return nil, fmt.Errorf("stripe error %d: %s", resp.StatusCode, string(errMsg))
-	}
-
-	return result, nil
+	return nil, lastErr
 }
 
 func (h *PaymentHandler) processStripeRefund(paymentIntentID string, amount float64, reason string) (string, error) {
@@ -778,27 +831,41 @@ func (h *PaymentHandler) processStripeRefund(paymentIntentID string, amount floa
 		form += "&reason=" + urlEncode(reason)
 	}
 
-	req, _ := http.NewRequest("POST", "https://api.stripe.com/v1/refunds", bytes.NewBufferString(form))
-	req.Header.Set("Authorization", "Bearer "+h.cfg.Stripe.SecretKey)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(1<<attempt) * time.Second)
+		}
 
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("stripe refund error: %w", err)
+		req, _ := http.NewRequest("POST", "https://api.stripe.com/v1/refunds", bytes.NewBufferString(form))
+		req.Header.Set("Authorization", "Bearer "+h.cfg.Stripe.SecretKey)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Idempotency-Key", "refund_"+paymentIntentID[:8]+"_"+uuid.New().String()[:8])
+
+		client := &http.Client{Timeout: 15 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("stripe refund error: %w", err)
+			continue
+		}
+
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+
+		if resp.StatusCode >= 500 {
+			lastErr = fmt.Errorf("stripe refund error %d: %s", resp.StatusCode, string(errMsg(result)))
+			continue
+		}
+		if resp.StatusCode >= 400 {
+			return "", fmt.Errorf("stripe refund error %d: %s", resp.StatusCode, string(errMsg(result)))
+		}
+
+		refundID, _ := result["id"].(string)
+		return refundID, nil
 	}
-	defer resp.Body.Close()
 
-	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
-
-	if resp.StatusCode >= 400 {
-		errMsg, _ := json.Marshal(result)
-		return "", fmt.Errorf("stripe refund error %d: %s", resp.StatusCode, string(errMsg))
-	}
-
-	refundID, _ := result["id"].(string)
-	return refundID, nil
+	return "", lastErr
 }
 
 // ==================== Helpers ====================

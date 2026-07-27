@@ -240,22 +240,26 @@ class _PaymentScreenState extends State<PaymentScreen> {
       context: context,
       amount: (paymentData['amount'] as num).toDouble() / 100,
       currency: 'INR',
+      razorpayKey: paymentData['key_id'] as String,
+      orderId: paymentData['gateway_order_id'] as String,
+      customerName: widget.booking.customerName,
+      customerEmail: (widget.booking.customer?['email'] as String?) ?? '',
+      customerPhone: (widget.booking.customer?['phone'] as String?) ?? '',
     );
+    paymentService.dispose();
 
     if (!mounted) return;
 
     if (result.success) {
-      final gatewayOrderId = paymentData['gateway_order_id'] as String;
       final paymentId = paymentData['payment_id'] as String;
-      final mockPaymentId = result.transactionId ?? 'mock_pay_${DateTime.now().millisecondsSinceEpoch}';
 
       context.read<BookingBloc>().add(
         VerifyBookingPayment(
           paymentId: paymentId,
           gateway: 'razorpay',
-          razorpayOrderId: gatewayOrderId,
-          razorpayPaymentId: mockPaymentId,
-          razorpaySignature: 'dev_mode_skip_verify',
+          razorpayOrderId: result.razorpayOrderId ?? '',
+          razorpayPaymentId: result.razorpayPaymentId ?? '',
+          razorpaySignature: result.razorpaySignature ?? '',
         ),
       );
     } else {
