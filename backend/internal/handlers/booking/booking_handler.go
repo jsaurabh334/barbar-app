@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/barbar-app/backend/internal/auth"
+	"github.com/barbar-app/backend/internal/config"
 	"github.com/barbar-app/backend/internal/models"
 	notifService "github.com/barbar-app/backend/internal/services/notification"
 	"github.com/barbar-app/backend/internal/utils"
@@ -213,8 +214,24 @@ func (h *BookingHandler) Create(c *gin.Context) {
 	}
 
 	// Assign staff and calculate queue/wait times
-	assignment, err := h.findBestStaff(barber, req.StaffID, req.ServiceIDs, req.ScheduledStart, req.IsHomeService)
+	tx := h.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Advisory lock: prevent concurrent double-booking for the barber
+	lockKey := fmt.Sprintf("barber_booking_%s", req.BarberID.String())
+	if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?)::bigint)", lockKey).Error; err != nil {
+		tx.Rollback()
+		utils.InternalErrorResponse(c, "Failed to acquire slot lock, try again")
+		return
+	}
+
+	assignment, err := h.findBestStaff(tx, barber, req.StaffID, req.ServiceIDs, req.ScheduledStart, req.IsHomeService)
 	if err != nil {
+		tx.Rollback()
 		utils.BadRequestResponse(c, err.Error())
 		return
 	}
@@ -276,16 +293,6 @@ func (h *BookingHandler) Create(c *gin.Context) {
 	// Check if slot is in past
 	if req.ScheduledStart.Before(time.Now()) {
 		utils.BadRequestResponse(c, "Cannot book in the past")
-		return
-	}
-
-	tx := h.db.Begin()
-
-	// Advisory lock: prevent concurrent double-booking even when no rows exist yet
-	lockKey := fmt.Sprintf("%s@%s", req.BarberID.String(), req.ScheduledStart.Format("2006-01-02T15:04:05"))
-	if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?)::bigint)", lockKey).Error; err != nil {
-		tx.Rollback()
-		utils.InternalErrorResponse(c, "Failed to acquire slot lock, try again")
 		return
 	}
 
@@ -538,8 +545,17 @@ func (h *BookingHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
-	// Prevent staff member from having multiple active (in progress) services
+	// Prevent starting early or having multiple active services
 	if toStatus == models.BookingStatusInProgress {
+		// 1. Prevent starting advanced bookings too early
+		now := time.Now()
+		gracePeriod := time.Duration(config.Load().App.EarlyStartWindowMin) * time.Minute
+		if now.Before(booking.ScheduledStart.Add(-gracePeriod)) {
+			utils.BadRequestResponse(c, fmt.Sprintf("Cannot start this booking yet. It is scheduled for %s.", booking.ScheduledStart.Format("02 Jan 03:04 PM")))
+			return
+		}
+
+		// 2. Prevent staff from having multiple active services
 		var activeCount int64
 		if booking.StaffID != nil {
 			h.db.Model(&models.Booking{}).Where("staff_id = ? AND status = ? AND id != ?", booking.StaffID, models.BookingStatusInProgress, booking.ID).Count(&activeCount)
@@ -710,8 +726,8 @@ func (h *BookingHandler) ListBarberBookings(c *gin.Context) {
 
 	query.Model(&models.Booking{}).Count(&total)
 	query.Preload("Customer").Preload("Staff").Preload("Services").
-		Offset((page-1)*pageSize).Limit(pageSize).
-		Order("scheduled_start ASC").Find(&bookings)
+		Offset((page - 1) * pageSize).Limit(pageSize).
+		Order("scheduled_start DESC").Find(&bookings)
 
 	utils.PaginatedResponse(c, bookings, page, pageSize, total)
 }
@@ -1069,39 +1085,15 @@ func (h *BookingHandler) RejectHomeService(c *gin.Context) {
 }
 
 func (h *BookingHandler) processRefund(booking *models.Booking) {
-	var payment models.Payment
-	if err := h.db.Where("order_id = ?", booking.ID).First(&payment).Error; err != nil {
-		// No payment record found, just create refund request
-		refund := models.RefundRequest{
-			OrderID:     booking.ID,
-			CustomerID:  booking.CustomerID,
-			Reason:      "Booking cancelled",
-			RefundType:  "full",
-			RefundAmount: booking.FinalPrice,
-			Status:      "approved",
-		}
-		h.db.Create(&refund)
-		return
-	}
-
-	now := time.Now()
 	refund := models.RefundRequest{
-		OrderID:     booking.ID,
-		CustomerID:  booking.CustomerID,
-		Reason:      "Booking cancelled",
-		RefundType:  "full",
+		OrderID:      booking.ID,
+		CustomerID:   booking.CustomerID,
+		Reason:       "Booking cancelled",
+		RefundType:   "full",
 		RefundAmount: booking.FinalPrice,
-		Status:      "approved",
-		ProcessedAt: &now,
+		Status:       "pending",
 	}
 	h.db.Create(&refund)
-
-	payment.RefundAmount = booking.FinalPrice
-	payment.RefundStatus = "approved"
-	payment.RefundedAt = &now
-	h.db.Save(&payment)
-
-	h.db.Model(&models.Booking{}).Where("id = ?", booking.ID).Update("payment_status", "refunded")
 }
 
 type PayBookingRequest struct {
