@@ -162,7 +162,11 @@ func (s *OrderService) TransitionOrder(ctx context.Context, orderID, userID uuid
 				})
 			}
 		}
+		// Generate pickup OTP for the vendor immediately when driver accepts
+		go s.generatePickupOTP(&order)
+
 	case models.OrderStatusReadyForPickup:
+		s.generatePickupOTP(&order)
 		// Broadcast to nearby online delivery partners
 		if order.DeliveryPartnerID == nil {
 			go s.BroadcastDeliveryOffer(context.Background(), &order)
@@ -388,7 +392,10 @@ func (s *OrderService) GetOrderByID(ctx context.Context, orderID uuid.UUID) (*mo
 	return &order, nil
 }
 
-// FindActiveOrderByDriver returns the active order for a delivery partner
+var ErrNoActiveOrder = fmt.Errorf("no active order for driver")
+
+// FindActiveOrderByDriver returns the active order for a delivery partner.
+// Returns (nil, ErrNoActiveOrder) when the driver has no active order (business condition, not system error).
 func (s *OrderService) FindActiveOrderByDriver(ctx context.Context, deliveryUserID uuid.UUID) (*models.Order, error) {
 	var order models.Order
 	err := s.db.Where("delivery_partner_id = ? AND status IN (?)",
@@ -399,9 +406,12 @@ func (s *OrderService) FindActiveOrderByDriver(ctx context.Context, deliveryUser
 			models.OrderStatusPickedUp,
 			models.OrderStatusOutForDelivery,
 		},
-	).First(&order).Error
+	).Order("id ASC").Limit(1).Find(&order).Error
 	if err != nil {
-		return nil, fmt.Errorf("no active order for driver %s: %w", deliveryUserID, err)
+		return nil, fmt.Errorf("error finding active order for driver %s: %w", deliveryUserID, err)
+	}
+	if order.ID == uuid.Nil {
+		return nil, ErrNoActiveOrder
 	}
 	return &order, nil
 }
@@ -447,6 +457,48 @@ func (s *OrderService) ExpireAssignments(ctx context.Context) (int, error) {
 	return expired, nil
 }
 
+func (s *OrderService) generatePickupOTP(order *models.Order) {
+	code := fmt.Sprintf("%04d", mustRandomInt(10000))
+	otpHash := hashOTP(code)
+
+	now := time.Now()
+	otp := models.DeliveryOTP{
+		OrderID:   order.ID,
+		Type:      "pickup",
+		OTP:       otpHash,
+		ExpiresAt: now.Add(60 * time.Minute),
+	}
+	s.db.Where("order_id = ? AND type = ?", order.ID, "pickup").Assign(models.DeliveryOTP{
+		OTP:        otpHash,
+		ExpiresAt:  now.Add(60 * time.Minute),
+		VerifiedAt: nil,
+		Attempts:   0,
+	}).FirstOrCreate(&otp)
+
+	var vendor models.Vendor
+	if err := s.db.First(&vendor, order.VendorID).Error; err == nil {
+		s.wsHub.SendToUser(vendor.UserID, &websocket.WSMessage{
+			Type: websocket.MessageType("pickup_otp_generated"),
+			Payload: map[string]interface{}{
+				"version":    1,
+				"event":      "pickup_otp_generated",
+				"order_id":   order.ID.String(),
+				"pickup_otp": code,
+			},
+		})
+
+		s.dispatcher.Dispatch(context.Background(), notification.NotificationEvent{
+			Type:       models.NotificationType("pickup_otp_generated"),
+			ReceiverID: vendor.UserID,
+			Role:       notification.RoleVendor,
+			Data: map[string]interface{}{
+				"order_id":   order.ID.String(),
+				"pickup_otp": code,
+			},
+		})
+	}
+}
+
 func (s *OrderService) generateDeliveryOTP(order *models.Order) {
 	code := fmt.Sprintf("%04d", mustRandomInt(10000))
 	otpHash := hashOTP(code)
@@ -454,21 +506,25 @@ func (s *OrderService) generateDeliveryOTP(order *models.Order) {
 	now := time.Now()
 	otp := models.DeliveryOTP{
 		OrderID:   order.ID,
+		Type:      "delivery",
 		OTP:       otpHash,
 		ExpiresAt: now.Add(10 * time.Minute),
 	}
-	if err := s.db.Create(&otp).Error; err != nil {
-		return
-	}
+	s.db.Where("order_id = ? AND type = ?", order.ID, "delivery").Assign(models.DeliveryOTP{
+		OTP:        otpHash,
+		ExpiresAt:  now.Add(10 * time.Minute),
+		VerifiedAt: nil,
+		Attempts:   0,
+	}).FirstOrCreate(&otp)
 
 	s.wsHub.SendToRoom("order:"+order.ID.String(), &websocket.WSMessage{
 		Type: websocket.MsgDeliveryOTPGenerated,
 		Payload: map[string]interface{}{
-			"version":              1,
-			"event":                "delivery_otp_generated",
-			"order_id":             order.ID.String(),
-			"delivery_otp":         code,
-			"expires_in_seconds":   600,
+			"version":            1,
+			"event":              "delivery_otp_generated",
+			"order_id":           order.ID.String(),
+			"delivery_otp":       code,
+			"expires_in_seconds": 600,
 		},
 	})
 }
@@ -483,13 +539,21 @@ func (s *OrderService) VerifyDeliveryOTP(ctx context.Context, orderID, userID uu
 		return nil, fmt.Errorf("not the assigned driver for this order")
 	}
 
-	if order.Status != models.OrderStatusOutForDelivery {
-		return nil, fmt.Errorf("order is not out for delivery")
+	targetType := "delivery"
+	if otpType == "pickup" {
+		targetType = "pickup"
+		if order.Status != models.OrderStatusDriverAccepted && order.Status != models.OrderStatusDriverAssigned {
+			return nil, fmt.Errorf("order is not ready for pickup verification")
+		}
+	} else {
+		if order.Status != models.OrderStatusOutForDelivery {
+			return nil, fmt.Errorf("order is not out for delivery")
+		}
 	}
 
 	var deliveryOTP models.DeliveryOTP
-	if err := s.db.Where("order_id = ? AND verified_at IS NULL", orderID).First(&deliveryOTP).Error; err != nil {
-		return nil, fmt.Errorf("no active OTP found for this order")
+	if err := s.db.Where("order_id = ? AND type = ? AND verified_at IS NULL", orderID, targetType).First(&deliveryOTP).Error; err != nil {
+		return nil, fmt.Errorf("no active %s OTP found for this order", targetType)
 	}
 
 	if deliveryOTP.IsExpired() {
@@ -511,7 +575,11 @@ func (s *OrderService) VerifyDeliveryOTP(ctx context.Context, orderID, userID uu
 	deliveryOTP.VerifiedAt = &now
 	s.db.Save(&deliveryOTP)
 
-	return s.TransitionOrder(ctx, orderID, userID, "delivery", models.OrderStatusDelivered, "OTP verified")
+	if targetType == "pickup" {
+		return s.TransitionOrder(ctx, orderID, userID, "delivery", models.OrderStatusPickedUp, "Pickup OTP verified")
+	}
+
+	return s.TransitionOrder(ctx, orderID, userID, "delivery", models.OrderStatusDelivered, "Delivery OTP verified")
 }
 
 func mustRandomInt(max int64) int64 {
