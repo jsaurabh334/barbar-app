@@ -102,12 +102,13 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 	bankSvc := deliverySvc.NewBankAccountService(db)
 	earningH := deliveryPartnerHandler.NewEarningHandler(earningSvc)
 	bankH := deliveryPartnerHandler.NewBankHandler(bankSvc)
+	deliveryWalletH := deliveryHandler.NewDeliveryWalletHandler(db)
 	paymentH := paymentHandler.NewPaymentHandler(db, cfg, dispatcher)
 	walletH := walletHandler.NewWalletHandler(db)
 	cartH := cartHandler.NewCartHandler(db)
 	wishlistH := wishlistHandler.NewWishlistHandler(db)
 	couponH := couponHandler.NewCouponHandler(db)
-	adminH := adminHandler.NewAdminHandler(db, dispatcher)
+	adminH := adminHandler.NewAdminHandler(db, cfg, dispatcher)
 	adminCustomerH := adminHandler.NewAdminCustomerHandler(db)
 	adminBookingH := adminHandler.NewAdminBookingHandler(db, dispatcher, hub)
 	adminOrderH := adminHandler.NewAdminOrderHandler(db, orderSvc)
@@ -403,6 +404,10 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			deliveryRoutes.POST("/bank", bankH.UpsertBankAccount)
 			deliveryRoutes.PUT("/bank", bankH.UpsertBankAccount)
 			deliveryRoutes.DELETE("/bank", bankH.DeleteBankAccount)
+			deliveryRoutes.GET("/wallet/summary", deliveryWalletH.GetWalletSummary)
+			deliveryRoutes.GET("/wallet/transactions", deliveryWalletH.GetWalletTransactions)
+			deliveryRoutes.POST("/withdraw", deliveryWalletH.RequestWithdrawal)
+			deliveryRoutes.GET("/withdrawals", deliveryWalletH.ListWithdrawals)
 		}
 
 		// ==================== Product routes ====================
