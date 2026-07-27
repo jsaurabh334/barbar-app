@@ -13,13 +13,11 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/server ./cmd/serv
 
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata curl
 
 RUN adduser -D -g '' appuser
 
 COPY --from=builder /app/server /usr/local/bin/server
-
-COPY --from=builder /app/.env /.env
 
 COPY --from=builder /app/static /app/static
 
@@ -30,6 +28,6 @@ WORKDIR /app
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
 ENTRYPOINT ["server"]
