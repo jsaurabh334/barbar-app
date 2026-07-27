@@ -11,24 +11,6 @@ import (
 	"path/filepath"
 )
 
-var shopViews = map[int][]string{
-	1:  {"exterior", "interior", "chair", "reception", "service"},
-	2:  {"exterior", "interior", "reception", "wash-area", "haircut"},
-	3:  {"exterior", "chair", "spa-room", "reception", "product-display"},
-	4:  {"exterior", "interior", "chair", "waiting-area", "service"},
-	5:  {"exterior", "chair", "reception", "service", "product-display"},
-	6:  {"exterior", "interior", "spa-room", "chair", "reception"},
-	7:  {"exterior", "chair", "reception", "haircut", "wash-area"},
-	8:  {"exterior", "interior", "chair", "waiting-area", "service"},
-	9:  {"exterior", "reception", "chair", "styling-area", "product-display"},
-	10: {"exterior", "interior", "beard-station", "chair", "reception"},
-	11: {"exterior", "chair", "reception", "service", "waiting-area"},
-	12: {"exterior", "interior", "chair", "reception", "spa-room"},
-	13: {"exterior", "chair", "reception", "service", "haircut"},
-	14: {"exterior", "interior", "vip-room", "spa-room", "reception"},
-	15: {"exterior", "chair", "reception", "service", "product-display"},
-}
-
 var viewColors = map[string]color.RGBA{
 	"exterior":       {0x2E, 0xCC, 0x71, 0xFF},
 	"interior":       {0x34, 0x98, 0xDB, 0xFF},

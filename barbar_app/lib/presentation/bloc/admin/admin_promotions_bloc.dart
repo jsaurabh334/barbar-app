@@ -11,7 +11,8 @@ abstract class AdminPromotionsEvent extends Equatable {
 class LoadCoupons extends AdminPromotionsEvent {
   final int page;
   final bool? isActive;
-  const LoadCoupons({this.page = 1, this.isActive});
+  final String? searchQuery;
+  const LoadCoupons({this.page = 1, this.isActive, this.searchQuery});
   @override
   List<Object?> get props => [page, isActive];
 }
@@ -177,7 +178,7 @@ class AdminPromotionsBloc extends Bloc<AdminPromotionsEvent, AdminPromotionsStat
   Future<void> _onLoadCoupons(LoadCoupons event, Emitter<AdminPromotionsState> emit) async {
     if (event.page == 1) emit(AdminPromotionsLoading());
     try {
-      final result = await adminRepository.getAdminCoupons(page: event.page, isActive: event.isActive);
+      final result = await adminRepository.getAdminCoupons(page: event.page, isActive: event.isActive, search: event.searchQuery);
       final List<dynamic> rawData = (result['data'] is List) ? result['data'] : (result['data']?['data'] ?? []);
       if (state is CouponsLoaded && event.page > 1) {
         final cur = state as CouponsLoaded;

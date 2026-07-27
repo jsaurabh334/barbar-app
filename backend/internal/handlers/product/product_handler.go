@@ -58,8 +58,8 @@ func (h *ProductHandler) Create(c *gin.Context) {
 	userID := c.MustGet("user").(uuid.UUID)
 
 	var vendor models.Vendor
-	if err := h.db.Where("user_id = ? AND status = ?", userID, models.VendorStatusApproved).First(&vendor).Error; err != nil {
-		utils.ForbiddenResponse(c, "Only approved vendors can create products")
+	if err := h.db.Where("user_id = ?", userID).First(&vendor).Error; err != nil {
+		utils.ForbiddenResponse(c, "Vendor profile not found. Please register as a vendor first.")
 		return
 	}
 
@@ -103,6 +103,8 @@ func (h *ProductHandler) Create(c *gin.Context) {
 		ReservedStock:     0,
 		LowStockThreshold: req.LowStockThreshold,
 		HasVariants:       req.HasVariants,
+		IsActive:          true,
+		IsApproved:        true,
 	}
 
 	if req.Tags != nil {

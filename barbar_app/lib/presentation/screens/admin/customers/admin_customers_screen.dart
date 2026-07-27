@@ -5,6 +5,10 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../bloc/admin/admin_customers_bloc.dart';
 import '../../../../domain/repositories/admin_repository.dart';
 import '../../../../data/models/user_model.dart';
+import '../../../../core/utils/debouncer.dart';
+import '../../../widgets/admin/admin_empty_state.dart';
+import '../../../widgets/admin/admin_error_state.dart';
+import '../../../widgets/admin/admin_loading_state.dart';
 import 'admin_customer_details_screen.dart';
 
 class AdminCustomersScreen extends StatelessWidget {
@@ -31,6 +35,7 @@ class _CustomersView extends StatefulWidget {
 class _CustomersViewState extends State<_CustomersView> with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   late TabController _tabController;
+  final _debouncer = Debouncer(milliseconds: 500);
   final List<String> _statusFilters = ['active', 'blocked', 'deleted'];
 
   @override
@@ -44,6 +49,7 @@ class _CustomersViewState extends State<_CustomersView> with SingleTickerProvide
   void dispose() {
     _searchController.dispose();
     _tabController.dispose();
+    _debouncer.dispose();
     super.dispose();
   }
 
@@ -53,7 +59,7 @@ class _CustomersViewState extends State<_CustomersView> with SingleTickerProvide
   }
 
   void _onSearchChanged(String query) {
-    _fetchData();
+    _debouncer.run(() => _fetchData());
   }
 
   void _fetchData() {
@@ -104,34 +110,12 @@ class _CustomersViewState extends State<_CustomersView> with SingleTickerProvide
           Expanded(
             child: BlocBuilder<AdminCustomersBloc, AdminCustomersState>(
               builder: (context, state) {
-                if (state is AdminCustomersLoading || state is AdminCustomersInitial) {
-                  return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-                }
+                if (state is AdminCustomersLoading || state is AdminCustomersInitial) { return const AdminLoadingState(); }
 
-                if (state is AdminCustomersError) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(LucideIcons.alertTriangle, color: AppColors.error, size: 48),
-                        const SizedBox(height: 16),
-                        Text(state.message, style: const TextStyle(color: Colors.white)),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: _fetchData,
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  );
-                }
+                if (state is AdminCustomersError) { return AdminErrorState(message: state.message, onRetry: _fetchData); }
 
                 if (state is AdminCustomersLoaded) {
-                  if (state.customers.isEmpty) {
-                    return Center(
-                      child: Text('No customers found.', style: TextStyle(color: Colors.grey[500], fontSize: 16)),
-                    );
-                  }
+                  if (state.customers.isEmpty) { return const AdminEmptyState(icon: LucideIcons.users, title: 'No customers found', subtitle: 'Try adjusting your search or filters.'); }
 
                   return ListView.separated(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -221,6 +205,15 @@ class _CustomersViewState extends State<_CustomersView> with SingleTickerProvide
                                   _showConfirmationDialog(context, customer, isBlocked);
                                 },
                               ),
+
+                              IconButton(
+                                icon: const Icon(LucideIcons.trash2, color: AppColors.error),
+                                tooltip: 'Deactivate / Delete Customer',
+                                onPressed: () {
+                                  _showDeleteDialog(context, customer);
+                                },
+                              ),
+
                             ],
                           ),
                         ),
@@ -269,6 +262,38 @@ class _CustomersViewState extends State<_CustomersView> with SingleTickerProvide
               }
             },
             child: Text(isBlocked ? 'UNBLOCK' : 'BLOCK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteDialog(BuildContext context, UserModel customer) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Delete Customer?', style: TextStyle(color: Colors.white)),
+        content: Text(
+          'Are you sure you want to delete ? This will deactivate their account.',
+          style: TextStyle(color: Colors.grey[400]),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.read<AdminCustomersBloc>().add(DeleteCustomer(customer.id));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Customer deleted/deactivated successfully')));
+            },
+            child: const Text('DELETE'),
           ),
         ],
       ),

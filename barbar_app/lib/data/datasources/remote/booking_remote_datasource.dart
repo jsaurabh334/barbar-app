@@ -132,30 +132,56 @@ class BookingRemoteDataSource {
     }
   }
 
-  Future<List<BookingModel>> getBarberBookings() async {
-    final response = await _apiClient.dio.get('/barber/bookings');
-    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
-      final data = (response.data['data'] as List<dynamic>?) ?? [];
-      return data.map((e) => BookingModel.fromJson(e as Map<String, dynamic>)).toList();
+  String _parseDioError(DioException e, String fallback) {
+    if (e.response?.data != null && e.response?.data is Map) {
+      final msg = e.response!.data['error'] ?? e.response!.data['message'];
+      if (msg != null && msg.toString().isNotEmpty) return msg.toString();
     }
-    throw Exception(response.data['error'] ?? 'Failed to fetch barber bookings');
+    if (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.receiveTimeout) {
+      return 'Connection timed out. Please check your network.';
+    }
+    if (e.type == DioExceptionType.connectionError) {
+      return 'Server is unreachable. Please try again later.';
+    }
+    return fallback;
+  }
+
+  Future<List<BookingModel>> getBarberBookings() async {
+    try {
+      final response = await _apiClient.dio.get('/barber/bookings');
+      if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        final data = (response.data['data'] as List<dynamic>?) ?? [];
+        return data.map((e) => BookingModel.fromJson(e as Map<String, dynamic>)).toList();
+      }
+      throw Exception(response.data['error'] ?? 'Failed to fetch barber bookings');
+    } on DioException catch (e) {
+      throw Exception(_parseDioError(e, 'Failed to fetch barber bookings'));
+    }
   }
 
   Future<List<BookingModel>> getCustomerBookings() async {
-    final response = await _apiClient.dio.get('/bookings');
-    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
-      final data = (response.data['data'] as List<dynamic>?) ?? [];
-      return data.map((e) => BookingModel.fromJson(e as Map<String, dynamic>)).toList();
+    try {
+      final response = await _apiClient.dio.get('/bookings');
+      if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        final data = (response.data['data'] as List<dynamic>?) ?? [];
+        return data.map((e) => BookingModel.fromJson(e as Map<String, dynamic>)).toList();
+      }
+      throw Exception(response.data['error'] ?? 'Failed to fetch bookings');
+    } on DioException catch (e) {
+      throw Exception(_parseDioError(e, 'Failed to fetch bookings'));
     }
-    throw Exception(response.data['error'] ?? 'Failed to fetch bookings');
   }
 
   Future<Map<String, dynamic>> getBookingInvoice(String bookingId) async {
-    final response = await _apiClient.dio.get('/bookings/$bookingId/invoice');
-    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
-      return response.data['data'] as Map<String, dynamic>;
+    try {
+      final response = await _apiClient.dio.get('/bookings/$bookingId/invoice');
+      if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        return response.data['data'] as Map<String, dynamic>;
+      }
+      throw Exception(response.data['error'] ?? 'Failed to fetch invoice details');
+    } on DioException catch (e) {
+      throw Exception(_parseDioError(e, 'Failed to fetch invoice details'));
     }
-    throw Exception(response.data['error'] ?? 'Failed to fetch invoice details');
   }
 
   Future<List<Map<String, dynamic>>> getAvailableSlots(String barberId, String date) async {

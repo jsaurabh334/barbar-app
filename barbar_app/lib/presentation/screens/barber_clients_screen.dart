@@ -15,7 +15,18 @@ class BarberClientsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('CLIENTS'),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.black,
+        centerTitle: true,
+        title: const Text(
+          'CLIENTS',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 20,
+            color: Colors.black,
+            letterSpacing: 1.2,
+          ),
+        ),
       ),
       body: BlocBuilder<BookingBloc, BookingState>(
         builder: (context, state) {

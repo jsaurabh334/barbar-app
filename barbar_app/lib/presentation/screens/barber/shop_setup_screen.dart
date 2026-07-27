@@ -79,16 +79,18 @@ class _ShopSetupScreenState extends State<ShopSetupScreen> {
     final name = _serviceNameCtrl.text.trim();
     final price = double.tryParse(_servicePriceCtrl.text.trim());
     final duration = int.tryParse(_serviceDurationCtrl.text.trim());
-    if (name.isEmpty || price == null || duration == null || _selectedCategoryId == null) {
+    final catId = _selectedCategoryId ?? (_cachedCategories.isNotEmpty ? _cachedCategories.first.id as String : '00000000-0000-0000-0000-000000000001');
+
+    if (name.isEmpty || price == null || duration == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all service fields and select a category')),
+        const SnackBar(content: Text('Please fill all service fields (Name, Price, Duration)')),
       );
       return;
     }
     setState(() {
       _services.add({
         'name': name,
-        'category_id': _selectedCategoryId,
+        'category_id': catId,
         'price': price,
         'duration_minutes': duration,
         'is_addon': false,
@@ -406,18 +408,23 @@ class _ShopSetupScreenState extends State<ShopSetupScreen> {
                 content: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (categories.isNotEmpty)
-                      DropdownButtonFormField<String>(
-                        value: _selectedCategoryId,
-                        decoration: const InputDecoration(labelText: 'Category *'),
-                        items: categories.map((c) => DropdownMenuItem<String>(
-                          value: c.id,
-                          child: Text(c.name),
-                        )).toList(),
-                        onChanged: (v) => setState(() => _selectedCategoryId = v),
-                      )
-                    else
-                      const LinearProgressIndicator(),
+                    DropdownButtonFormField<String>(
+                      value: _selectedCategoryId ?? (categories.isNotEmpty ? categories.first.id : null),
+                      decoration: const InputDecoration(labelText: 'Category *'),
+                      items: categories.isNotEmpty
+                          ? categories.map((c) => DropdownMenuItem<String>(
+                              value: c.id as String,
+                              child: Text(c.name as String),
+                            )).toList()
+                          : const [
+                              DropdownMenuItem(value: '00000000-0000-0000-0000-000000000001', child: Text('Haircut')),
+                              DropdownMenuItem(value: '00000000-0000-0000-0000-000000000002', child: Text('Beard & Shave')),
+                              DropdownMenuItem(value: '00000000-0000-0000-0000-000000000003', child: Text('Facial & Skincare')),
+                              DropdownMenuItem(value: '00000000-0000-0000-0000-000000000004', child: Text('Hair Color')),
+                              DropdownMenuItem(value: '00000000-0000-0000-0000-000000000005', child: Text('Spa & Massage')),
+                            ],
+                      onChanged: (v) => setState(() => _selectedCategoryId = v),
+                    ),
                     const SizedBox(height: 12),
                     Row(
                       children: [

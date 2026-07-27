@@ -721,7 +721,14 @@ func (h *BookingHandler) ListBarberBookings(c *gin.Context) {
 		query = query.Where("status = ?", status)
 	}
 	if date != "" {
-		query = query.Where("DATE(scheduled_start) = DATE(?)", date)
+		if parsedDate, err := time.Parse("2006-01-02", date); err == nil {
+			query = query.Where("scheduled_start >= ? AND scheduled_start < ?", parsedDate, parsedDate.Add(24*time.Hour))
+		} else if parsedTime, err := time.Parse(time.RFC3339, date); err == nil {
+			trunc := parsedTime.Truncate(24 * time.Hour)
+			query = query.Where("scheduled_start >= ? AND scheduled_start < ?", trunc, trunc.Add(24*time.Hour))
+		} else {
+			query = query.Where("CAST(scheduled_start AS text) LIKE ?", date+"%")
+		}
 	}
 
 	query.Model(&models.Booking{}).Count(&total)

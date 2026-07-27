@@ -233,12 +233,12 @@ func (h *DeliveryOrderHandler) ListAssignedOrders(c *gin.Context) {
 	userID := c.MustGet("user").(uuid.UUID)
 
 	var orders []models.Order
-	h.db.Where("delivery_partner_id = ?", userID).
-		Preload("Items").
-		Preload("Customer").
-		Preload("Vendor").
+	h.db.Where("delivery_partner_id = ? OR delivery_partner_id IN (SELECT id FROM delivery_partners WHERE user_id = ?)", userID, userID).
 		Preload("ShippingAddress").
+		Preload("Items").
+		Preload("Vendor").
 		Order("created_at DESC").
+		Limit(20).
 		Find(&orders)
 
 	utils.SuccessResponse(c, orders)

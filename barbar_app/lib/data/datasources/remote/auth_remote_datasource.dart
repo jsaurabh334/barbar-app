@@ -35,13 +35,16 @@ class AuthRemoteDataSource {
     }
   }
 
-  Future<bool> sendOtp(String phone) async {
+  Future<String?> sendOtp(String phone) async {
     try {
       final response = await _apiClient.dio.post(
         '/auth/otp/send',
         data: {'phone': phone},
       );
-      return response.statusCode == 200 && response.data['status'] == 'success';
+      if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        return response.data['data']['otp']?.toString();
+      }
+      return null;
     } on DioException catch (e) {
       throw Exception(e.response?.data['error'] ?? 'Failed to send OTP');
     }

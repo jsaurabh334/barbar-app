@@ -38,22 +38,31 @@ class DeliveryPartnerModel {
   bool get isRejected => status == 'rejected';
   bool get isSuspended => status == 'suspended';
 
+  static double _parseDouble(dynamic val) {
+    if (val == null) return 0.0;
+    if (val is num) return val.toDouble();
+    if (val is String) return double.tryParse(val) ?? 0.0;
+    return 0.0;
+  }
+
   factory DeliveryPartnerModel.fromJson(Map<String, dynamic> json) {
     return DeliveryPartnerModel(
-      id: json['id'] ?? '',
-      userId: json['user_id'] ?? '',
-      vehicleType: json['vehicle_type'] ?? '',
-      vehicleNumber: json['vehicle_number'] ?? '',
-      licenseNumber: json['license_number'] ?? '',
-      currentLatitude: (json['current_latitude'] ?? 0.0).toDouble(),
-      currentLongitude: (json['current_longitude'] ?? 0.0).toDouble(),
-      availabilityStatus: json['availability_status'] ?? 'offline',
-      rating: (json['rating'] ?? 0.0).toDouble(),
-      user: json['user'] != null ? UserModel.fromJson(json['user']) : null,
-      status: json['status'] ?? 'pending',
-      rejectionReason: json['rejection_reason'],
-      approvedAt: json['approved_at'] != null ? DateTime.parse(json['approved_at']) : null,
-      suspendedAt: json['suspended_at'] != null ? DateTime.parse(json['suspended_at']) : null,
+      id: json['id'] as String? ?? '',
+      userId: json['user_id'] as String? ?? '',
+      vehicleType: json['vehicle_type'] as String? ?? '',
+      vehicleNumber: json['vehicle_number'] as String? ?? '',
+      licenseNumber: json['license_number'] as String? ?? '',
+      currentLatitude: _parseDouble(json['current_latitude']),
+      currentLongitude: _parseDouble(json['current_longitude']),
+      availabilityStatus: json['availability_status'] as String? ?? 'offline',
+      rating: _parseDouble(json['rating']),
+      user: json['user'] != null && json['user'] is Map<String, dynamic>
+          ? UserModel.fromJson(json['user'] as Map<String, dynamic>)
+          : null,
+      status: json['status'] as String? ?? 'pending',
+      rejectionReason: json['rejection_reason'] as String?,
+      approvedAt: json['approved_at'] != null ? DateTime.tryParse(json['approved_at'].toString()) : null,
+      suspendedAt: json['suspended_at'] != null ? DateTime.tryParse(json['suspended_at'].toString()) : null,
     );
   }
 

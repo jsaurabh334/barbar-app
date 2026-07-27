@@ -5,6 +5,7 @@ import '../../core/theme/app_theme.dart';
 import '../bloc/notification/notification_bloc.dart';
 import '../bloc/notification/notification_state.dart';
 import '../screens/notifications_screen.dart';
+import '../screens/barber_notifications_screen.dart';
 
 class NotificationBellIcon extends StatelessWidget {
   final String? role;
@@ -41,9 +42,12 @@ class NotificationBellIcon extends StatelessWidget {
             ],
           ),
           onPressed: () {
+            final screen = role == 'barber'
+                ? const BarberNotificationsScreen()
+                : NotificationsScreen(role: role);
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => NotificationsScreen(role: role)),
+              MaterialPageRoute(builder: (_) => screen),
             );
           },
         );

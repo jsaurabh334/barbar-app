@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:barbar_app/presentation/bloc/admin/admin_banners_bloc.dart';
@@ -198,12 +199,13 @@ class _BannerCard extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            child: Image.network(
-              banner.imageUrl,
+            child: CachedNetworkImage(
+              imageUrl: banner.imageUrl,
               height: 140,
               width: double.infinity,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
+              placeholder: (_, __) => Container(height: 140, color: Colors.grey[850], child: const Center(child: Icon(LucideIcons.imageOff, color: Colors.grey))),
+              errorWidget: (_, __, ___) => Container(
                 height: 140, color: Colors.grey[850],
                 child: const Center(child: Icon(LucideIcons.imageOff, color: Colors.grey)),
               ),

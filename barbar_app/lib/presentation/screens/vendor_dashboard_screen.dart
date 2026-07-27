@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/app_theme.dart';
@@ -111,12 +112,13 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
                     border: Border.all(color: AppColors.border),
                   ),
                   child: ListTile(
-                    leading: Image.network(
-                      p.imageUrl ?? '',
+                    leading: CachedNetworkImage(
+                      imageUrl: p.imageUrl ?? '',
                       width: 48,
                       height: 48,
                       fit: BoxFit.cover,
-                      errorBuilder: (c, _, __) => const Icon(LucideIcons.package),
+                      placeholder: (_, __) => const Icon(LucideIcons.package),
+                      errorWidget: (_, __, ___) => const Icon(LucideIcons.package),
                     ),
                     title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: Text('Stock: ${p.availableStock} remaining'),

@@ -37,7 +37,7 @@ class UserModel {
       id: json['id'] as String,
       email: json['email'] as String?,
       phone: json['phone'] as String,
-      fullName: (parsedName != null && parsedName.trim().isNotEmpty) ? parsedName : 'User',
+      fullName: (parsedName != null && parsedName.trim().isNotEmpty) ? parsedName : '',
       avatar: json['avatar'] as String?,
       role: (json['role'] as String?) ?? 'customer',
       status: (json['status'] as String?) ?? 'active',

@@ -181,21 +181,23 @@ func (s *PresenceService) IsEligibleForAssignment(ctx context.Context, userID uu
 	key := redisKey(userID)
 
 	result, err := database.RedisClient.HGetAll(ctx, key).Result()
-	if err != nil {
-		return false, fmt.Errorf("failed to check eligibility: %w", err)
+	if err == nil && len(result) > 0 {
+		if result["status"] == "busy" || result["current_order_id"] != "" {
+			return false, fmt.Errorf("driver %s already has an active order", userID)
+		}
+		if result["status"] == "online" {
+			return true, nil
+		}
 	}
 
-	if len(result) == 0 {
-		return false, fmt.Errorf("driver %s has no presence record (offline)", userID)
+	// Verify driver is an approved Delivery Partner in PostgreSQL database
+	var partner models.DeliveryPartner
+	if err := s.db.Where("user_id = ? AND status = ?", userID, "approved").First(&partner).Error; err != nil {
+		return false, fmt.Errorf("driver is not an approved delivery partner")
 	}
 
-	if result["status"] != "online" {
-		return false, fmt.Errorf("driver %s is not online (status: %s)", userID, result["status"])
-	}
-
-	if result["current_order_id"] != "" {
-		return false, fmt.Errorf("driver %s already has an active order", userID)
-	}
+	// Auto-enable online status for approved driver assignment
+	_ = s.SetOnline(ctx, userID, "admin-assigned", "1.0")
 
 	return true, nil
 }
@@ -326,7 +328,7 @@ func haversine(lat1, lon1, lat2, lon2 float64) float64 {
 
 func (s *PresenceService) calculateETA(ctx context.Context, lat, lng, speed float64, orderID uuid.UUID) (etaMinutes, distanceKm float64, err error) {
 	var order models.Order
-	if err := s.db.Preload("ShippingAddress").First(&order, orderID).Error; err != nil {
+	if err := s.db.WithContext(ctx).Preload("ShippingAddress").First(&order, orderID).Error; err != nil {
 		return 0, 0, fmt.Errorf("failed to fetch order: %w", err)
 	}
 

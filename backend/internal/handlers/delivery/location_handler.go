@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"errors"
 	"time"
 
 	deliverySvc "github.com/barbar-app/backend/internal/services/delivery"
@@ -47,7 +48,11 @@ func (h *LocationHandler) UpdateLocation(c *gin.Context) {
 
 	var orderID *uuid.UUID
 	order, err := h.orderService.FindActiveOrderByDriver(c.Request.Context(), userID)
-	if err == nil && order != nil {
+	if err != nil && !errors.Is(err, orderService.ErrNoActiveOrder) {
+		utils.BadRequestResponse(c, err.Error())
+		return
+	}
+	if order != nil {
 		orderID = &order.ID
 	}
 

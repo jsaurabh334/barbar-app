@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
@@ -24,12 +25,13 @@ class DriverCardWidget extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(30),
             child: driver.avatar.isNotEmpty
-                ? Image.network(
-                    driver.avatar,
+                ? CachedNetworkImage(
+                    imageUrl: driver.avatar,
                     width: 56,
                     height: 56,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _avatarPlaceholder(),
+                    placeholder: (_, __) => _avatarPlaceholder(),
+                    errorWidget: (_, __, ___) => _avatarPlaceholder(),
                   )
                 : _avatarPlaceholder(),
           ),

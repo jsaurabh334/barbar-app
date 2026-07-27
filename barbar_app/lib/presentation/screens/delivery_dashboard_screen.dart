@@ -2,13 +2,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart' as ll;
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/navigation_launcher.dart';
 import '../../data/models/order_model.dart';
 import '../../domain/repositories/delivery_repository.dart';
 import '../bloc/auth/auth_bloc.dart';
 import '../bloc/auth/auth_event.dart';
+import '../bloc/auth/auth_state.dart';
 import '../bloc/delivery/delivery_bloc.dart';
 import '../bloc/delivery/delivery_event.dart';
 import '../bloc/delivery/delivery_state.dart';
@@ -16,6 +19,11 @@ import '../widgets/glass_card.dart';
 import 'delivery/delivery_earnings_screen.dart';
 import 'delivery/delivery_bank_screen.dart';
 import 'delivery/delivery_otp_screen.dart';
+import 'delivery/delivery_wallet_screen.dart';
+import 'delivery/delivery_gps_calibration_screen.dart';
+import 'delivery/delivery_support_screen.dart';
+import 'delivery/delivery_verification_screen.dart';
+import 'notifications_screen.dart';
 
 class DeliveryDashboardScreen extends StatefulWidget {
   const DeliveryDashboardScreen({super.key});
@@ -33,34 +41,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
   Timer? _gpsTimer;
   List<OrderModel> _orders = [];
 
-  static const String _darkMapStyle = '''
-  [
-    {
-      "elementType": "geometry",
-      "stylers": [{"color": "#12121a"}]
-    },
-    {
-      "elementType": "labels.text.fill",
-      "stylers": [{"color": "#8e8e93"}]
-    },
-    {
-      "elementType": "labels.text.stroke",
-      "stylers": [{"color": "#12121a"}]
-    },
-    {
-      "featureType": "road",
-      "elementType": "geometry",
-      "stylers": [{"color": "#1b1b25"}]
-    },
-    {
-      "featureType": "water",
-      "elementType": "geometry",
-      "stylers": [{"color": "#09090c"}]
-    }
-  ]
-  ''';
-
-  static const LatLng _defaultLoc = LatLng(12.9725, 77.5955);
+  // Using OpenStreetMap via flutter_map - completely free, no API key needed!
 
   @override
   void initState() {
@@ -150,31 +131,21 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        elevation: 0,
         title: const Text(
           'DELIVERY CONSOLE',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2),
+          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2, color: Colors.black),
         ),
         actions: [
-          Row(
-            children: [
-              Text(
-                _isOnline ? 'ONLINE' : 'OFFLINE',
-                style: TextStyle(
-                  color: _isOnline ? Colors.greenAccent : AppColors.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Switch(
-                value: _isOnline,
-                activeTrackColor: Colors.greenAccent,
-                onChanged: _presenceLoading ? null : _toggleOnline,
-              ),
-            ],
-          ),
           IconButton(
-            icon: const Icon(LucideIcons.logOut),
-            onPressed: () => context.read<AuthBloc>().add(LogoutRequested()),
+            icon: const Icon(LucideIcons.bell, color: Colors.black),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+              );
+            },
           ),
         ],
       ),
@@ -232,36 +203,47 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
 
   Widget _buildTasksTab() {
     return BlocBuilder<DeliveryBloc, DeliveryState>(
-      buildWhen: (previous, current) => 
-          current is DeliveryLoading || 
-          current is DeliveryOrdersLoaded || 
-          current is DeliveryFailure,
+      buildWhen: (previous, current) =>
+          current is DeliveryLoading ||
+          current is DeliveryOrdersLoaded ||
+          current is DeliveryFailure ||
+          current is DeliveryPresenceUpdated ||
+          current is DeliveryInitial,
       builder: (context, state) {
-        if (state is DeliveryLoading && state is! DeliveryOrdersLoaded) {
+        if (state is DeliveryLoading && _orders.isEmpty) {
           return const Center(child: CircularProgressIndicator(color: AppColors.primary));
         }
+        if (state is DeliveryFailure && _orders.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(LucideIcons.alertCircle, size: 48, color: AppColors.error),
+                const SizedBox(height: 12),
+                Text(
+                  state.error,
+                  style: const TextStyle(color: AppColors.textSecondary),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => context.read<DeliveryBloc>().add(FetchAssignedOrders()),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          );
+        }
 
-        final orders = state is DeliveryOrdersLoaded ? state.orders : <OrderModel>[];
+        final orders = state is DeliveryOrdersLoaded ? state.orders : _orders;
         final activeOrders = orders.where((o) =>
           o.status != 'delivered' && o.status != 'cancelled').toList();
 
-        if (!_isOnline) {
-          return const Center(
-            child: Text(
-              'Go ONLINE to receive delivery assignments.',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          );
-        }
-
-        if (activeOrders.isEmpty) {
-          return const Center(
-            child: Text(
-              'No pending delivery tasks assigned.',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          );
-        }
+        final authState = context.watch<AuthBloc>().state;
+        final driverName = (authState is AuthAuthenticated && authState.user.fullName.isNotEmpty)
+            ? authState.user.fullName
+            : 'Delivery Partner';
 
         if (_selectedOrder != null) {
           final currentOrder = activeOrders.firstWhere(
@@ -278,15 +260,124 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
           child: ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              _buildCurrentDeliveryCard(activeOrders),
+              _buildDutyStatusCard(driverName),
               const SizedBox(height: 16),
-              ...activeOrders.map((o) => _buildOrderCard(o, onTap: () {
-                setState(() => _selectedOrder = o);
-              })),
+              if (activeOrders.isEmpty)
+                _buildActiveScannerState()
+              else ...[
+                _buildCurrentDeliveryCard(activeOrders),
+                const SizedBox(height: 16),
+                ...activeOrders.map((o) => _buildOrderCard(o, onTap: () {
+                  setState(() => _selectedOrder = o);
+                })),
+              ],
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildDutyStatusCard(String name) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _isOnline ? Colors.greenAccent.withValues(alpha: 0.4) : AppColors.border),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: _isOnline ? Colors.greenAccent.withValues(alpha: 0.15) : AppColors.surface,
+            child: Icon(
+              _isOnline ? LucideIcons.radio : LucideIcons.power,
+              color: _isOnline ? Colors.greenAccent : AppColors.textSecondary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Welcome, $name 👋',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _isOnline ? '🟢 ONLINE • Ready for orders' : '⚪ OFFLINE • Toggle switch to start',
+                  style: TextStyle(
+                    color: _isOnline ? Colors.greenAccent : AppColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: _isOnline,
+            activeTrackColor: Colors.greenAccent,
+            onChanged: _presenceLoading ? null : _toggleOnline,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveScannerState() {
+    return Container(
+      padding: const EdgeInsets.all(28),
+      margin: const EdgeInsets.only(top: 10),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: _isOnline ? Colors.greenAccent.withValues(alpha: 0.1) : AppColors.surface,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              _isOnline ? LucideIcons.radar : LucideIcons.navigationOff,
+              size: 48,
+              color: _isOnline ? Colors.greenAccent : AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            _isOnline ? 'Scanning for Delivery Orders...' : 'You are currently Offline',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _isOnline
+                ? 'Your location is active and visible to Admin. Incoming assigned orders will pop up here instantly.'
+                : 'Turn on the ONLINE switch above to start receiving delivery task assignments.',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          OutlinedButton.icon(
+            onPressed: () => context.read<DeliveryBloc>().add(FetchAssignedOrders()),
+            icon: const Icon(LucideIcons.refreshCw, size: 16),
+            label: const Text('Refresh Orders'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -404,13 +495,37 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
 
   Widget _buildHistoryTab() {
     return BlocBuilder<DeliveryBloc, DeliveryState>(
-      buildWhen: (previous, current) => 
-          current is DeliveryLoading || 
-          current is DeliveryOrdersLoaded || 
-          current is DeliveryFailure,
+      buildWhen: (previous, current) =>
+          current is DeliveryLoading ||
+          current is DeliveryOrdersLoaded ||
+          current is DeliveryFailure ||
+          current is DeliveryPresenceUpdated ||
+          current is DeliveryInitial,
       builder: (context, state) {
         if (state is DeliveryLoading && state is! DeliveryOrdersLoaded) {
           return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+        }
+        if (state is DeliveryFailure) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(LucideIcons.alertCircle, size: 48, color: AppColors.error),
+                const SizedBox(height: 12),
+                Text(
+                  state.error,
+                  style: const TextStyle(color: AppColors.textSecondary),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => context.read<DeliveryBloc>().add(FetchAssignedOrders()),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          );
         }
 
         final history = state is DeliveryOrdersLoaded
@@ -449,6 +564,11 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
           final p = state.profile;
           name = p.user?.fullName ?? 'Delivery Agent';
           partnerId = p.id.length > 8 ? p.id.substring(0, 8) : p.id;
+        }
+
+        final authState = context.watch<AuthBloc>().state;
+        if ((name == 'Delivery Agent' || name.isEmpty) && authState is AuthAuthenticated) {
+          name = authState.user.fullName;
         }
 
         return SingleChildScrollView(
@@ -553,7 +673,17 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                   children: [
                     ListTile(
                       leading: const Icon(LucideIcons.wallet, color: AppColors.primary),
-                      title: const Text('Earnings'),
+                      title: const Text('Wallet & Withdrawals'),
+                      trailing: const Icon(LucideIcons.chevronRight, size: 18),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const DeliveryWalletScreen()),
+                      ),
+                    ),
+                    const Divider(height: 1, color: AppColors.border),
+                    ListTile(
+                      leading: const Icon(LucideIcons.trendingUp, color: AppColors.primary),
+                      title: const Text('Earnings History'),
                       trailing: const Icon(LucideIcons.chevronRight, size: 18),
                       onTap: () => Navigator.push(
                         context,
@@ -578,21 +708,36 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                         'VERIFIED',
                         style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12),
                       ),
-                      onTap: () {},
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const DeliveryVerificationScreen()),
+                      ),
                     ),
                     const Divider(height: 1, color: AppColors.border),
                     ListTile(
                       leading: const Icon(LucideIcons.navigation2, color: AppColors.primary),
                       title: const Text('GPS Calibration'),
                       trailing: const Icon(LucideIcons.chevronRight, size: 18),
-                      onTap: () {},
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const DeliveryGpsCalibrationScreen()),
+                      ),
                     ),
                     const Divider(height: 1, color: AppColors.border),
                     ListTile(
                       leading: const Icon(LucideIcons.headphones, color: AppColors.primary),
                       title: const Text('Support Hotline'),
                       trailing: const Icon(LucideIcons.chevronRight, size: 18),
-                      onTap: () {},
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const DeliverySupportScreen()),
+                      ),
+                    ),
+                    const Divider(height: 1, color: AppColors.border),
+                    ListTile(
+                      leading: const Icon(LucideIcons.logOut, color: AppColors.error),
+                      title: const Text('Logout', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
+                      onTap: () => context.read<AuthBloc>().add(LogoutRequested()),
                     ),
                   ],
                 ),
@@ -698,30 +843,32 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                   children: [
                     Expanded(
                       child: SizedBox(
-                        height: 38,
+                        height: 44,
                         child: ElevatedButton.icon(
                           onPressed: () => context.read<DeliveryBloc>().add(AcceptAssignment(o.id)),
-                          icon: const Icon(LucideIcons.checkCircle, size: 16),
-                          label: const Text('Accept', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          icon: const Icon(LucideIcons.checkCircle, size: 16, color: Colors.white),
+                          label: const Text('Accept', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.success,
-                            foregroundColor: Colors.black,
+                            backgroundColor: const Color(0xFF10B981),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: SizedBox(
-                        height: 38,
+                        height: 44,
                         child: ElevatedButton.icon(
                           onPressed: () => context.read<DeliveryBloc>().add(RejectAssignment(o.id)),
-                          icon: const Icon(LucideIcons.xCircle, size: 16),
-                          label: const Text('Reject', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          icon: const Icon(LucideIcons.xCircle, size: 16, color: Colors.white),
+                          label: const Text('Decline', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.error,
-                            foregroundColor: Colors.black,
+                            backgroundColor: const Color(0xFFEF4444),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
                         ),
@@ -753,6 +900,14 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
   }
 
   Widget _buildRouteTrackingView(OrderModel o) {
+    final vLat = (o.vendorLatitude != null && o.vendorLatitude! != 0) ? o.vendorLatitude! : 21.2514;
+    final vLng = (o.vendorLongitude != null && o.vendorLongitude! != 0) ? o.vendorLongitude! : 81.6296;
+    final cLat = (o.customerLatitude != null && o.customerLatitude! != 0) ? o.customerLatitude! : 21.2400;
+    final cLng = (o.customerLongitude != null && o.customerLongitude! != 0) ? o.customerLongitude! : 81.6350;
+
+    final vendorPos = ll.LatLng(vLat, vLng);
+    final customerPos = ll.LatLng(cLat, cLng);
+
     return Column(
       children: [
         Container(
@@ -769,14 +924,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      o.orderNumber,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                    ),
-                    Text(
-                      'Transit Route Tracking',
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                    )
+                    Text(o.orderNumber, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text('Transit Route Tracking', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
                   ],
                 ),
               ),
@@ -786,51 +935,47 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
         Expanded(
           child: Stack(
             children: [
-              GoogleMap(
-                initialCameraPosition: CameraPosition(
-                  target: o.vendorLatitude != null
-                      ? LatLng(o.vendorLatitude!, o.vendorLongitude!)
-                      : _defaultLoc,
-                  zoom: 13.5,
+              FlutterMap(
+                options: MapOptions(
+                  initialCenter: vendorPos,
+                  initialZoom: 13.5,
                 ),
-                style: _darkMapStyle,
-                onMapCreated: (controller) {},
-                markers: {
-                  if (o.vendorLatitude != null)
-                    Marker(
-                      markerId: const MarkerId('vendor'),
-                      position: LatLng(o.vendorLatitude!, o.vendorLongitude!),
-                      infoWindow: const InfoWindow(title: 'Pickup Location'),
-                      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
-                    ),
-                  if (o.customerLatitude != null)
-                    Marker(
-                      markerId: const MarkerId('customer'),
-                      position: LatLng(o.customerLatitude!, o.customerLongitude!),
-                      infoWindow: const InfoWindow(title: 'Delivery Address (Drop)'),
-                      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
-                    ),
-                },
-                polylines: o.vendorLatitude != null && o.customerLatitude != null
-                    ? {
-                        Polyline(
-                          polylineId: const PolylineId('route'),
-                          color: AppColors.primary,
-                          width: 5,
-                          points: [
-                            LatLng(o.vendorLatitude!, o.vendorLongitude!),
-                            LatLng(o.customerLatitude!, o.customerLongitude!),
-                          ],
-                        ),
-                      }
-                    : {},
-                myLocationButtonEnabled: false,
-                zoomControlsEnabled: false,
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.yourcompany.barbarapp',
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: vendorPos,
+                        width: 48,
+                        height: 48,
+                        child: const Icon(LucideIcons.store, color: Colors.orange, size: 36),
+                      ),
+                      Marker(
+                        point: customerPos,
+                        width: 48,
+                        height: 48,
+                        child: const Icon(LucideIcons.home, color: Colors.yellowAccent, size: 36),
+                      ),
+                    ],
+                  ),
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: [vendorPos, customerPos],
+                        color: AppColors.primary,
+                        strokeWidth: 4.0,
+                      ),
+                    ],
+                  ),
+                ],
               ),
               Positioned(
                 bottom: 20,
-                left: 20,
-                right: 20,
+                left: 16,
+                right: 16,
                 child: GlassCard(
                   padding: const EdgeInsets.all(16),
                   opacity: 0.15,
@@ -846,14 +991,14 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1.5),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: AppColors.primary.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              o.status.toUpperCase(),
-                              style: const TextStyle(color: AppColors.primary, fontSize: 9, fontWeight: FontWeight.bold),
+                              o.status.toUpperCase().replaceAll('_', ' '),
+                              style: const TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold),
                             ),
                           )
                         ],
@@ -865,7 +1010,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Pickup: Pickup Location',
+                              'Pickup: Vendor Store',
                               style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.9)),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -873,10 +1018,10 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Row(
                         children: [
-                          const Icon(LucideIcons.home, color: AppColors.primary, size: 16),
+                          const Icon(LucideIcons.home, color: Colors.yellowAccent, size: 16),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -888,8 +1033,33 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      _buildActionButton(context, o),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => NavigationLauncher.launchMapsNavigation(
+                                context: context,
+                                latitude: (o.status == OrderModel.pickedUp || o.status == OrderModel.outForDelivery) ? cLat : vLat,
+                                longitude: (o.status == OrderModel.pickedUp || o.status == OrderModel.outForDelivery) ? cLng : vLng,
+                                title: (o.status == OrderModel.pickedUp || o.status == OrderModel.outForDelivery) ? 'Customer Location' : 'Vendor Pickup Location',
+                              ),
+                              icon: const Icon(LucideIcons.navigation2, size: 16, color: AppColors.primary),
+                              label: const Text('Google GPS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: AppColors.primary),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 2,
+                            child: _buildActionButton(context, o),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -938,9 +1108,9 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
       case OrderModel.driverAccepted:
       case OrderModel.assigned:
         return ElevatedButton.icon(
-          onPressed: () => context.read<DeliveryBloc>().add(PickupOrder(o.id)),
+          onPressed: () => _showOtpVerification(context, o, otpType: 'pickup'),
           icon: const Icon(LucideIcons.package, size: 18),
-          label: const Text('PICKUP ORDER', style: TextStyle(fontWeight: FontWeight.bold)),
+          label: const Text('VERIFY PICKUP OTP', style: TextStyle(fontWeight: FontWeight.bold)),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF14B8A6),
             foregroundColor: Colors.black,
@@ -962,7 +1132,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
         );
       case OrderModel.outForDelivery:
         return ElevatedButton.icon(
-          onPressed: () => _showOtpVerification(context, o),
+          onPressed: () => _showOtpVerification(context, o, otpType: 'delivery'),
           icon: const Icon(LucideIcons.checkCircle, size: 18),
           label: const Text('CONFIRM DELIVERY', style: TextStyle(fontWeight: FontWeight.bold)),
           style: ElevatedButton.styleFrom(
@@ -993,21 +1163,28 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
     }
   }
 
-  void _showOtpVerification(BuildContext context, OrderModel order) {
+  void _showOtpVerification(BuildContext context, OrderModel order, {String otpType = 'delivery'}) {
     final bloc = context.read<DeliveryBloc>();
+    final isPickup = otpType == 'pickup';
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => DeliveryOtpScreen(
           orderId: order.id,
-          title: 'Delivery OTP',
-          subtitle: 'Ask the customer for the OTP to confirm delivery',
-          otpType: 'delivery',
+          title: isPickup ? 'Pickup OTP' : 'Delivery OTP',
+          subtitle: isPickup
+              ? 'Ask the vendor for the Pickup OTP to confirm parcel collection'
+              : 'Ask the customer for the OTP to confirm delivery',
+          otpType: otpType,
         ),
       ),
     ).then((verified) {
       if (verified == true) {
-        bloc.add(DeliverOrder(order.id));
+        if (isPickup) {
+          bloc.add(FetchAssignedOrders());
+        } else {
+          bloc.add(DeliverOrder(order.id));
+        }
       }
     });
   }

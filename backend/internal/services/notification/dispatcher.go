@@ -304,10 +304,16 @@ func (d *notificationDispatcher) buildMessageFallback(event NotificationEvent) (
 		action = ActionOpenOrder
 		priority = models.PriorityNormal
 	case models.NotifOrderDriverAssigned:
-		title = "Driver Assigned"
-		body = "A delivery driver has been assigned to your order."
+		if event.Role == RoleDelivery {
+			title = "New Delivery Request! 🚚"
+			body = "You have been assigned a new delivery. Tap to view details and accept."
+			priority = models.PriorityHigh
+		} else {
+			title = "Driver Assigned"
+			body = "A delivery driver has been assigned to your order."
+			priority = models.PriorityNormal
+		}
 		action = ActionOpenOrder
-		priority = models.PriorityNormal
 	case models.NotifOrderDriverAccepted:
 		title = "Driver Accepted"
 		body = "The delivery driver has accepted the assignment."

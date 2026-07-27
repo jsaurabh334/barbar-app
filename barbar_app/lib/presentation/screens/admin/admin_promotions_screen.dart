@@ -3,6 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:barbar_app/presentation/bloc/admin/admin_promotions_bloc.dart';
 import 'package:barbar_app/core/theme/app_theme.dart';
+import 'package:barbar_app/core/utils/debouncer.dart';
+import '../../widgets/admin/admin_empty_state.dart';
+import '../../widgets/admin/admin_error_state.dart';
+import '../../widgets/admin/admin_loading_state.dart';
 
 class AdminPromotionsScreen extends StatefulWidget {
   const AdminPromotionsScreen({super.key});
@@ -62,76 +66,114 @@ class _AdminPromotionsScreenState extends State<AdminPromotionsScreen>
   }
 }
 
-class _CouponsTab extends StatelessWidget {
+class _CouponsTab extends StatefulWidget {
   @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<AdminPromotionsBloc, AdminPromotionsState>(
-      builder: (context, state) {
-        if (state is AdminPromotionsLoading) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (state is AdminPromotionsError) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(state.message, style: const TextStyle(color: AppColors.error)),
-                const SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: () => context.read<AdminPromotionsBloc>().add(const LoadCoupons()),
-                  child: const Text('Retry'),
-                ),
-              ],
-            ),
-          );
-        }
-        if (state is CouponsLoaded) {
-          return _CouponListView(coupons: state.coupons);
-        }
-        return const Center(child: Text('Tap refresh to load coupons'));
-      },
-    );
-  }
+  State<_CouponsTab> createState() => _CouponsTabState();
 }
 
-class _CouponListView extends StatelessWidget {
-  final List<dynamic> coupons;
-  const _CouponListView({required this.coupons});
+class _CouponsTabState extends State<_CouponsTab> {
+  final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
+  final _debouncer = Debouncer(milliseconds: 500);
+  int _page = 1;
 
   @override
-  Widget build(BuildContext context) {
-    if (coupons.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(LucideIcons.ticket, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text('No coupons found', style: TextStyle(fontSize: 16, color: Colors.grey)),
-          ],
-        ),
-      );
+  void initState() {
+    super.initState();
+    _load();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _scrollController.dispose();
+    _debouncer.dispose();
+    super.dispose();
+  }
+
+  void _load() {
+    context.read<AdminPromotionsBloc>().add(LoadCoupons(page: _page, searchQuery: _searchController.text));
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      final state = context.read<AdminPromotionsBloc>().state;
+      if (state is CouponsLoaded && !state.hasReachedMax) {
+        _page++;
+        _load();
+      }
     }
-    return ListView.builder(
-      padding: const EdgeInsets.all(12),
-      itemCount: coupons.length + 1,
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: ElevatedButton.icon(
-              onPressed: () => _showCouponForm(context, null),
-              icon: const Icon(LucideIcons.plus),
-              label: const Text('Create Coupon'),
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: TextField(
+            controller: _searchController,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'Search coupons...',
+              hintStyle: TextStyle(color: Colors.grey[500]),
+              prefixIcon: const Icon(LucideIcons.search, color: Colors.grey),
+              filled: true,
+              fillColor: AppColors.surface,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
             ),
-          );
-        }
-        final coupon = coupons[index - 1];
-        return _CouponCard(coupon: coupon);
-      },
+            onChanged: (value) {
+              _debouncer.run(() {
+                _page = 1;
+                _load();
+              });
+            },
+          ),
+        ),
+        Expanded(
+          child: BlocBuilder<AdminPromotionsBloc, AdminPromotionsState>(
+            builder: (context, state) {
+              if (state is AdminPromotionsLoading && _page == 1) return const AdminLoadingState();
+              if (state is AdminPromotionsError && _page == 1) return AdminErrorState(message: state.message, onRetry: () { _page = 1; _load(); });
+              if (state is CouponsLoaded) {
+                if (state.coupons.isEmpty) return const AdminEmptyState(icon: LucideIcons.ticket, title: 'No coupons found', subtitle: 'Create one or clear search.');
+                return RefreshIndicator(
+                  color: AppColors.primary,
+                  onRefresh: () async { _page = 1; _load(); },
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    itemCount: state.coupons.length + 2, // +1 for Add Button, +1 for loading
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 12)),
+                            onPressed: () => _showCouponForm(context, null),
+                            icon: const Icon(LucideIcons.plus),
+                            label: const Text('CREATE NEW COUPON', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        );
+                      }
+                      if (index > state.coupons.length) {
+                        return state.hasReachedMax ? const SizedBox.shrink() : const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator(color: AppColors.primary)));
+                      }
+                      return _CouponCard(coupon: state.coupons[index - 1]);
+                    },
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      ],
     );
   }
 }
+
 
 class _CouponCard extends StatelessWidget {
   final Map<String, dynamic> coupon;

@@ -138,4 +138,24 @@ class DeliveryRepositoryImpl implements DeliveryRepository {
       timestamp: timestamp,
     );
   }
+
+  @override
+  Future<Map<String, dynamic>> getWalletSummary() async {
+    return await _remoteDataSource.getWalletSummary();
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getWalletTransactions({int limit = 20, int offset = 0}) async {
+    return await _remoteDataSource.getWalletTransactions(limit: limit, offset: offset);
+  }
+
+  @override
+  Future<Map<String, dynamic>> requestWithdrawal(double amount) async {
+    return await _remoteDataSource.requestWithdrawal(amount);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getWithdrawalHistory() async {
+    return await _remoteDataSource.getWithdrawalHistory();
+  }
 }

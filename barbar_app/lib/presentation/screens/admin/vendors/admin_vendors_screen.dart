@@ -4,6 +4,10 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../bloc/admin/admin_vendors_bloc.dart';
 import '../../../../data/models/vendor_model.dart';
+import '../../../../core/utils/debouncer.dart';
+import '../../../widgets/admin/admin_empty_state.dart';
+import '../../../widgets/admin/admin_error_state.dart';
+import '../../../widgets/admin/admin_loading_state.dart';
 import 'admin_vendor_detail_screen.dart';
 
 class AdminVendorsScreen extends StatefulWidget {
@@ -16,6 +20,7 @@ class AdminVendorsScreen extends StatefulWidget {
 class _AdminVendorsScreenState extends State<AdminVendorsScreen> {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
+  final _debouncer = Debouncer(milliseconds: 500);
 
   @override
   void initState() {
@@ -27,6 +32,7 @@ class _AdminVendorsScreenState extends State<AdminVendorsScreen> {
   void dispose() {
     _searchController.dispose();
     _scrollController.dispose();
+    _debouncer.dispose();
     super.dispose();
   }
 
@@ -61,7 +67,7 @@ class _AdminVendorsScreenState extends State<AdminVendorsScreen> {
               ),
             ),
             onChanged: (value) {
-              context.read<AdminVendorsBloc>().add(LoadVendors(page: 1, searchQuery: value));
+              _debouncer.run(() => context.read<AdminVendorsBloc>().add(LoadVendors(page: 1, searchQuery: value)));
             },
           ),
         ),
@@ -75,16 +81,10 @@ class _AdminVendorsScreenState extends State<AdminVendorsScreen> {
               }
             },
             builder: (context, state) {
-              if (state is AdminVendorsLoading || state is AdminVendorsInitial) {
-                return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-              }
+              if (state is AdminVendorsLoading || state is AdminVendorsInitial) { return const AdminLoadingState(); }
 
               if (state is AdminVendorsLoaded) {
-                if (state.vendors.isEmpty) {
-                  return const Center(
-                    child: Text('No vendors found', style: TextStyle(color: AppColors.textSecondary)),
-                  );
-                }
+                if (state.vendors.isEmpty) { return const AdminEmptyState(icon: LucideIcons.store, title: 'No vendors found', subtitle: 'Try adjusting your search query.'); }
 
                 return ListView.builder(
                   controller: _scrollController,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:barbar_app/presentation/bloc/admin/admin_barber_details_bloc.dart';
 import 'package:barbar_app/domain/repositories/admin_repository.dart';
@@ -120,10 +121,11 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
                       maxScale: 4.0,
                       child: Transform.rotate(
                         angle: _rotation,
-                        child: Image.network(
-                          url,
+                        child: CachedNetworkImage(
+                          imageUrl: url,
                           fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Center(
+                          placeholder: (_, __) => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                          errorWidget: (_, __, ___) => const Center(
                             child: Icon(Icons.broken_image, color: Colors.white, size: 50),
                           ),
                         ),

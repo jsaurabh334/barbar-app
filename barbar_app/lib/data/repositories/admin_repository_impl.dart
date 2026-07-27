@@ -52,13 +52,7 @@ class AdminRepositoryImpl implements AdminRepository {
   Future<List<UserModel>> getCustomers({int page = 1, int limit = 20, String? search, String? status}) async {
     try {
       return await remoteDataSource.getCustomers(page: page, limit: limit, search: search, status: status);
-    } catch (e) {
-      if (page > 1) return [];
-      return [
-        UserModel(id: 'c1', phone: '+1234567890', fullName: 'Mock Customer 1', role: 'customer', status: 'active', otpVerified: true, languagePref: 'en'),
-        UserModel(id: 'c2', phone: '+0987654321', fullName: 'Mock Customer 2', role: 'customer', status: 'blocked', otpVerified: true, languagePref: 'en'),
-      ];
-    }
+    } catch (e) { throw _handleError(e); }
   }
 
   @override
@@ -66,21 +60,7 @@ class AdminRepositoryImpl implements AdminRepository {
     try {
       final data = await remoteDataSource.getCustomerDetails(id);
       return AdminCustomerDetailsModel.fromJson(data);
-    } catch (e) {
-      // Mock fallback
-      return AdminCustomerDetailsModel(
-        customer: UserModel(id: id, phone: '+1234567890', fullName: 'Mock Customer', role: 'customer', status: 'active', otpVerified: true, languagePref: 'en'),
-        walletBalance: 500.0,
-        transactions: [],
-        bookings: [],
-        reviews: [],
-        totalBookings: 5,
-        completedBookings: 4,
-        cancelledBookings: 1,
-        spent: 1200.0,
-        rating: 4.5,
-      );
-    }
+    } catch (e) { throw _handleError(e); }
   }
 
   @override
@@ -103,13 +83,7 @@ class AdminRepositoryImpl implements AdminRepository {
     try {
       final data = await remoteDataSource.getVendors(page: page, limit: limit, search: search);
       return data.map((json) => VendorModel.fromJson(json)).toList();
-    } catch (e) {
-      if (page > 1) return [];
-      return [
-        VendorModel(id: 'v1', userId: 'u1', businessName: 'Acme Products', status: 'pending', kycStatus: 'pending', rating: 0.0, totalRevenue: 0.0, city: 'Delhi'),
-        VendorModel(id: 'v2', userId: 'u2', businessName: 'Hair Care Co', status: 'approved', kycStatus: 'verified', rating: 4.5, totalRevenue: 5000.0, city: 'Mumbai'),
-      ];
-    }
+    } catch (e) { throw _handleError(e); }
   }
 
   @override
@@ -152,19 +126,7 @@ class AdminRepositoryImpl implements AdminRepository {
     try {
       final data = await remoteDataSource.getDeliveryPartners(page: page, limit: limit, search: search, status: status);
       return data.map((json) => DeliveryPartnerModel.fromJson(json)).toList();
-    } catch (e) {
-      if (page > 1) return [];
-      return [
-        DeliveryPartnerModel(
-          id: 'd1', userId: 'u3', vehicleType: 'Bike', licenseNumber: 'DL123456', 
-          currentLatitude: 0.0, currentLongitude: 0.0, availabilityStatus: 'available', rating: 4.8,
-        ),
-        DeliveryPartnerModel(
-          id: 'd2', userId: 'u4', vehicleType: 'Scooter', licenseNumber: 'DL654321', 
-          currentLatitude: 0.0, currentLongitude: 0.0, availabilityStatus: 'offline', rating: 4.2,
-        ),
-      ];
-    }
+    } catch (e) { throw _handleError(e); }
   }
 
   @override
@@ -182,14 +144,7 @@ class AdminRepositoryImpl implements AdminRepository {
     try {
       final data = await remoteDataSource.getKycDocuments(userId);
       return data.map((json) => KycDocumentModel.fromJson(json)).toList();
-    } catch (e) {
-      return [
-        KycDocumentModel(id: 'k1', userId: userId, docType: 'PAN', docFrontUrl: 'https://placehold.co/600x400/png?text=PAN+Card', status: 'pending'),
-        KycDocumentModel(id: 'k2', userId: userId, docType: 'Aadhaar Front', docFrontUrl: 'https://placehold.co/600x400/png?text=Aadhaar+Front', status: 'pending'),
-        KycDocumentModel(id: 'k3', userId: userId, docType: 'Aadhaar Back', docFrontUrl: 'https://placehold.co/600x400/png?text=Aadhaar+Back', status: 'pending'),
-        KycDocumentModel(id: 'k4', userId: userId, docType: 'Shop License', docFrontUrl: 'https://placehold.co/600x400/png?text=Shop+License', status: 'pending'),
-      ];
-    }
+    } catch (e) { throw _handleError(e); }
   }
 
   @override
@@ -342,8 +297,8 @@ class AdminRepositoryImpl implements AdminRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getAdminCoupons({int page = 1, int limit = 20, bool? isActive}) {
-    return remoteDataSource.getAdminCoupons(page: page, limit: limit, isActive: isActive);
+  Future<Map<String, dynamic>> getAdminCoupons({int page = 1, int limit = 20, bool? isActive, String? search}) {
+    return remoteDataSource.getAdminCoupons(page: page, limit: limit, isActive: isActive, search: search);
   }
 
   @override
@@ -559,5 +514,25 @@ class AdminRepositoryImpl implements AdminRepository {
   @override
   Future<void> deleteAdminCmsPage(String id) {
     return remoteDataSource.deleteAdminCmsPage(id);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getSystemHealth() {
+    return remoteDataSource.getSystemHealth();
+  }
+
+  @override
+  Future<Map<String, dynamic>> getAuditLogs({int page = 1, int limit = 20}) {
+    return remoteDataSource.getAuditLogs(page: page, limit: limit);
+  }
+
+  Exception _handleError(dynamic e) {
+    String msg = e.toString().toLowerCase();
+    if (msg.contains('timeout')) return Exception('Timeout');
+    if (msg.contains('unauthorized') || msg.contains('401')) return Exception('Unauthorized');
+    if (msg.contains('forbidden') || msg.contains('403')) return Exception('Forbidden');
+    if (msg.contains('404')) return Exception('No Data');
+    if (msg.contains('socket') || msg.contains('network')) return Exception('Network Error');
+    return Exception('Server Error');
   }
 }

@@ -1,7 +1,6 @@
 import '../../domain/repositories/marketplace_repository.dart';
 import '../datasources/remote/marketplace_remote_datasource.dart';
 import '../models/order_model.dart';
-import '../models/order_item_model.dart';
 import '../models/product_model.dart';
 
 class MarketplaceRepositoryImpl implements MarketplaceRepository {
@@ -42,25 +41,8 @@ class MarketplaceRepositoryImpl implements MarketplaceRepository {
 
   @override
   Future<List<OrderModel>> getOrders() async {
-    if (_cachedOrders.isEmpty) {
-      _cachedOrders = [
-        OrderModel(
-          id: 'ord-1', orderNumber: 'ORD-20260603-9A1C',
-          status: 'confirmed', itemsTotal: 499.0,
-          shippingCharge: 50.0, taxAmount: 90.0,
-          discountAmount: 0.0, finalAmount: 639.0,
-          paymentStatus: 'success',
-          items: [
-            OrderItemModel(
-              productId: 'p1',
-              productName: 'Sample Grooming Kit',
-              quantity: 1,
-              price: 499.0,
-            ),
-          ],
-        ),
-      ];
-    }
+    final orders = await _remoteDataSource.getOrders();
+    _cachedOrders = orders;
     return List.from(_cachedOrders);
   }
 

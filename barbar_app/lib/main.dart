@@ -130,6 +130,7 @@ void main() async {
       vendorRepository: vendorRepository,
       vendorRemoteDataSource: vendorRemoteDataSource,
       deliveryRepository: deliveryRepository,
+      apiClient: apiClient,
       webSocketClient: webSocketClient,
     ),
   );
@@ -149,6 +150,7 @@ class MyApp extends StatelessWidget {
   final VendorRepositoryImpl vendorRepository;
   final VendorRemoteDataSource vendorRemoteDataSource;
   final DeliveryRepositoryImpl deliveryRepository;
+  final ApiClient apiClient;
   final WebSocketClient webSocketClient;
 
   const MyApp({
@@ -166,6 +168,7 @@ class MyApp extends StatelessWidget {
     required this.vendorRepository,
     required this.vendorRemoteDataSource,
     required this.deliveryRepository,
+    required this.apiClient,
     required this.webSocketClient,
   });
 
@@ -205,6 +208,12 @@ class MyApp extends StatelessWidget {
         ),
         RepositoryProvider<DeliveryRepository>(
           create: (context) => deliveryRepository,
+        ),
+        RepositoryProvider<ApiClient>(
+          create: (context) => apiClient,
+        ),
+        RepositoryProvider<WebSocketClient>(
+          create: (context) => webSocketClient,
         ),
       ],
       child: MultiBlocProvider(

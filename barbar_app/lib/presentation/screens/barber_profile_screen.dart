@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:barbar_app/data/models/barber_model.dart';
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
@@ -36,6 +37,9 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
   bool _isHomeServiceAvailable = false;
   bool _profileCompleted = false;
   bool _isLoading = false;
+  bool _isEditing = false;
+  String _ownerName = '';
+  String _ownerPhone = '';
   // Timings
   String _startTime = '09:00';
   String _endTime = '21:00';
@@ -78,15 +82,19 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
   }
 
   void _populateForm(Map<String, dynamic> profile, {bool profileCompleted = false}) {
+    final userMap = profile['user'] as Map<String, dynamic>?;
+    _ownerName = (userMap?['full_name'] as String?) ?? '';
+    _ownerPhone = (userMap?['phone'] as String?) ?? (profile['phone'] as String?) ?? '';
+
     _nameController.text = (profile['shop_name'] as String?) ?? '';
     _descController.text = (profile['shop_description'] as String?) ?? '';
     _addressController.text = (profile['address'] as String?) ?? '';
     _cityController.text = (profile['city'] as String?) ?? '';
     _stateController.text = (profile['state'] as String?) ?? '';
     _pincodeController.text = (profile['pincode'] as String?) ?? '';
-    _phoneController.text = (profile['phone'] as String?) ?? '';
+    _phoneController.text = _ownerPhone.isNotEmpty ? _ownerPhone : ((profile['phone'] as String?) ?? '');
     _altPhoneController.text = (profile['alternate_phone'] as String?) ?? '';
-    _emailController.text = (profile['email'] as String?) ?? '';
+    _emailController.text = (profile['email'] as String?) ?? (userMap?['email'] as String? ?? '');
     _expController.text = (profile['experience_years']?.toString()) ?? '0';
     _shopImageController.text = (profile['shop_image'] as String?) ?? '';
     _amenitiesController.text = ((profile['amenities'] as List<dynamic>?) ?? []).join(', ');
@@ -266,7 +274,18 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('SHOP PROFILE')),
+      appBar: AppBar(
+        title: Text(_isEditing ? 'EDIT PROFILE' : 'SHOP PROFILE'),
+        actions: [
+          IconButton(
+            icon: Icon(_isEditing ? Icons.visibility : Icons.edit, color: AppColors.primary),
+            tooltip: _isEditing ? 'View Mode' : 'Edit Profile',
+            onPressed: () {
+              setState(() => _isEditing = !_isEditing);
+            },
+          ),
+        ],
+      ),
       body: BlocConsumer<BarberProfileBloc, BarberProfileState>(
         listener: (context, state) {
           if (state is BarberProfileLoaded) {
@@ -277,6 +296,7 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
             _isLoading = true;
           } else if (state is BarberProfileSuccess) {
             _isLoading = false;
+            _isEditing = false;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(state.message), backgroundColor: AppColors.success),
             );
@@ -290,6 +310,9 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
         builder: (context, state) {
           if (state is BarberProfileLoading && _nameController.text.isEmpty) {
             return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+          }
+          if (!_isEditing) {
+            return _buildViewModeProfile();
           }
           return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
@@ -526,10 +549,15 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
                                         },
                                         child: ClipRRect(
                                           borderRadius: BorderRadius.circular(10),
-                                          child: Image.network(
-                                            BarberModel.getFullImageUrl(url),
+                                          child: CachedNetworkImage(
+                                            imageUrl: BarberModel.getFullImageUrl(url),
                                             width: 110, height: 130, fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) => Container(
+                                            placeholder: (_, __) => Container(
+                                              width: 110, height: 130,
+                                              decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
+                                              child: const Icon(Icons.image_not_supported, color: AppColors.textMuted),
+                                            ),
+                                            errorWidget: (_, __, ___) => Container(
                                               width: 110, height: 130,
                                               decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
                                               child: const Icon(Icons.image_not_supported, color: AppColors.textMuted),
@@ -680,6 +708,7 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
 
   Widget _buildProfileProgress() {
     final pct = _profileProgressPercent();
+    if (pct >= 100) return const SizedBox.shrink();
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
@@ -737,6 +766,101 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
           labelText: label,
           prefixIcon: Icon(icon, size: 18),
         ),
+      ),
+    );
+  }
+
+  Widget _buildViewModeProfile() {
+    final shopName = _nameController.text.isNotEmpty ? _nameController.text : 'My Barber Shop';
+    final address = _addressController.text.isNotEmpty ? _addressController.text : 'Not set';
+    final city = _cityController.text.isNotEmpty ? _cityController.text : '';
+    final state = _stateController.text.isNotEmpty ? _stateController.text : '';
+    final pincode = _pincodeController.text.isNotEmpty ? _pincodeController.text : '';
+    final fullAddress = [address, city, state, pincode].where((e) => e.isNotEmpty).join(', ');
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildProfileProgress(),
+          GlassCard(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                CircleAvatar(
+                  radius: 36,
+                  backgroundColor: AppColors.primary,
+                  child: Text(
+                    shopName.isNotEmpty ? shopName[0].toUpperCase() : 'B',
+                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  shopName,
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                if (_descController.text.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    _descController.text,
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+                const SizedBox(height: 16),
+                const Divider(color: AppColors.border),
+                const SizedBox(height: 12),
+                if (_ownerName.isNotEmpty)
+                  _buildInfoRow(Icons.person, 'Owner Name', _ownerName),
+                if (_ownerPhone.isNotEmpty || _phoneController.text.isNotEmpty)
+                  _buildInfoRow(Icons.phone, 'Registration Phone', _ownerPhone.isNotEmpty ? _ownerPhone : _phoneController.text),
+                if (_emailController.text.isNotEmpty)
+                  _buildInfoRow(Icons.email, 'Email', _emailController.text),
+                _buildInfoRow(Icons.location_on, 'Shop Address', fullAddress),
+                _buildInfoRow(Icons.work, 'Experience', '${_expController.text} Years'),
+                _buildInfoRow(Icons.access_time, 'Working Hours', '$_startTime - $_endTime'),
+                _buildInfoRow(Icons.home, 'Home Service', _isHomeServiceAvailable ? 'Available' : 'In-Shop Only'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => setState(() => _isEditing = true),
+            icon: const Icon(Icons.edit, color: Colors.black),
+            label: const Text('EDIT PROFILE DETAILS', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+          const SizedBox(height: 30),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: AppColors.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                const SizedBox(height: 2),
+                Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

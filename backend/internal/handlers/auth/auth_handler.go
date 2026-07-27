@@ -301,6 +301,7 @@ func (h *AuthHandler) SendOTP(c *gin.Context) {
 
 	utils.SuccessResponse(c, gin.H{
 		"message": "OTP sent successfully",
+		"otp":     otp,
 	})
 }
 

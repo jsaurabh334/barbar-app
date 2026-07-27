@@ -38,11 +38,20 @@ class TrackingRepositoryImpl implements TrackingRepository {
 
     try {
       _cached = await fetchTracking(orderId);
-      _controller!.add(_cached!);
-    } catch (_) {}
+      yield _cached!;
+    } catch (e) {
+      _controller!.addError(e);
+      yield* _controller!.stream;
+      return;
+    }
 
-    await _wsClient.connect();
-    _wsClient.subscribeOrder(orderId);
+    _wsClient.connect().then((_) {
+      if (!_disposed && _currentOrderId == orderId) {
+        _wsClient.subscribeOrder(orderId);
+      }
+    }).catchError((_) {
+      _startFallbackPolling();
+    });
 
     _locationSub = _wsClient.eventsByType('driver.location_updated').listen((event) {
       final payload = event['payload'] as Map<String, dynamic>? ?? event;
@@ -139,7 +148,7 @@ class TrackingRepositoryImpl implements TrackingRepository {
 
   void _startFallbackPolling() {
     _fallbackTimer?.cancel();
-    _fallbackTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+    _fallbackTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       if (_currentOrderId == null || _disposed) return;
       try {
         final response = await _apiClient.dio.get('/public/orders/$_currentOrderId/tracking');

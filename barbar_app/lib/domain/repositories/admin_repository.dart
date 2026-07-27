@@ -67,7 +67,7 @@ abstract class AdminRepository {
   Future<Map<String, dynamic>> getAdminDashboard();
   Future<void> updateAdminCommission(String vendorId, double rate);
 
-  Future<Map<String, dynamic>> getAdminCoupons({int page = 1, int limit = 20, bool? isActive});
+  Future<Map<String, dynamic>> getAdminCoupons({int page = 1, int limit = 20, bool? isActive, String? search});
   Future<Map<String, dynamic>> createAdminCoupon(Map<String, dynamic> data);
   Future<void> updateAdminCoupon(String id, Map<String, dynamic> data);
   Future<void> deleteAdminCoupon(String id);
@@ -120,4 +120,6 @@ abstract class AdminRepository {
   Future<Map<String, dynamic>> createAdminCmsPage(Map<String, dynamic> data);
   Future<Map<String, dynamic>> updateAdminCmsPage(String id, Map<String, dynamic> data);
   Future<void> deleteAdminCmsPage(String id);
+  Future<Map<String, dynamic>> getSystemHealth();
+  Future<Map<String, dynamic>> getAuditLogs({int page = 1, int limit = 20});
 }

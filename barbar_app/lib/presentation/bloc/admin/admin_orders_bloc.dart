@@ -13,10 +13,12 @@ class LoadOrders extends AdminOrdersEvent {
   final String? status;
   final String? paymentStatus;
   final String? search;
+  final String? dateFrom;
+  final String? dateTo;
 
-  const LoadOrders({this.page = 1, this.status, this.paymentStatus, this.search});
+  const LoadOrders({this.page = 1, this.status, this.paymentStatus, this.search, this.dateFrom, this.dateTo});
   @override
-  List<Object?> get props => [page, status, paymentStatus, search];
+  List<Object?> get props => [page, status, paymentStatus, search, dateFrom, dateTo];
 }
 
 class UpdateOrderStatus extends AdminOrdersEvent {
@@ -93,7 +95,7 @@ class AdminOrdersBloc extends Bloc<AdminOrdersEvent, AdminOrdersState> {
     if (event.page == 1) emit(AdminOrdersLoading());
     try {
       final result = await adminRepository.getAdminOrders(
-        page: event.page, status: event.status, paymentStatus: event.paymentStatus, search: event.search,
+        page: event.page, status: event.status, paymentStatus: event.paymentStatus, search: event.search, dateFrom: event.dateFrom, dateTo: event.dateTo,
       );
       final List<dynamic> rawData = (result['data'] is List) ? result['data'] : (result['data']?['data'] ?? []);
       final int total = (result['total'] as num?)?.toInt() ?? rawData.length;

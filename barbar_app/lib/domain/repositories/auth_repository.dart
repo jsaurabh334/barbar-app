@@ -9,7 +9,7 @@ abstract class AuthRepository {
     String? email,
   });
 
-  Future<bool> sendOtp(String phone);
+  Future<String?> sendOtp(String phone);
 
   Future<UserModel> verifyOtp({
     required String phone,

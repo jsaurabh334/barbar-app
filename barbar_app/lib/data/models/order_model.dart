@@ -79,6 +79,13 @@ class OrderModel {
     this.customerLongitude,
   });
 
+  static double? _numToDouble(dynamic val) {
+    if (val == null) return null;
+    if (val is num) return val.toDouble();
+    if (val is String) return double.tryParse(val);
+    return null;
+  }
+
   factory OrderModel.fromJson(Map<String, dynamic> json) {
     return OrderModel(
       id: json['id'] as String,
@@ -110,10 +117,10 @@ class OrderModel {
       createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'] as String) : null,
       updatedAt: json['updated_at'] != null ? DateTime.tryParse(json['updated_at'] as String) : null,
       cancellationReason: json['cancellation_reason'] as String?,
-      vendorLatitude: (json['vendor'] as Map<String, dynamic>?)?['latitude']?.toDouble(),
-      vendorLongitude: (json['vendor'] as Map<String, dynamic>?)?['longitude']?.toDouble(),
-      customerLatitude: (json['shipping_address'] as Map<String, dynamic>?)?['latitude']?.toDouble(),
-      customerLongitude: (json['shipping_address'] as Map<String, dynamic>?)?['longitude']?.toDouble(),
+      vendorLatitude: _numToDouble(json['vendor_latitude']) ?? _numToDouble((json['vendor'] as Map<String, dynamic>?)?['latitude']),
+      vendorLongitude: _numToDouble(json['vendor_longitude']) ?? _numToDouble((json['vendor'] as Map<String, dynamic>?)?['longitude']),
+      customerLatitude: _numToDouble(json['customer_latitude']) ?? _numToDouble((json['shipping_address'] as Map<String, dynamic>?)?['latitude']),
+      customerLongitude: _numToDouble(json['customer_longitude']) ?? _numToDouble((json['shipping_address'] as Map<String, dynamic>?)?['longitude']),
     );
   }
 

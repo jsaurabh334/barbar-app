@@ -204,4 +204,38 @@ class DeliveryRemoteDataSource {
     }
     throw Exception(response.data['error'] ?? 'Failed to send location');
   }
+
+  // ==================== Wallet ====================
+
+  Future<Map<String, dynamic>> getWalletSummary() async {
+    final response = await _apiClient.dio.get('/delivery/wallet/summary');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch wallet summary');
+  }
+
+  Future<List<Map<String, dynamic>>> getWalletTransactions({int limit = 20, int offset = 0}) async {
+    final response = await _apiClient.dio.get('/delivery/wallet/transactions', queryParameters: {'limit': limit, 'offset': offset});
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return (response.data['data'] as List<dynamic>).cast<Map<String, dynamic>>();
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch wallet transactions');
+  }
+
+  Future<Map<String, dynamic>> requestWithdrawal(double amount) async {
+    final response = await _apiClient.dio.post('/delivery/withdraw', data: {'amount': amount});
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to submit withdrawal request');
+  }
+
+  Future<List<Map<String, dynamic>>> getWithdrawalHistory() async {
+    final response = await _apiClient.dio.get('/delivery/withdrawals');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return (response.data['data'] as List<dynamic>).cast<Map<String, dynamic>>();
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch withdrawal history');
+  }
 }

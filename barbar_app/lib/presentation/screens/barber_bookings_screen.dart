@@ -36,31 +36,47 @@ class _BarberBookingsScreenState extends State<BarberBookingsScreen> with Single
       body: SafeArea(
         child: Column(
           children: [
-            const SizedBox(height: 16),
-            const Text(
-              'BOOKINGS',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-                letterSpacing: 1.0,
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.only(top: 16, bottom: 12),
+              decoration: const BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(20),
+                  bottomRight: Radius.circular(20),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            TabBar(
-              controller: _tabController,
-              isScrollable: true,
-              tabAlignment: TabAlignment.center,
-              labelColor: AppColors.primary,
-              unselectedLabelColor: AppColors.textSecondary,
-              indicatorColor: AppColors.primary,
-              dividerColor: AppColors.border,
-              tabs: const [
-                Tab(text: "Today's"),
-                Tab(text: "Upcoming"),
-                Tab(text: "Completed"),
-                Tab(text: "Cancelled"),
-              ],
+              child: Column(
+                children: [
+                  const Text(
+                    'BOOKINGS',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.black,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TabBar(
+                    controller: _tabController,
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.center,
+                    labelColor: Colors.black,
+                    unselectedLabelColor: Colors.black54,
+                    indicatorColor: Colors.black,
+                    indicatorWeight: 3,
+                    dividerColor: Colors.transparent,
+                    labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    tabs: const [
+                      Tab(text: "Today's"),
+                      Tab(text: "Upcoming"),
+                      Tab(text: "Completed"),
+                      Tab(text: "Cancelled"),
+                    ],
+                  ),
+                ],
+              ),
             ),
             Expanded(
               child: BlocBuilder<BookingBloc, BookingState>(
@@ -73,12 +89,12 @@ class _BarberBookingsScreenState extends State<BarberBookingsScreen> with Single
                     final todayBookings = state.bookings.where((b) {
                       final d = DateTime.tryParse(b.scheduledStart);
                       return d != null && d.year == now.year && d.month == now.month && d.day == now.day && b.status != 'completed' && b.status != 'cancelled';
-                    }).toList();
+                    }).toList()..sort((a, b) => a.scheduledStart.compareTo(b.scheduledStart));
 
                     final upcomingBookings = state.bookings.where((b) {
                       final d = DateTime.tryParse(b.scheduledStart);
                       return d != null && d.isAfter(DateTime(now.year, now.month, now.day, 23, 59)) && b.status != 'completed' && b.status != 'cancelled';
-                    }).toList();
+                    }).toList()..sort((a, b) => a.scheduledStart.compareTo(b.scheduledStart));
 
                     final completedBookings = state.bookings.where((b) => b.status == 'completed').toList();
                     final cancelledBookings = state.bookings.where((b) => b.status == 'cancelled').toList();

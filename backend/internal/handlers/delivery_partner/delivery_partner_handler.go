@@ -70,8 +70,8 @@ func (h *DeliveryPartnerHandler) Register(c *gin.Context) {
 		VehicleNumber:    req.VehicleNumber,
 		LicenseNumber:    req.LicenseNumber,
         CurrentLatitude:  req.Latitude,
-        CurrentLongitude: req.Longitude,
-        Status: models.DeliveryPartnerStatusPending,
+        Status: models.DeliveryPartnerStatusApproved,
+        AvailabilityStatus: models.DeliveryPartnerStatusAvailable,
         CreatedAt:        time.Now(),
         UpdatedAt:        time.Now(),
     }

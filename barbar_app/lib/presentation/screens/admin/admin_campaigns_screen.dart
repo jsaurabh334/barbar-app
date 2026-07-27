@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:barbar_app/presentation/bloc/admin/admin_campaigns_bloc.dart';
@@ -41,6 +42,8 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
     }
   }
 
+  List<CampaignModel> _lastCampaigns = [];
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -51,7 +54,11 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
               content: Text(state.message),
               backgroundColor: Colors.green,
             ));
-            context.read<AdminCampaignsBloc>().add(const LoadCampaigns());
+            // Reload with the current filter so the selected chip stays correct
+            context.read<AdminCampaignsBloc>().add(LoadCampaigns(status: _statusFilter));
+          }
+          if (state is AdminCampaignsLoaded) {
+            _lastCampaigns = state.campaigns;
           }
           if (state is AdminCampaignsError) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -123,19 +130,38 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
   }
 
   Widget _buildBody(AdminCampaignsState state) {
+    // While loading a filter switch, show the previous list dimmed to avoid flicker
     if (state is AdminCampaignsLoading) {
-      return const Center(child: CircularProgressIndicator());
+      if (_lastCampaigns.isEmpty) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      return Opacity(
+        opacity: 0.4,
+        child: ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: _lastCampaigns.length,
+          itemBuilder: (_, i) => _CampaignCard(
+            campaign: _lastCampaigns[i],
+            onTap: () {},
+          ),
+        ),
+      );
     }
     if (state is AdminCampaignsLoaded) {
       if (state.campaigns.isEmpty) {
-        return const AdminEmptyState(
+        return AdminEmptyState(
           icon: LucideIcons.megaphone,
-          title: 'No Campaigns',
-          subtitle: 'Tap + to create your first campaign',
+          title: _statusFilter == null
+              ? 'No Campaigns'
+              : 'No ${_statusFilter![0].toUpperCase()}${_statusFilter!.substring(1)} Campaigns',
+          subtitle: _statusFilter == null
+              ? 'Tap + to create your first campaign'
+              : 'No campaigns with status "$_statusFilter" found',
         );
       }
       return RefreshIndicator(
-        onRefresh: () async => context.read<AdminCampaignsBloc>().add(const LoadCampaigns()),
+        // Preserve current filter on pull-to-refresh
+        onRefresh: () async => context.read<AdminCampaignsBloc>().add(LoadCampaigns(status: _statusFilter)),
         child: ListView.builder(
           controller: _scrollController,
           padding: const EdgeInsets.all(16),
@@ -262,8 +288,9 @@ class _CampaignDetailScreen extends StatelessWidget {
             if (campaign.imageUrl != null && campaign.imageUrl!.isNotEmpty)
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.network(campaign.imageUrl!, height: 160, width: double.infinity, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                child: CachedNetworkImage(imageUrl: campaign.imageUrl!, height: 160, width: double.infinity, fit: BoxFit.cover,
+                  placeholder: (_, __) => const SizedBox.shrink(),
+                  errorWidget: (_, __, ___) => const SizedBox.shrink(),
                 ),
               ),
             if (campaign.imageUrl != null && campaign.imageUrl!.isNotEmpty) const SizedBox(height: 16),

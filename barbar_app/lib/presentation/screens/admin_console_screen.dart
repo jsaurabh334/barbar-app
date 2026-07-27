@@ -67,6 +67,9 @@ class AdminConsoleScreen extends StatefulWidget {
 
 class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  int _bottomNavIndex = 0;
+  // Maps bottom nav index -> tab index (Dashboard, Bookings, Orders, Finance, Profile)
+  final List<int> _bottomNavTabs = [0, 1, 2, 11, 16];
 
   // Disputes State
   final List<DisputeCase> _disputes = [
@@ -105,7 +108,7 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 16, vsync: this);
+    _tabController = TabController(length: 17, vsync: this);
     _tabController.addListener(() {
       setState(() {});
     });
@@ -130,44 +133,40 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(
-                color: AppColors.cardBg,
+            DrawerHeader(
+              decoration: const BoxDecoration(
+                color: AppColors.primary,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Text(
+                  const Text(
                     'SUPER ADMIN',
                     style: TextStyle(
-                      color: AppColors.primary,
+                      color: Colors.black,
                       fontSize: 22,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w900,
                       letterSpacing: 1.5,
                     ),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Text(
                     'Management Console',
-                    style: TextStyle(color: AppColors.textSecondary),
+                    style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
             ),
-            _buildDrawerItem(LucideIcons.layoutDashboard, 'Dashboard (Barbers)', 0),
-            _buildDrawerItem(LucideIcons.calendarCheck, 'Bookings', 1),
-            _buildDrawerItem(LucideIcons.shoppingCart, 'Orders', 2),
+            // Only items NOT in bottom nav
             _buildDrawerItem(LucideIcons.users, 'Customers', 3),
             _buildDrawerItem(LucideIcons.store, 'Vendors', 4),
             _buildDrawerItem(LucideIcons.bike, 'Delivery', 5),
-            _buildDrawerItem(LucideIcons.activity, 'Delivery Drivers', 99), // 99 for direct navigation
             _buildDrawerItem(LucideIcons.messageSquare, 'Reviews', 6),
             _buildDrawerItem(LucideIcons.flag, 'Reports', 7),
             _buildDrawerItem(LucideIcons.receipt, 'Refunds', 8),
-            _buildDrawerItem(LucideIcons.receipt, 'Tax Settings', 9),
+            _buildDrawerItem(LucideIcons.settings, 'Tax Settings', 9),
             _buildDrawerItem(LucideIcons.activity, 'Revenue Analytics', 10),
-            _buildDrawerItem(LucideIcons.banknote, 'Settlements', 11),
             _buildDrawerItem(LucideIcons.wallet, 'Wallets', 12),
             _buildDrawerItem(LucideIcons.image, 'Banners', 13),
             _buildDrawerItem(LucideIcons.megaphone, 'Campaigns', 14),
@@ -176,14 +175,17 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
         ),
       ),
       appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.black),
         title: const Text(
-          'Admin Console',
-          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 20),
+          'ADMIN CONSOLE',
+          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: Colors.black, letterSpacing: 1.2),
         ),
-        centerTitle: false,
+        centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(LucideIcons.bell),
+            icon: const Icon(LucideIcons.bell, color: Colors.black),
             onPressed: () {
               Navigator.push(
                 context,
@@ -229,8 +231,15 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
             create: (context) => AdminFinanceBloc(adminRepository: context.read<AdminRepository>())..add(const LoadTaxSettings()),
             child: const AdminTaxSettingsScreen(),
           ),
-          BlocProvider(
-            create: (context) => AdminReportsBloc(adminRepository: context.read<AdminRepository>())..add(LoadRevenueReport()),
+          MultiBlocProvider(
+            providers: [
+              BlocProvider(
+                create: (context) => AdminFinanceBloc(adminRepository: context.read<AdminRepository>())..add(const LoadRevenueAnalytics()),
+              ),
+              BlocProvider(
+                create: (context) => AdminReportsBloc(adminRepository: context.read<AdminRepository>())..add(LoadRevenueReport()),
+              ),
+            ],
             child: const AdminRevenueAnalyticsScreen(),
           ),
           BlocProvider(
@@ -253,6 +262,28 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
             create: (context) => AdminCmsBloc(adminRepository: context.read<AdminRepository>())..add(LoadCmsPages()),
             child: const AdminCmsScreen(),
           ),
+          // Tab 16: Profile
+          const ProfileScreen(),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _bottomNavIndex,
+        onTap: (index) {
+          setState(() => _bottomNavIndex = index);
+          _tabController.animateTo(_bottomNavTabs[index]);
+        },
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: AppColors.cardBg,
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: Colors.grey,
+        selectedFontSize: 11,
+        unselectedFontSize: 10,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(LucideIcons.layoutDashboard), label: 'Dashboard'),
+          BottomNavigationBarItem(icon: Icon(LucideIcons.calendarCheck), label: 'Bookings'),
+          BottomNavigationBarItem(icon: Icon(LucideIcons.shoppingCart), label: 'Orders'),
+          BottomNavigationBarItem(icon: Icon(LucideIcons.banknote), label: 'Finance'),
+          BottomNavigationBarItem(icon: Icon(LucideIcons.user), label: 'Profile'),
         ],
       ),
     );
@@ -273,13 +304,9 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
       selectedTileColor: AppColors.primary.withValues(alpha: 0.1),
       onTap: () {
         Navigator.pop(context); // close drawer
-        if (index == 99) {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDeliveryPresenceScreen()));
-        } else {
-          _tabController.animateTo(index);
-        }
+        _tabController.animateTo(index);
+        setState(() => _bottomNavIndex = 4); // highlight More
       },
     );
   }
-
-  }
+}

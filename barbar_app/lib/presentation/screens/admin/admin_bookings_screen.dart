@@ -1,8 +1,10 @@
 import 'package:barbar_app/presentation/bloc/admin/admin_bookings_bloc.dart';
 import 'package:barbar_app/presentation/screens/admin/admin_booking_detail_screen.dart';
+import 'package:barbar_app/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:intl/intl.dart';
 
 class AdminBookingsScreen extends StatefulWidget {
   const AdminBookingsScreen({super.key});
@@ -70,7 +72,7 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> with SingleTi
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: AppColors.background,
       body: Column(
         children: [
           _buildFilters(),
@@ -78,19 +80,19 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> with SingleTi
             child: BlocBuilder<AdminBookingsBloc, AdminBookingsState>(
               builder: (context, state) {
                 if (state is AdminBookingsLoading && _currentPage == 1) {
-                  return const Center(child: CircularProgressIndicator(color: Colors.white));
+                  return const Center(child: CircularProgressIndicator(color: AppColors.primary));
                 }
                 if (state is AdminBookingsError && _currentPage == 1) {
                   return Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(LucideIcons.alertCircle, color: Colors.redAccent, size: 48),
+                        const Icon(LucideIcons.alertCircle, color: AppColors.error, size: 48),
                         const SizedBox(height: 16),
-                        Text(state.message, style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                        Text(state.message, style: const TextStyle(color: AppColors.textSecondary, fontSize: 16)),
                         const SizedBox(height: 16),
                         ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black),
+                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.black),
                           onPressed: _resetPage, 
                           child: const Text('Retry')
                         ),
@@ -104,29 +106,29 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> with SingleTi
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(LucideIcons.calendarX, color: Colors.white.withValues(alpha: 0.2), size: 64),
+                          Icon(LucideIcons.calendarX, color: AppColors.textMuted.withValues(alpha: 0.4), size: 64),
                           const SizedBox(height: 16),
-                          const Text('No bookings found', style: TextStyle(color: Colors.white54, fontSize: 16)),
+                          const Text('No bookings found', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
                         ],
                       ),
                     );
                   }
                   return RefreshIndicator(
                     color: Colors.black,
-                    backgroundColor: Colors.white,
+                    backgroundColor: AppColors.primary,
                     onRefresh: () async {
                       _currentPage = 1;
                       _loadBookings();
                     },
                     child: ListView.builder(
                       controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       itemCount: state.bookings.length + (state.hasReachedMax ? 0 : 1),
                       itemBuilder: (context, index) {
                         if (index >= state.bookings.length) {
                           return const Padding(
                             padding: EdgeInsets.all(16.0),
-                            child: Center(child: CircularProgressIndicator(color: Colors.white)),
+                            child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
                           );
                         }
                         final bookingData = state.bookings[index];
@@ -159,55 +161,48 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> with SingleTi
 
   Widget _buildFilters() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          )
-        ],
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             decoration: BoxDecoration(
-              color: const Color(0xFF2A2A2A),
+              color: AppColors.cardBg,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+              border: Border.all(color: AppColors.border),
             ),
             child: TextField(
               controller: _searchController,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
+              style: const TextStyle(color: AppColors.textPrimary),
+              decoration: const InputDecoration(
                 hintText: 'Search bookings by ID, Name...',
-                hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
-                prefixIcon: Icon(LucideIcons.search, color: Colors.white.withValues(alpha: 0.5), size: 20),
+                hintStyle: TextStyle(color: AppColors.textMuted),
+                prefixIcon: Icon(LucideIcons.search, color: AppColors.textSecondary, size: 20),
                 border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
               onSubmitted: (_) => _resetPage(),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
             child: Row(
               children: [
                 _buildDatePicker(),
-                const SizedBox(width: 12),
-                Container(height: 30, width: 1, color: Colors.white.withValues(alpha: 0.1)),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
+                Container(height: 24, width: 1, color: AppColors.border),
+                const SizedBox(width: 10),
                 _buildStatusChip('All', null),
                 ..._statuses.where((s) => s != null).map((s) => _buildStatusChip(s!.replaceAll('_', ' ').toUpperCase(), s)),
               ],
             ),
           ),
-          const SizedBox(height: 8),
         ],
       ),
     );
@@ -223,12 +218,12 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> with SingleTi
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
+          color: isSelected ? AppColors.primary : AppColors.cardBg,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.2),
+            color: isSelected ? AppColors.primary : AppColors.border,
           ),
         ),
         child: Text(
@@ -236,7 +231,7 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> with SingleTi
           style: TextStyle(
             fontSize: 12,
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected ? Colors.black : Colors.white70,
+            color: isSelected ? Colors.black : AppColors.textSecondary,
           ),
         ),
       ),
@@ -256,10 +251,10 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> with SingleTi
             return Theme(
               data: Theme.of(context).copyWith(
                 colorScheme: const ColorScheme.dark(
-                  primary: Colors.white,
+                  primary: AppColors.primary,
                   onPrimary: Colors.black,
-                  surface: Color(0xFF1E1E1E),
-                  onSurface: Colors.white,
+                  surface: AppColors.cardBg,
+                  onSurface: AppColors.textPrimary,
                 ),
               ),
               child: child!,
@@ -275,22 +270,22 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> with SingleTi
         }
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: hasDate ? Colors.white.withValues(alpha: 0.15) : Colors.transparent,
+          color: hasDate ? AppColors.primary.withValues(alpha: 0.2) : AppColors.cardBg,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: hasDate ? Colors.transparent : Colors.white.withValues(alpha: 0.2)),
+          border: Border.all(color: hasDate ? AppColors.primary : AppColors.border),
         ),
         child: Row(
           children: [
-            Icon(LucideIcons.calendar, size: 14, color: hasDate ? Colors.white : Colors.white70),
-            const SizedBox(width: 8),
+            Icon(LucideIcons.calendar, size: 14, color: hasDate ? AppColors.primary : AppColors.textSecondary),
+            const SizedBox(width: 6),
             Text(
               hasDate ? _selectedDate! : 'Filter Date',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
-                color: hasDate ? Colors.white : Colors.white70,
+                color: hasDate ? AppColors.primary : AppColors.textSecondary,
               ),
             ),
           ],
@@ -308,14 +303,14 @@ class _BookingCard extends StatelessWidget {
 
   Color _statusColor(String status) {
     switch (status.toLowerCase()) {
-      case 'pending': return const Color(0xFFFFA726); // Orange
-      case 'confirmed': return const Color(0xFF29B6F6); // Light Blue
-      case 'in_progress': return const Color(0xFF66BB6A); // Green
-      case 'completed': return const Color(0xFF26A69A); // Teal
-      case 'cancelled': return const Color(0xFFEF5350); // Red
-      case 'no_show': return const Color(0xFF8D6E63); // Brown
-      case 'rescheduled': return const Color(0xFFAB47BC); // Purple
-      default: return const Color(0xFFBDBDBD); // Grey
+      case 'pending': return AppColors.warning;
+      case 'confirmed': return AppColors.info;
+      case 'in_progress': return AppColors.success;
+      case 'completed': return Colors.teal;
+      case 'cancelled': return AppColors.error;
+      case 'no_show': return AppColors.textMuted;
+      case 'rescheduled': return Colors.purple;
+      default: return AppColors.textMuted;
     }
   }
 
@@ -327,50 +322,60 @@ class _BookingCard extends StatelessWidget {
     final customerName = _customerName(bookingData);
     final shopName = _shopName(bookingData);
     final scheduledStart = bookingData['scheduled_start'] as String? ?? '';
-    final price = (bookingData['final_price'] as num?)?.toDouble() ?? 0.0;
+    final price = (bookingData['final_price'] as num?)?.toDouble() ?? (bookingData['total_price'] as num?)?.toDouble() ?? 0.0;
     
     final sColor = _statusColor(status);
+    final initial = customerName.isNotEmpty && customerName != 'Customer' ? customerName[0].toUpperCase() : null;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           )
         ],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           onTap: onTap,
-          highlightColor: Colors.white.withValues(alpha: 0.05),
-          splashColor: Colors.white.withValues(alpha: 0.05),
+          highlightColor: AppColors.primary.withValues(alpha: 0.05),
+          splashColor: AppColors.primary.withValues(alpha: 0.05),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top Row: Avatar, Name & Badge
+                // Top Row: Avatar, Customer & Status Badge
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: Colors.primaries[customerName.length % Colors.primaries.length].withValues(alpha: 0.2),
-                      child: Text(
-                        customerName.isNotEmpty ? customerName[0].toUpperCase() : '?',
-                        style: TextStyle(
-                          color: Colors.primaries[customerName.length % Colors.primaries.length],
-                          fontWeight: FontWeight.bold,
-                        ),
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                       ),
+                      alignment: Alignment.center,
+                      child: initial != null
+                          ? Text(
+                              initial,
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            )
+                          : const Icon(LucideIcons.user, size: 20, color: AppColors.primary),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -379,7 +384,7 @@ class _BookingCard extends StatelessWidget {
                         children: [
                           Text(
                             customerName, 
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.white, letterSpacing: 0.5),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -387,12 +392,12 @@ class _BookingCard extends StatelessWidget {
                           if (shopName.isNotEmpty) 
                             Row(
                               children: [
-                                Icon(LucideIcons.store, size: 12, color: Colors.white.withValues(alpha: 0.5)),
-                                const SizedBox(width: 4),
+                                const Icon(LucideIcons.store, size: 13, color: AppColors.primary),
+                                const SizedBox(width: 5),
                                 Expanded(
                                   child: Text(
                                     shopName, 
-                                    style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13),
+                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -403,62 +408,66 @@ class _BookingCard extends StatelessWidget {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
                         color: sColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: sColor.withValues(alpha: 0.3)),
+                        border: Border.all(color: sColor.withValues(alpha: 0.4)),
                       ),
                       child: Text(
                         status.replaceAll('_', ' ').toUpperCase(), 
-                        style: TextStyle(fontSize: 10, color: sColor, fontWeight: FontWeight.w700, letterSpacing: 0.5)
+                        style: TextStyle(fontSize: 10, color: sColor, fontWeight: FontWeight.bold, letterSpacing: 0.5)
                       ),
                     ),
                   ],
                 ),
                 
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Divider(color: Colors.white12, height: 1),
-                ),
+                const SizedBox(height: 12),
                 
-                // Bottom Row: Date, Price & ID
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(LucideIcons.calendarClock, size: 14, color: Colors.white.withValues(alpha: 0.6)),
-                              const SizedBox(width: 6),
-                              Text(
-                                _formatDateTime(scheduledStart), 
-                                style: const TextStyle(fontSize: 13, color: Colors.white70, fontWeight: FontWeight.w500)
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              Icon(LucideIcons.hash, size: 12, color: Colors.white.withValues(alpha: 0.3)),
-                              const SizedBox(width: 4),
-                              Text(
-                                shortId, 
-                                style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.4), fontFamily: 'monospace')
-                              ),
-                            ],
-                          ),
-                        ],
+                // Bottom Inner surface box: Date, ID & Price
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(LucideIcons.calendarClock, size: 14, color: AppColors.primary),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _formatDateTime(scheduledStart), 
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w500)
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const Icon(LucideIcons.hash, size: 12, color: AppColors.textMuted),
+                                const SizedBox(width: 4),
+                                Text(
+                                  shortId, 
+                                  style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontFamily: 'monospace')
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    Text(
-                      '₹${price.toStringAsFixed(0)}', 
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20, color: Colors.white)
-                    ),
-                  ],
+                      Text(
+                        '₹${price.toStringAsFixed(0)}', 
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.primary)
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -469,24 +478,37 @@ class _BookingCard extends StatelessWidget {
   }
 
   String _customerName(Map<String, dynamic> data) {
-    if (data['customer'] != null && data['customer']['full_name'] != null) {
-      return data['customer']['full_name'] as String;
+    if (data['customer'] != null && data['customer'] is Map) {
+      final m = data['customer'] as Map<String, dynamic>;
+      final name = (m['full_name'] ?? m['name'] ?? m['phone']) as String?;
+      if (name != null && name.trim().isNotEmpty) return name;
     }
-    return data['customer_name'] as String? ?? 'Guest';
+    if (data['user'] != null && data['user'] is Map) {
+      final m = data['user'] as Map<String, dynamic>;
+      final name = (m['full_name'] ?? m['name'] ?? m['phone']) as String?;
+      if (name != null && name.trim().isNotEmpty) return name;
+    }
+    final cName = (data['customer_name'] ?? data['user_name'] ?? data['name']) as String?;
+    if (cName != null && cName.trim().isNotEmpty) return cName;
+    return 'Customer';
   }
 
   String _shopName(Map<String, dynamic> data) {
-    if (data['barber'] != null && data['barber']['shop_name'] != null) {
-      return data['barber']['shop_name'] as String;
+    if (data['barber'] != null && data['barber'] is Map) {
+      final m = data['barber'] as Map<String, dynamic>;
+      final name = (m['shop_name'] ?? m['name']) as String?;
+      if (name != null && name.trim().isNotEmpty) return name;
     }
-    return data['shop_name'] as String? ?? '';
+    final sName = (data['shop_name'] ?? data['barber_shop_name']) as String?;
+    if (sName != null && sName.trim().isNotEmpty) return sName;
+    return '';
   }
 
   String _formatDateTime(String iso) {
     if (iso.isEmpty) return 'TBA';
     try {
       final dt = DateTime.parse(iso).toLocal();
-      return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      return DateFormat('dd MMM yyyy, hh:mm a').format(dt);
     } catch (_) {
       return iso;
     }

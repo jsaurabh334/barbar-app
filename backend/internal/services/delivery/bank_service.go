@@ -24,13 +24,19 @@ type UpsertBankAccountInput struct {
 }
 
 func (s *BankAccountService) Upsert(partnerID uuid.UUID, input UpsertBankAccountInput) (*models.DeliveryPartnerBankAccount, error) {
+	var partner models.DeliveryPartner
+	targetID := partnerID
+	if err := s.db.Where("user_id = ?", partnerID).First(&partner).Error; err == nil {
+		targetID = partner.ID
+	}
+
 	var account models.DeliveryPartnerBankAccount
-	result := s.db.Where("delivery_partner_id = ?", partnerID).First(&account)
+	result := s.db.Where("delivery_partner_id = ? OR delivery_partner_id = ?", targetID, partnerID).First(&account)
 
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			account = models.DeliveryPartnerBankAccount{
-				DeliveryPartnerID: partnerID,
+				DeliveryPartnerID: targetID,
 				AccountHolderName: input.AccountHolderName,
 				AccountNumber:     input.AccountNumber,
 				IFSCCode:          input.IFSCCode,
@@ -64,15 +70,27 @@ func (s *BankAccountService) Upsert(partnerID uuid.UUID, input UpsertBankAccount
 }
 
 func (s *BankAccountService) GetByPartnerID(partnerID uuid.UUID) (*models.DeliveryPartnerBankAccount, error) {
+	var partner models.DeliveryPartner
+	targetID := partnerID
+	if err := s.db.Where("user_id = ?", partnerID).First(&partner).Error; err == nil {
+		targetID = partner.ID
+	}
+
 	var account models.DeliveryPartnerBankAccount
-	if err := s.db.Where("delivery_partner_id = ?", partnerID).First(&account).Error; err != nil {
+	if err := s.db.Where("delivery_partner_id = ? OR delivery_partner_id = ?", targetID, partnerID).First(&account).Error; err != nil {
 		return nil, err
 	}
 	return &account, nil
 }
 
 func (s *BankAccountService) Delete(partnerID uuid.UUID) error {
-	result := s.db.Where("delivery_partner_id = ?", partnerID).Delete(&models.DeliveryPartnerBankAccount{})
+	var partner models.DeliveryPartner
+	targetID := partnerID
+	if err := s.db.Where("user_id = ?", partnerID).First(&partner).Error; err == nil {
+		targetID = partner.ID
+	}
+
+	result := s.db.Where("delivery_partner_id = ? OR delivery_partner_id = ?", targetID, partnerID).Delete(&models.DeliveryPartnerBankAccount{})
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound
 	}

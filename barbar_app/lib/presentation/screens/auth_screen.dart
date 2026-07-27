@@ -88,6 +88,9 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                 if (state is OtpSentSuccess) {
                   setState(() {
                     _pendingPhone = state.phone;
+                    if (state.otp != null) {
+                      _otpController.text = state.otp!;
+                    }
                   });
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -378,7 +381,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                   onPressed: () {
                     setState(() {
                       _pendingPhone = null;
-                      _otpController.clear();
+                      // _otpController.clear();
                     });
                   },
                 ),

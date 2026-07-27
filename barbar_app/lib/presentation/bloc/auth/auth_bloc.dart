@@ -40,9 +40,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onSendOtpRequested(SendOtpRequested event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
     try {
-      final success = await _authRepository.sendOtp(event.phone);
-      if (success) {
-        emit(OtpSentSuccess(event.phone));
+      final otp = await _authRepository.sendOtp(event.phone);
+      if (otp != null) {
+        emit(OtpSentSuccess(event.phone, otp));
       } else {
         emit(const AuthFailure('Failed to send OTP. Please check the number.'));
       }
@@ -75,9 +75,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         role: event.role,
         email: event.email,
       );
-      final success = await _authRepository.sendOtp(event.phone);
-      if (success) {
-        emit(OtpSentSuccess(event.phone));
+      final otp = await _authRepository.sendOtp(event.phone);
+      if (otp != null) {
+        emit(OtpSentSuccess(event.phone, otp));
       } else {
         emit(const AuthFailure('Registration succeeded, but failed to send OTP.'));
       }

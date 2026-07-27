@@ -2,19 +2,68 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/debouncer.dart';
+import '../../../widgets/admin/admin_empty_state.dart';
+import '../../../widgets/admin/admin_error_state.dart';
+import '../../../widgets/admin/admin_loading_state.dart';
 import '../../../bloc/admin/admin_delivery_bloc.dart';
 import '../../../../data/models/delivery_partner_model.dart';
 
-class AdminDeliveryScreen extends StatefulWidget {
+
+import '../admin_delivery_presence_screen.dart';
+
+class AdminDeliveryScreen extends StatelessWidget {
   const AdminDeliveryScreen({super.key});
 
   @override
-  State<AdminDeliveryScreen> createState() => _AdminDeliveryScreenState();
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              color: AppColors.cardBg,
+              border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+            ),
+            child: const TabBar(
+              indicatorColor: AppColors.primary,
+              indicatorWeight: 3,
+              labelColor: AppColors.primary,
+              unselectedLabelColor: AppColors.textSecondary,
+              labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              unselectedLabelStyle: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+              tabs: [
+                Tab(text: 'Partners Directory'),
+                Tab(text: 'Live Drivers'),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                const AdminDeliveryPartnersView(),
+                AdminDeliveryPresenceScreen(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _AdminDeliveryScreenState extends State<AdminDeliveryScreen> with SingleTickerProviderStateMixin {
+class AdminDeliveryPartnersView extends StatefulWidget {
+  const AdminDeliveryPartnersView({super.key});
+
+  @override
+  State<AdminDeliveryPartnersView> createState() => _AdminDeliveryPartnersViewState();
+}
+
+class _AdminDeliveryPartnersViewState extends State<AdminDeliveryPartnersView> with SingleTickerProviderStateMixin {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
+  final _debouncer = Debouncer(milliseconds: 500);
   late TabController _tabController;
 
   final _tabs = const [
@@ -48,10 +97,12 @@ class _AdminDeliveryScreenState extends State<AdminDeliveryScreen> with SingleTi
     _searchController.dispose();
     _scrollController.dispose();
     _tabController.dispose();
+    _debouncer.dispose();
     super.dispose();
   }
 
   void _onTabChanged() {
+    if (!mounted || _tabController.indexIsChanging) return;
     _searchController.clear();
     context.read<AdminDeliveryBloc>().add(LoadDeliveryPartners(
       page: 1,
@@ -83,6 +134,16 @@ class _AdminDeliveryScreenState extends State<AdminDeliveryScreen> with SingleTi
             decoration: InputDecoration(
               hintText: 'Search delivery partners...',
               prefixIcon: const Icon(LucideIcons.search, color: AppColors.textSecondary),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(LucideIcons.x, size: 16, color: AppColors.textSecondary),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {});
+                        context.read<AdminDeliveryBloc>().add(LoadDeliveryPartners(page: 1, searchQuery: '', status: _statusFilter));
+                      },
+                    )
+                  : null,
               filled: true,
               fillColor: AppColors.surface,
               border: OutlineInputBorder(
@@ -91,17 +152,16 @@ class _AdminDeliveryScreenState extends State<AdminDeliveryScreen> with SingleTi
               ),
             ),
             onChanged: (value) {
-              context.read<AdminDeliveryBloc>().add(LoadDeliveryPartners(
-                page: 1,
-                searchQuery: value,
-                status: _statusFilter,
-              ));
+              setState(() {});
+              _debouncer.run(() => context.read<AdminDeliveryBloc>().add(LoadDeliveryPartners(page: 1, searchQuery: value, status: _statusFilter)));
             },
           ),
         ),
         TabBar(
           controller: _tabController,
           isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           indicatorColor: AppColors.primary,
           labelColor: AppColors.primary,
           unselectedLabelColor: AppColors.textSecondary,
@@ -117,16 +177,10 @@ class _AdminDeliveryScreenState extends State<AdminDeliveryScreen> with SingleTi
               }
             },
             builder: (context, state) {
-              if (state is AdminDeliveryLoading || state is AdminDeliveryInitial) {
-                return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-              }
+              if (state is AdminDeliveryLoading || state is AdminDeliveryInitial) { return const AdminLoadingState(); }
 
               if (state is AdminDeliveryLoaded) {
-                if (state.partners.isEmpty) {
-                  return const Center(
-                    child: Text('No delivery partners found', style: TextStyle(color: AppColors.textSecondary)),
-                  );
-                }
+                if (state.partners.isEmpty) { return const AdminEmptyState(icon: LucideIcons.bike, title: 'No delivery partners found', subtitle: 'Adjust search or filters.'); }
 
                 return ListView.builder(
                   controller: _scrollController,
@@ -270,13 +324,20 @@ class _DeliveryCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        partner.user?.fullName ?? 'Delivery Partner',
+                        (partner.user?.fullName != null && partner.user!.fullName!.isNotEmpty)
+                            ? partner.user!.fullName!
+                            : 'Delivery Partner',
                         style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${partner.vehicleType} - ${partner.licenseNumber}',
-                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        '${partner.vehicleType.toUpperCase()} (${partner.vehicleNumber}) • License: ${partner.licenseNumber}',
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      ),
+                      const SizedBox(height: 2),
+                      SelectableText(
+                        'User ID: ${partner.userId}',
+                        style: const TextStyle(color: AppColors.primary, fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),

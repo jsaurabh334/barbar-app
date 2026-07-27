@@ -128,6 +128,17 @@ class _AdminVendorDetailScreenState extends State<AdminVendorDetailScreen> {
       ),
       child: Column(
         children: [
+
+          if (v.banner != null && v.banner!.isNotEmpty)
+            Container(
+              height: 120,
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                image: DecorationImage(image: NetworkImage(v.banner!), fit: BoxFit.cover),
+              ),
+            ),
           CircleAvatar(
             radius: 40,
             backgroundColor: v.logo != null ? Colors.transparent : AppColors.primary.withValues(alpha: 0.2),

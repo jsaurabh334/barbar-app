@@ -31,29 +31,50 @@ class VendorRemoteDataSource {
   }
 
   Future<Map<String, dynamic>> getProfile() async {
-    final response = await _apiClient.dio.get('/vendor/profile');
-    if (response.statusCode == 200 && response.data['status'] == 'success') {
-      final data = response.data['data'] as Map<String, dynamic>;
-      return data['vendor'] as Map<String, dynamic>;
+    try {
+      final response = await _apiClient.dio.get('/vendor/profile');
+      if (response.statusCode == 200 && response.data['status'] == 'success') {
+        final data = response.data['data'] as Map<String, dynamic>;
+        return data['vendor'] as Map<String, dynamic>;
+      }
+      throw Exception(response.data['error'] ?? 'Failed to fetch profile');
+    } on DioException catch (e) {
+      if (e.response?.data is Map && e.response?.data['error'] != null) {
+        throw Exception(e.response?.data['error']);
+      }
+      throw Exception(e.message ?? 'Failed to fetch vendor profile');
     }
-    throw Exception(response.data['error'] ?? 'Failed to fetch profile');
   }
 
   Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> data) async {
-    final response = await _apiClient.dio.put('/vendor/profile', data: data);
-    if (response.statusCode == 200 && response.data['status'] == 'success') {
-      final result = response.data['data'] as Map<String, dynamic>;
-      return result['vendor'] as Map<String, dynamic>;
+    try {
+      final response = await _apiClient.dio.put('/vendor/profile', data: data);
+      if (response.statusCode == 200 && response.data['status'] == 'success') {
+        final result = response.data['data'] as Map<String, dynamic>;
+        return result['vendor'] as Map<String, dynamic>;
+      }
+      throw Exception(response.data['error'] ?? 'Failed to update profile');
+    } on DioException catch (e) {
+      if (e.response?.data is Map && e.response?.data['error'] != null) {
+        throw Exception(e.response?.data['error']);
+      }
+      throw Exception(e.message ?? 'Failed to update profile');
     }
-    throw Exception(response.data['error'] ?? 'Failed to update profile');
   }
 
   Future<Map<String, dynamic>> getDashboard() async {
-    final response = await _apiClient.dio.get('/vendor/dashboard');
-    if (response.statusCode == 200 && response.data['status'] == 'success') {
-      return response.data['data'] as Map<String, dynamic>;
+    try {
+      final response = await _apiClient.dio.get('/vendor/dashboard');
+      if (response.statusCode == 200 && response.data['status'] == 'success') {
+        return response.data['data'] as Map<String, dynamic>;
+      }
+      throw Exception(response.data['error'] ?? 'Failed to fetch dashboard');
+    } on DioException catch (e) {
+      if (e.response?.data is Map && e.response?.data['error'] != null) {
+        throw Exception(e.response?.data['error']);
+      }
+      throw Exception(e.message ?? 'Failed to fetch dashboard');
     }
-    throw Exception(response.data['error'] ?? 'Failed to fetch dashboard');
   }
 
   // ==================== Warehouses ====================
@@ -116,12 +137,19 @@ class VendorRemoteDataSource {
   }
 
   Future<Map<String, dynamic>> createProduct(Map<String, dynamic> data) async {
-    final response = await _apiClient.dio.post('/products/', data: data);
-    if ((response.statusCode == 200 || response.statusCode == 201) &&
-        (response.data['status'] == 'success' || response.data['status'] == 'created')) {
-      return response.data['data'] as Map<String, dynamic>;
+    try {
+      final response = await _apiClient.dio.post('/products', data: data);
+      if ((response.statusCode == 200 || response.statusCode == 201) &&
+          (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        return response.data['data'] as Map<String, dynamic>;
+      }
+      throw Exception(response.data['error'] ?? 'Failed to create product');
+    } on DioException catch (e) {
+      if (e.response?.data is Map && e.response?.data['error'] != null) {
+        throw Exception(e.response?.data['error']);
+      }
+      throw Exception(e.message ?? 'Failed to create product');
     }
-    throw Exception(response.data['error'] ?? 'Failed to create product');
   }
 
   Future<Map<String, dynamic>> updateProduct(String productId, Map<String, dynamic> data) async {

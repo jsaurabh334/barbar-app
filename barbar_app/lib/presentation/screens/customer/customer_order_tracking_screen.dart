@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../core/theme/app_theme.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/websocket_client.dart';
 import '../../../data/models/tracking/tracking_response.dart';
@@ -27,6 +28,8 @@ class _CustomerOrderTrackingScreenState extends State<CustomerOrderTrackingScree
   bool _isLoading = true;
   bool _isLive = true;
   String? _error;
+  Timer? _timeoutTimer;
+  static const Duration _timeoutDuration = Duration(seconds: 10);
 
   @override
   void initState() {
@@ -37,18 +40,33 @@ class _CustomerOrderTrackingScreenState extends State<CustomerOrderTrackingScree
   void _startTracking() {
     _repository?.dispose();
     _sub?.cancel();
+    _timeoutTimer?.cancel();
 
-    final apiClient = ApiClient();
-    final wsClient = WebSocketClient();
+    final apiClient = context.read<ApiClient>();
+    final wsClient = context.read<WebSocketClient>();
     _repository = TrackingRepositoryImpl(apiClient, wsClient);
 
     setState(() {
       _isLoading = true;
       _error = null;
+      _response = null;
+      _isLive = true;
+    });
+
+    _timeoutTimer = Timer(_timeoutDuration, () {
+      if (mounted) {
+        _sub?.cancel();
+        _repository?.dispose();
+        setState(() {
+          _isLoading = false;
+          _error = 'Unable to load tracking. Please try again.';
+        });
+      }
     });
 
     _sub = _repository!.trackingUpdates(widget.orderId).listen(
       (response) {
+        _timeoutTimer?.cancel();
         if (mounted) {
           setState(() {
             _response = response;
@@ -58,6 +76,7 @@ class _CustomerOrderTrackingScreenState extends State<CustomerOrderTrackingScree
         }
       },
       onError: (err) {
+        _timeoutTimer?.cancel();
         if (mounted) {
           setState(() {
             _isLoading = false;
@@ -70,6 +89,7 @@ class _CustomerOrderTrackingScreenState extends State<CustomerOrderTrackingScree
 
   @override
   void dispose() {
+    _timeoutTimer?.cancel();
     _sub?.cancel();
     _repository?.dispose();
     super.dispose();
@@ -121,7 +141,7 @@ class _CustomerOrderTrackingScreenState extends State<CustomerOrderTrackingScree
           children: [
             const Icon(LucideIcons.map, size: 48, color: AppColors.textMuted),
             const SizedBox(height: 12),
-            const Text('Driver location unavailable',
+            const Text('Unable to load tracking details',
                 style: TextStyle(color: AppColors.textSecondary)),
             const SizedBox(height: 4),
             Text(_error!, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
@@ -139,6 +159,23 @@ class _CustomerOrderTrackingScreenState extends State<CustomerOrderTrackingScree
     final response = _response;
     if (response == null) return const SizedBox.shrink();
 
+    final status = response.status.toLowerCase();
+
+    if (_isLiveTrackingStatus(status)) {
+      return _buildLiveTrackingView(response, status);
+    }
+
+    return _buildStaticView(response, status);
+  }
+
+  bool _isLiveTrackingStatus(String status) {
+    return status == 'driver_assigned' ||
+        status == 'driver_accepted' ||
+        status == 'picked_up' ||
+        status == 'out_for_delivery';
+  }
+
+  Widget _buildLiveTrackingView(TrackingResponse response, String status) {
     return Column(
       children: [
         Expanded(
@@ -156,14 +193,13 @@ class _CustomerOrderTrackingScreenState extends State<CustomerOrderTrackingScree
               children: [
                 _buildEtaBar(response),
                 const SizedBox(height: 12),
-                if (response.deliveryOtp != null) ...[
+                if (response.deliveryOtp != null && status == 'picked_up')
                   _buildOtpCard(response.deliveryOtp!),
-                  const SizedBox(height: 12),
-                ],
                 if (response.driver != null) ...[
-                  DriverCardWidget(driver: response.driver!),
                   const SizedBox(height: 12),
+                  DriverCardWidget(driver: response.driver!),
                 ],
+                const SizedBox(height: 12),
                 TimelineWidget(
                   entries: response.timeline,
                   currentStatus: response.status,
@@ -193,6 +229,124 @@ class _CustomerOrderTrackingScreenState extends State<CustomerOrderTrackingScree
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildStaticView(TrackingResponse response, String status) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _buildStatusHeaderBanner(response),
+          if (status == 'ready_for_pickup' && response.eta != null) ...[
+            const SizedBox(height: 12),
+            _buildEtaBar(response),
+          ],
+          if (status == 'delivered' && response.driver != null) ...[
+            const SizedBox(height: 12),
+            DriverCardWidget(driver: response.driver!),
+          ],
+          const SizedBox(height: 12),
+          TimelineWidget(
+            entries: response.timeline,
+            currentStatus: response.status,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusHeaderBanner(TrackingResponse response) {
+    final status = response.status.toLowerCase();
+    IconData icon;
+    Color color;
+    String title;
+    String subtitle;
+
+    switch (status) {
+      case 'pending':
+        icon = LucideIcons.clock;
+        color = AppColors.warning;
+        title = 'Order Received';
+        subtitle = 'Waiting for vendor to accept your order.';
+        break;
+      case 'confirmed':
+      case 'accepted':
+        icon = LucideIcons.checkCircle;
+        color = AppColors.info;
+        title = 'Order Confirmed';
+        subtitle = 'Vendor has accepted and is preparing your order.';
+        break;
+      case 'preparing':
+      case 'packed':
+        icon = LucideIcons.package;
+        color = AppColors.primary;
+        title = 'Preparing Order';
+        subtitle = 'Your items are being packed and readied for dispatch.';
+        break;
+      case 'ready_for_pickup':
+        icon = LucideIcons.store;
+        color = AppColors.primary;
+        title = 'Ready for Pickup';
+        subtitle = 'Order is packed. Finding a delivery partner...';
+        break;
+      case 'delivered':
+        icon = LucideIcons.checkCircle2;
+        color = AppColors.success;
+        title = 'Order Delivered';
+        subtitle = 'Thank you for ordering with us!';
+        break;
+      case 'cancelled':
+        icon = LucideIcons.xCircle;
+        color = AppColors.error;
+        title = 'Order Cancelled';
+        subtitle = 'This order has been cancelled.';
+        break;
+      default:
+        icon = LucideIcons.info;
+        color = AppColors.primary;
+        title = response.status.toUpperCase();
+        subtitle = 'Order status update.';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

@@ -26,6 +26,12 @@ class _BarberHomeServiceScreenState extends State<BarberHomeServiceScreen> with 
     context.read<BookingBloc>().add(FetchHomeServiceRequests());
   }
 
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   void _showRejectDialog(String bookingId) {
     final reasonController = TextEditingController();
     showDialog(

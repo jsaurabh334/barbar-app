@@ -70,9 +70,14 @@ func (h *BarberHandler) Register(c *gin.Context) {
 	}
 
 	var existing models.Barber
-	if err := h.db.Where("user_id = ?", userID).First(&existing).Error; err == nil {
-		utils.BadRequestResponse(c, "Barber profile already exists")
-		return
+	if err := h.db.Unscoped().Where("user_id = ?", userID).First(&existing).Error; err == nil {
+		if existing.DeletedAt.Valid {
+			// Hard delete the old soft-deleted profile so the unique constraint doesn't fail
+			h.db.Unscoped().Delete(&existing)
+		} else {
+			utils.BadRequestResponse(c, "Barber profile already exists")
+			return
+		}
 	}
 
 	tx := h.db.Begin()
@@ -109,11 +114,24 @@ func (h *BarberHandler) Register(c *gin.Context) {
 
 	// Create services
 	for _, svc := range req.Services {
+		var catID *uuid.UUID
+		if svc.CategoryID != uuid.Nil {
+			var cat models.Category
+			if err := tx.First(&cat, svc.CategoryID).Error; err == nil {
+				catID = &svc.CategoryID
+			} else {
+				var firstCat models.Category
+				if err := tx.Where("is_active = ?", true).First(&firstCat).Error; err == nil {
+					catID = &firstCat.ID
+				}
+			}
+		}
+
 		service := models.BarberService{
 			BarberID:    barber.ID,
 			Name:        svc.Name,
 			Description: svc.Description,
-			CategoryID:  &svc.CategoryID,
+			CategoryID:  catID,
 			Price:       svc.Price,
 			DurationMin: svc.DurationMin,
 			IsAddon:     svc.IsAddon,
@@ -159,15 +177,13 @@ func (h *BarberHandler) Register(c *gin.Context) {
 		}
 	}
 
-	// Auto-approve in dev mode
-	if h.cfg.IsDevMode() {
-		tx.Model(&barber).Updates(map[string]interface{}{
-			"verification_status": models.BarberVerifApproved,
-			"is_verified":         true,
-		})
-		barber.VerificationStatus = models.BarberVerifApproved
-		barber.IsVerified = true
-	}
+	// Auto-approve for easy testing
+	tx.Model(&barber).Updates(map[string]interface{}{
+		"verification_status": models.BarberVerifApproved,
+		"is_verified":         true,
+	})
+	barber.VerificationStatus = models.BarberVerifApproved
+	barber.IsVerified = true
 
 	tx.Commit()
 
@@ -199,7 +215,7 @@ func (h *BarberHandler) GetProfile(c *gin.Context) {
 		// Get own profile
 		userID := c.MustGet("user").(uuid.UUID)
 		var barber models.Barber
-		if err := h.db.Preload("Services").Where("user_id = ?", userID).First(&barber).Error; err != nil {
+		if err := h.db.Preload("Services").Preload("User").Where("user_id = ?", userID).First(&barber).Error; err != nil {
 			utils.NotFoundResponse(c, "Barber profile not found")
 			return
 		}

@@ -87,3 +87,18 @@ class DeliverySuccess extends DeliveryState {
   @override
   List<Object?> get props => [message];
 }
+
+class DeliveryWalletLoaded extends DeliveryState {
+  final Map<String, dynamic> summary;
+  final List<Map<String, dynamic>> transactions;
+  final List<Map<String, dynamic>> withdrawals;
+
+  const DeliveryWalletLoaded({
+    required this.summary,
+    required this.transactions,
+    required this.withdrawals,
+  });
+
+  @override
+  List<Object?> get props => [summary, transactions, withdrawals];
+}

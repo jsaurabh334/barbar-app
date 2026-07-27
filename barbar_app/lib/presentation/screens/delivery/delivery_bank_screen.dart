@@ -87,7 +87,17 @@ class _DeliveryBankScreenState extends State<DeliveryBankScreen> {
     return BlocConsumer<DeliveryBloc, DeliveryState>(
       listener: (context, state) {
         if (state is DeliveryBankAccountLoaded) {
-          setState(() => _account = state.account);
+          setState(() {
+            _account = state.account;
+            if (_account != null) {
+              _nameCtrl.text = _account?['account_holder_name'] ?? '';
+              _accCtrl.text = _account?['account_number'] ?? '';
+              _ifscCtrl.text = _account?['ifsc_code'] ?? '';
+              _bankCtrl.text = _account?['bank_name'] ?? '';
+              _branchCtrl.text = _account?['branch_name'] ?? '';
+              _upiCtrl.text = _account?['upi_id'] ?? '';
+            }
+          });
         } else if (state is DeliverySuccess) {
           if (state.message == 'Bank account saved') {
             context.read<DeliveryBloc>().add(FetchBankAccount());

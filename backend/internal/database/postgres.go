@@ -7,6 +7,7 @@ import (
 
 	"github.com/barbar-app/backend/internal/config"
 	"github.com/barbar-app/backend/internal/models"
+	"github.com/google/uuid"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -166,6 +167,22 @@ func RunMigrations(db *gorm.DB) {
 }
 
 func SeedData(db *gorm.DB, cfg *config.AppConfig) {
+	var catCount int64
+	db.Model(&models.Category{}).Count(&catCount)
+	if catCount == 0 {
+		categories := []models.Category{
+			{BaseModel: models.BaseModel{ID: uuid.MustParse("00000000-0000-0000-0000-000000000001")}, Name: "Haircut", Slug: "haircut", Description: "Haircuts & Hair Styling", IsActive: true, SortOrder: 1, CategoryType: "service"},
+			{BaseModel: models.BaseModel{ID: uuid.MustParse("00000000-0000-0000-0000-000000000002")}, Name: "Beard & Shave", Slug: "beard-shave", Description: "Beard Trimming, Shaving & Grooming", IsActive: true, SortOrder: 2, CategoryType: "service"},
+			{BaseModel: models.BaseModel{ID: uuid.MustParse("00000000-0000-0000-0000-000000000003")}, Name: "Facial & Skincare", Slug: "facial-skincare", Description: "Facial, Cleanup & Skincare Treatments", IsActive: true, SortOrder: 3, CategoryType: "service"},
+			{BaseModel: models.BaseModel{ID: uuid.MustParse("00000000-0000-0000-0000-000000000004")}, Name: "Hair Color & Chemical", Slug: "hair-color", Description: "Hair Coloring, Keratin & Straightening", IsActive: true, SortOrder: 4, CategoryType: "service"},
+			{BaseModel: models.BaseModel{ID: uuid.MustParse("00000000-0000-0000-0000-000000000005")}, Name: "Spa & Massage", Slug: "spa-massage", Description: "Head Massage, Body Spa & Relaxation", IsActive: true, SortOrder: 5, CategoryType: "service"},
+		}
+		for _, c := range categories {
+			db.Create(&c)
+		}
+		log.Println("Default categories seeded successfully")
+	}
+
 	var count int64
 	db.Model(&models.PlatformSetting{}).Count(&count)
 	if count > 0 {
@@ -197,5 +214,6 @@ func SeedData(db *gorm.DB, cfg *config.AppConfig) {
 	for _, s := range settings {
 		db.Create(&s)
 	}
+
 	log.Println("Seed data inserted successfully")
 }

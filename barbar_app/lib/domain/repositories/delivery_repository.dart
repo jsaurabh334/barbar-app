@@ -31,4 +31,8 @@ abstract class DeliveryRepository {
     double bearing = 0,
     String? timestamp,
   });
+  Future<Map<String, dynamic>> getWalletSummary();
+  Future<List<Map<String, dynamic>>> getWalletTransactions({int limit = 20, int offset = 0});
+  Future<Map<String, dynamic>> requestWithdrawal(double amount);
+  Future<List<Map<String, dynamic>>> getWithdrawalHistory();
 }

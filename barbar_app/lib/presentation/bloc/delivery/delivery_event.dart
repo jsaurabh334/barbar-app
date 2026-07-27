@@ -149,3 +149,14 @@ class DeliverOrder extends DeliveryEvent {
   @override
   List<Object?> get props => [orderId];
 }
+
+class FetchDeliveryWallet extends DeliveryEvent {}
+
+class RequestDeliveryWithdrawal extends DeliveryEvent {
+  final double amount;
+
+  const RequestDeliveryWithdrawal(this.amount);
+
+  @override
+  List<Object?> get props => [amount];
+}

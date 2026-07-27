@@ -15,6 +15,15 @@ import '../bloc/notification/notification_bloc.dart';
 import '../bloc/notification/notification_event.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/notification_bell.dart';
+import 'barber_profile_screen.dart';
+import 'barber_services_screen.dart';
+import 'barber_availability_screen.dart';
+import 'barber_documents_screen.dart';
+import 'barber_home_service_screen.dart';
+import 'barber_staff_screen.dart';
+
+import '../bloc/auth/auth_bloc.dart';
+import '../bloc/auth/auth_event.dart';
 import 'barber/booking_detail_screen.dart';
 
 class BarberDashboardScreen extends StatefulWidget {
@@ -38,6 +47,8 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
   int _pendingHomeServices = 0;
   int _pendingReviews = 0;
   String _shopName = '';
+  String _ownerName = '';
+  String _ownerPhone = '';
   String _shiftStart = '--:--';
   String _shiftEnd = '--:--';
   List<BookingModel> _bookings = [];
@@ -83,16 +94,20 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
     try {
       final dashboard = await widget.barberRepository.getDashboard();
       if (mounted) {
+        final barber = dashboard['barber'] as Map<String, dynamic>?;
+        final user = barber?['user'] as Map<String, dynamic>?;
         setState(() {
-          _barberData = dashboard['barber'] as Map<String, dynamic>?;
-          _barberStatus = dashboard['barber']['status'] as String? ?? 'inactive';
+          _barberData = barber;
+          _barberStatus = barber?['status'] as String? ?? 'inactive';
           _todayBookings = dashboard['today_bookings'] as int? ?? 0;
           _earningsToday = (dashboard['earnings_today'] as num?)?.toDouble() ?? 0;
           _pendingHomeServices = dashboard['pending_home_services'] as int? ?? 0;
           _pendingReviews = dashboard['pending_reviews'] as int? ?? 0;
-          _shopName = (dashboard['barber']['shop_name'] as String?) ?? 'My Shop';
-          _shiftStart = (dashboard['barber']['start_time'] as String?) ?? '09:00';
-          _shiftEnd = (dashboard['barber']['end_time'] as String?) ?? '21:00';
+          _shopName = (barber?['shop_name'] as String?) ?? 'My Shop';
+          _ownerName = (user?['full_name'] as String?) ?? '';
+          _ownerPhone = (user?['phone'] as String?) ?? (barber?['phone'] as String?) ?? '';
+          _shiftStart = (barber?['start_time'] as String?) ?? '09:00';
+          _shiftEnd = (barber?['end_time'] as String?) ?? '21:00';
         });
       }
     } catch (_) {}
@@ -121,11 +136,17 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(_shopName.isEmpty ? 'DASHBOARD' : _shopName.toUpperCase()),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.black,
+        title: Text(
+          _shopName.isEmpty ? 'DASHBOARD' : _shopName.toUpperCase(),
+          style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2),
+        ),
         actions: [
-          const NotificationBellIcon(),
+          const NotificationBellIcon(role: 'barber'),
         ],
       ),
+      drawer: _buildDrawer(context),
       body: BlocListener<BookingBloc, BookingState>(
         listener: (context, state) {
           if (state is BookingFailure) {
@@ -403,7 +424,10 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
     return BlocConsumer<BookingBloc, BookingState>(
       listener: (context, state) {
         if (state is BookingsLoaded) {
-          setState(() => _bookings = state.bookings);
+          setState(() {
+            _bookings = List.from(state.bookings)
+              ..sort((a, b) => a.scheduledStart.compareTo(b.scheduledStart));
+          });
         }
       },
       builder: (context, state) {
@@ -673,6 +697,112 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
               letterSpacing: 0.5,
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDrawerItem(IconData icon, String title, VoidCallback onTap) {
+    return ListTile(
+      leading: Icon(icon, color: AppColors.primary),
+      title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 16)),
+      trailing: const Icon(LucideIcons.chevronRight, size: 16, color: Colors.grey),
+      onTap: onTap,
+    );
+  }
+
+  Widget _buildDrawer(BuildContext context) {
+    return Drawer(
+      backgroundColor: AppColors.surface,
+      child: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24.0),
+              width: double.infinity,
+              color: AppColors.background,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: AppColors.primary,
+                    child: Text(
+                      _shopName.isNotEmpty ? _shopName[0].toUpperCase() : 'B',
+                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    _shopName.isEmpty ? 'Barber Profile' : _shopName,
+                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  if (_ownerName.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Owner: $_ownerName',
+                      style: const TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                  if (_ownerPhone.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      _ownerPhone,
+                      style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: _barberStatus == 'active' ? Colors.green : Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _barberStatus == 'active' ? 'Online' : 'Offline',
+                        style: TextStyle(color: _barberStatus == 'active' ? Colors.green : Colors.red, fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Divider(color: AppColors.border, height: 1),
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  _buildDrawerItem(LucideIcons.user, 'My Profile', () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => BarberProfileScreen(barberRepository: widget.barberRepository)));
+                  }),
+                  _buildDrawerItem(LucideIcons.users, 'Staff Management', () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => BarberStaffScreen()));
+                  }),
+                  _buildDrawerItem(LucideIcons.settings, 'Settings', () {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings coming soon')));
+                  }),
+                ],
+              ),
+            ),
+            const Divider(color: AppColors.border, height: 1),
+            ListTile(
+              leading: const Icon(LucideIcons.logOut, color: AppColors.error),
+              title: const Text('Logout', style: TextStyle(color: AppColors.error, fontSize: 16)),
+              onTap: () {
+                Navigator.pop(context);
+                context.read<AuthBloc>().add(LogoutRequested());
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
         ),
       ),
     );

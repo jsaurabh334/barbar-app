@@ -12,6 +12,9 @@ import 'delivery_registration_screen.dart';
 import 'delivery_suspended_screen.dart';
 import '../../../data/models/delivery_partner_model.dart';
 
+import '../../bloc/auth/auth_bloc.dart';
+import '../../bloc/auth/auth_event.dart';
+
 class DeliveryShell extends StatefulWidget {
   const DeliveryShell({super.key});
 
@@ -52,6 +55,7 @@ class _DeliveryShellState extends State<DeliveryShell> {
         }
 
         if (state is DeliveryFailure && _lastProfile == null) {
+          final is401 = state.error.contains('401') || state.error.toLowerCase().contains('unauthorized');
           return Scaffold(
             body: Center(
               child: Padding(
@@ -61,13 +65,33 @@ class _DeliveryShellState extends State<DeliveryShell> {
                   children: [
                     const Icon(LucideIcons.alertCircle, size: 48, color: AppColors.error),
                     const SizedBox(height: 16),
-                    Text('Error loading profile: ${state.error}',
-                        style: const TextStyle(color: Colors.white), textAlign: TextAlign.center),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => context.read<DeliveryBloc>().add(LoadDeliveryProfile()),
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-                      child: const Text('Retry'),
+                    Text(
+                      is401 ? 'Session expired. Please log in again.' : 'Error loading profile: ${state.error}',
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton(
+                          onPressed: () => context.read<DeliveryBloc>().add(LoadDeliveryProfile()),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.surface,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Retry'),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          onPressed: () => context.read<AuthBloc>().add(LogoutRequested()),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.black,
+                          ),
+                          child: const Text('Re-login'),
+                        ),
+                      ],
                     ),
                   ],
                 ),

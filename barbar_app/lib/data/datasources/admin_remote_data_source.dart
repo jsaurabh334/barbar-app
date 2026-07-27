@@ -251,9 +251,10 @@ class AdminRemoteDataSource {
     });
   }
 
-  Future<Map<String, dynamic>> getAdminCoupons({int page = 1, int limit = 20, bool? isActive}) async {
+  Future<Map<String, dynamic>> getAdminCoupons({int page = 1, int limit = 20, bool? isActive, String? search}) async {
     final queryParams = <String, dynamic>{'page': page, 'limit': limit};
     if (isActive != null) queryParams['is_active'] = isActive;
+    if (search != null && search.isNotEmpty) queryParams['search'] = search;
     final response = await apiClient.dio.get('/admin/coupons', queryParameters: queryParams);
     return response.data as Map<String, dynamic>;
   }
@@ -577,5 +578,15 @@ class AdminRemoteDataSource {
 
   Future<void> deleteAdminCmsPage(String id) async {
     await apiClient.dio.delete('/admin/cms/$id');
+  }
+
+  Future<Map<String, dynamic>> getSystemHealth() async {
+    final response = await apiClient.dio.get('/admin/system/health');
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getAuditLogs({int page = 1, int limit = 20}) async {
+    final response = await apiClient.dio.get('/admin/audit-logs', queryParameters: {'page': page, 'limit': limit});
+    return response.data as Map<String, dynamic>;
   }
 }

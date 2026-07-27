@@ -28,6 +28,8 @@ class DeliveryBloc extends Bloc<DeliveryEvent, DeliveryState> {
     on<PickupOrder>(_onPickupOrder);
     on<OutForDelivery>(_onOutForDelivery);
     on<DeliverOrder>(_onDeliverOrder);
+    on<FetchDeliveryWallet>(_onFetchDeliveryWallet);
+    on<RequestDeliveryWithdrawal>(_onRequestDeliveryWithdrawal);
   }
 
   Future<void> _onLoadProfile(LoadDeliveryProfile event, Emitter<DeliveryState> emit) async {
@@ -153,7 +155,7 @@ class DeliveryBloc extends Bloc<DeliveryEvent, DeliveryState> {
   Future<void> _onFetchAssignedOrders(FetchAssignedOrders event, Emitter<DeliveryState> emit) async {
     emit(DeliveryLoading());
     try {
-      final orders = await _deliveryRepository.getAssignedOrders();
+      final orders = await _deliveryRepository.getAssignedOrders().timeout(const Duration(seconds: 15));
       emit(DeliveryOrdersLoaded(orders));
     } catch (e) {
       emit(DeliveryFailure(e.toString().replaceAll('Exception: ', '')));
@@ -241,6 +243,40 @@ class DeliveryBloc extends Bloc<DeliveryEvent, DeliveryState> {
       emit(DeliveryOrderDetailLoaded(order));
       final orders = await _deliveryRepository.getAssignedOrders();
       emit(DeliveryOrdersLoaded(orders));
+    } catch (e) {
+      emit(DeliveryFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onFetchDeliveryWallet(FetchDeliveryWallet event, Emitter<DeliveryState> emit) async {
+    emit(DeliveryLoading());
+    try {
+      final summary = await _deliveryRepository.getWalletSummary();
+      final txns = await _deliveryRepository.getWalletTransactions();
+      final withdrawals = await _deliveryRepository.getWithdrawalHistory();
+      emit(DeliveryWalletLoaded(
+        summary: summary,
+        transactions: txns,
+        withdrawals: withdrawals,
+      ));
+    } catch (e) {
+      emit(DeliveryFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onRequestDeliveryWithdrawal(RequestDeliveryWithdrawal event, Emitter<DeliveryState> emit) async {
+    emit(DeliveryLoading());
+    try {
+      await _deliveryRepository.requestWithdrawal(event.amount);
+      emit(const DeliverySuccess('Withdrawal request submitted successfully!'));
+      final summary = await _deliveryRepository.getWalletSummary();
+      final txns = await _deliveryRepository.getWalletTransactions();
+      final withdrawals = await _deliveryRepository.getWithdrawalHistory();
+      emit(DeliveryWalletLoaded(
+        summary: summary,
+        transactions: txns,
+        withdrawals: withdrawals,
+      ));
     } catch (e) {
       emit(DeliveryFailure(e.toString().replaceAll('Exception: ', '')));
     }

@@ -35,7 +35,7 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<bool> sendOtp(String phone) async {
+  Future<String?> sendOtp(String phone) async {
     return await _remoteDataSource.sendOtp(phone);
   }
 
@@ -55,7 +55,7 @@ class AuthRepositoryImpl implements AuthRepository {
     
     // Fill required user schema properties from login response context if missing
     if (!userMap.containsKey('phone') || userMap['phone'] == null) userMap['phone'] = phone;
-    if (!userMap.containsKey('full_name') || userMap['full_name'] == null) userMap['full_name'] = 'Client';
+    if (!userMap.containsKey('full_name') || userMap['full_name'] == null) userMap['full_name'] = '';
     if (!userMap.containsKey('role') || userMap['role'] == null) userMap['role'] = 'customer';
     if (!userMap.containsKey('status') || userMap['status'] == null) userMap['status'] = 'active';
     if (!userMap.containsKey('otp_verified') || userMap['otp_verified'] == null) userMap['otp_verified'] = true;

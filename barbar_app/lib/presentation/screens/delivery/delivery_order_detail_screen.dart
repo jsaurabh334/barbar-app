@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/navigation_launcher.dart';
 import '../../../data/models/order_model.dart';
 import '../../../domain/repositories/delivery_repository.dart';
 import '../../bloc/delivery/delivery_bloc.dart';
@@ -179,11 +180,27 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(children: [
-            Icon(LucideIcons.user, size: 18, color: AppColors.primary),
-            SizedBox(width: 8),
-            Text('Customer', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          ]),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(children: [
+                Icon(LucideIcons.user, size: 18, color: AppColors.primary),
+                SizedBox(width: 8),
+                Text('Customer', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ]),
+              if (order.customerLatitude != null && order.customerLongitude != null)
+                IconButton(
+                  icon: const Icon(LucideIcons.navigation2, color: AppColors.primary, size: 20),
+                  tooltip: 'Navigate to Customer',
+                  onPressed: () => NavigationLauncher.launchMapsNavigation(
+                    context: context,
+                    latitude: order.customerLatitude!,
+                    longitude: order.customerLongitude!,
+                    title: 'Customer Dropoff Location',
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(height: 12),
           _infoRow(LucideIcons.user, 'Name', order.customerName ?? 'N/A'),
           if (order.customerPhone != null) ...[

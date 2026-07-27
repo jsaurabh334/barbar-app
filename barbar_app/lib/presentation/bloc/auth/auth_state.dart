@@ -25,11 +25,12 @@ class AuthUnauthenticated extends AuthState {}
 
 class OtpSentSuccess extends AuthState {
   final String phone;
+  final String? otp;
 
-  const OtpSentSuccess(this.phone);
+  const OtpSentSuccess(this.phone, [this.otp]);
 
   @override
-  List<Object?> get props => [phone];
+  List<Object?> get props => [phone, otp];
 }
 
 class AuthFailure extends AuthState {
