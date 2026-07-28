@@ -45,7 +45,7 @@ abstract class AdminRepository {
   Future<Map<String, dynamic>> getDeliveryPresenceSummary();
   Future<List<dynamic>> getOnlineDrivers();
 
-  Future<Map<String, dynamic>> getAdminBookings({int page = 1, int limit = 20, String? status, String? date, String? barberId});
+  Future<Map<String, dynamic>> getAdminBookings({int page = 1, int limit = 20, String? status, String? date, String? barberId, String? search});
   Future<Map<String, dynamic>> getAdminBookingDetail(String bookingId);
   Future<void> adminCancelBooking(String bookingId, String reason);
   Future<void> adminRescheduleBooking(String bookingId, String newStart, String newEnd, {String? reason});

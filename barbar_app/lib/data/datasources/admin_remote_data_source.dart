@@ -99,11 +99,12 @@ class AdminRemoteDataSource {
     });
   }
 
-  Future<Map<String, dynamic>> getAdminBookings({int page = 1, int limit = 20, String? status, String? date, String? barberId}) async {
+  Future<Map<String, dynamic>> getAdminBookings({int page = 1, int limit = 20, String? status, String? date, String? barberId, String? search}) async {
     final queryParams = <String, dynamic>{'page': page, 'limit': limit};
     if (status != null && status.isNotEmpty) queryParams['status'] = status;
     if (date != null && date.isNotEmpty) queryParams['date'] = date;
     if (barberId != null && barberId.isNotEmpty) queryParams['barber_id'] = barberId;
+    if (search != null && search.isNotEmpty) queryParams['search'] = search;
     final response = await apiClient.dio.get('/admin/bookings', queryParameters: queryParams);
     return response.data as Map<String, dynamic>;
   }

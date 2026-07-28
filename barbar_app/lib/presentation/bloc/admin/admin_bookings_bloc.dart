@@ -14,11 +14,12 @@ class LoadBookings extends AdminBookingsEvent {
   final String? status;
   final String? date;
   final String? barberId;
+  final String? search;
 
-  const LoadBookings({this.page = 1, this.status, this.date, this.barberId});
+  const LoadBookings({this.page = 1, this.status, this.date, this.barberId, this.search});
 
   @override
-  List<Object?> get props => [page, status, date, barberId];
+  List<Object?> get props => [page, status, date, barberId, search];
 }
 
 class CancelBooking extends AdminBookingsEvent {
@@ -114,6 +115,7 @@ class AdminBookingsBloc extends Bloc<AdminBookingsEvent, AdminBookingsState> {
         status: event.status,
         date: event.date,
         barberId: event.barberId,
+        search: event.search,
       );
 
       final List<dynamic> rawData = (result['data'] is List) ? result['data'] : (result['data']?['data'] ?? []);

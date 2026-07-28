@@ -960,6 +960,13 @@ func (h *AdminHandler) ListAllBookings(c *gin.Context) {
 	var total int64
 
 	query := h.db.Model(&models.Booking{}).Preload("Barber").Preload("Customer").Preload("Services")
+	if search := c.Query("search"); search != "" {
+		searchPattern := "%" + search + "%"
+		query = query.Where(
+			"id::text ILIKE ? OR customer_id::text ILIKE ? OR EXISTS (SELECT 1 FROM users WHERE users.id = bookings.customer_id AND users.full_name ILIKE ?)",
+			searchPattern, searchPattern, searchPattern,
+		)
+	}
 	if status := c.Query("status"); status != "" {
 		query = query.Where("status = ?", status)
 	}

@@ -202,8 +202,8 @@ class AdminRepositoryImpl implements AdminRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getAdminBookings({int page = 1, int limit = 20, String? status, String? date, String? barberId}) {
-    return remoteDataSource.getAdminBookings(page: page, limit: limit, status: status, date: date, barberId: barberId);
+  Future<Map<String, dynamic>> getAdminBookings({int page = 1, int limit = 20, String? status, String? date, String? barberId, String? search}) {
+    return remoteDataSource.getAdminBookings(page: page, limit: limit, status: status, date: date, barberId: barberId, search: search);
   }
 
   @override

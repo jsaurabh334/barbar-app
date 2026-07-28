@@ -61,6 +61,7 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> with SingleTi
       page: _currentPage,
       status: _selectedStatus,
       date: date?.isEmpty == true ? null : date,
+      search: _searchController.text,
     ));
   }
 
