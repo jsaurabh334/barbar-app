@@ -78,6 +78,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 
 	// WebSocket endpoint
 	router.GET("/ws", gin.WrapH(http.HandlerFunc(hub.HandleWebSocket)))
+	router.GET("/ws/sync", hub.HandleSyncEndpoint)
 
 	// Static file serving for uploads
 	router.Static("/uploads", cfg.App.Upload.Dir)
@@ -253,6 +254,9 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			bookingRoutes.GET("/:id/receipt", invoiceH.GetBookingReceipt)
 			bookingRoutes.GET("/:id/invoice", invoiceH.GetBookingInvoiceJSON)
 			bookingRoutes.POST("/:id/payment", bookingH.PayBooking)
+			bookingRoutes.POST("/:id/check-in", bookingH.CheckIn)
+			bookingRoutes.POST("/:id/im-coming", bookingH.ImComing)
+			bookingRoutes.GET("/:id/call-permission", bookingH.GetCallPermission)
 		}
 
 		// ==================== Review routes ====================
@@ -279,8 +283,13 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			barberRoutes.PUT("/bookings/:id/status", bookingH.UpdateStatus)
 			barberRoutes.PUT("/bookings/:id/services", bookingH.ModifyServices)
 			barberRoutes.GET("/queue", bookingH.GetQueue)
+			barberRoutes.GET("/queue/today", bookingH.GetTodayQueue)
 			barberRoutes.GET("/queue/:booking_id", bookingH.GetMyQueuePosition)
 			barberRoutes.PUT("/queue/reorder", bookingH.ReorderQueue)
+			barberRoutes.PUT("/queue/:id/skip", bookingH.QueueSkip)
+			barberRoutes.PUT("/queue/:id/start", bookingH.QueueStartService)
+			barberRoutes.PUT("/queue/:id/complete", bookingH.QueueCompleteService)
+			barberRoutes.PUT("/queue/:id/no-show", bookingH.QueueNoShow)
 
 			barberRoutes.POST("/reviews/:id/reply", reviewH.CreateReply)
 

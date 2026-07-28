@@ -18,6 +18,7 @@ import 'package:barbar_app/presentation/bloc/admin/admin_campaigns_bloc.dart';
 import 'package:barbar_app/presentation/screens/admin/admin_campaigns_screen.dart';
 import 'package:barbar_app/presentation/bloc/admin/admin_cms_bloc.dart';
 import 'package:barbar_app/presentation/screens/admin/admin_cms_screen.dart';
+import 'package:barbar_app/presentation/screens/admin/admin_barbers_screen.dart';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -35,7 +36,9 @@ import 'admin/customers/admin_customers_screen.dart';
 import 'admin/admin_dashboard_screen.dart';
 import 'admin/admin_review_moderation_screen.dart';
 import 'admin/admin_report_management_screen.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'notifications_screen.dart';
+import '../widgets/notification_bell.dart';
 import 'profile_screen.dart';
 
 class DisputeCase {
@@ -69,7 +72,7 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
   late TabController _tabController;
   int _bottomNavIndex = 0;
   // Maps bottom nav index -> tab index (Dashboard, Bookings, Orders, Finance, Profile)
-  final List<int> _bottomNavTabs = [0, 1, 2, 11, 16];
+  final List<int> _bottomNavTabs = [0, 1, 2, 12, 17];
 
   // Disputes State
   final List<DisputeCase> _disputes = [
@@ -108,7 +111,7 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 17, vsync: this);
+    _tabController = TabController(length: 18, vsync: this);
     _tabController.addListener(() {
       setState(() {});
     });
@@ -133,44 +136,63 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            DrawerHeader(
+            Container(
+              padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 16, 16, 20),
               decoration: const BoxDecoration(
                 color: AppColors.primary,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
+              child: Row(
                 children: [
-                  const Text(
-                    'SUPER ADMIN',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5,
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.15),
+                      shape: BoxShape.circle,
                     ),
+                    child: const Icon(LucideIcons.shieldCheck, color: Colors.black, size: 24),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Management Console',
-                    style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'SUPER ADMIN',
+                        style: GoogleFonts.outfit(
+                          color: Colors.black,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Management Console',
+                        style: GoogleFonts.outfit(
+                          color: Colors.black87,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
             // Only items NOT in bottom nav
             _buildDrawerItem(LucideIcons.users, 'Customers', 3),
-            _buildDrawerItem(LucideIcons.store, 'Vendors', 4),
-            _buildDrawerItem(LucideIcons.bike, 'Delivery', 5),
-            _buildDrawerItem(LucideIcons.messageSquare, 'Reviews', 6),
-            _buildDrawerItem(LucideIcons.flag, 'Reports', 7),
-            _buildDrawerItem(LucideIcons.receipt, 'Refunds', 8),
-            _buildDrawerItem(LucideIcons.settings, 'Tax Settings', 9),
-            _buildDrawerItem(LucideIcons.activity, 'Revenue Analytics', 10),
-            _buildDrawerItem(LucideIcons.wallet, 'Wallets', 12),
-            _buildDrawerItem(LucideIcons.image, 'Banners', 13),
-            _buildDrawerItem(LucideIcons.megaphone, 'Campaigns', 14),
-            _buildDrawerItem(LucideIcons.fileText, 'CMS', 15),
+            _buildDrawerItem(LucideIcons.scissors, 'Barbers', 4),
+            _buildDrawerItem(LucideIcons.store, 'Vendors', 5),
+            _buildDrawerItem(LucideIcons.bike, 'Delivery', 6),
+            _buildDrawerItem(LucideIcons.messageSquare, 'Reviews', 7),
+            _buildDrawerItem(LucideIcons.flag, 'Reports', 8),
+            _buildDrawerItem(LucideIcons.receipt, 'Refunds', 9),
+            _buildDrawerItem(LucideIcons.settings, 'Tax Settings', 10),
+            _buildDrawerItem(LucideIcons.activity, 'Revenue Analytics', 11),
+            _buildDrawerItem(LucideIcons.wallet, 'Wallets', 13),
+            _buildDrawerItem(LucideIcons.image, 'Banners', 14),
+            _buildDrawerItem(LucideIcons.megaphone, 'Campaigns', 15),
+            _buildDrawerItem(LucideIcons.fileText, 'CMS', 16),
           ],
         ),
       ),
@@ -184,16 +206,8 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
         ),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.bell, color: Colors.black),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const NotificationsScreen(role: 'admin')),
-              );
-            },
-          ),
-          const SizedBox(width: 16),
+          const NotificationBellIcon(role: 'admin'),
+          const SizedBox(width: 8),
         ],
       ),
       body: TabBarView(
@@ -213,6 +227,7 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
             create: (context) => AdminCustomersBloc(adminRepository: context.read<AdminRepository>())..add(const LoadCustomers()),
             child: const AdminCustomersScreen(),
           ),
+          const AdminBarbersScreen(),
           BlocProvider(
             create: (context) => AdminVendorsBloc(adminRepository: context.read<AdminRepository>())..add(const LoadVendors()),
             child: const AdminVendorsScreen(),
@@ -262,7 +277,7 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
             create: (context) => AdminCmsBloc(adminRepository: context.read<AdminRepository>())..add(LoadCmsPages()),
             child: const AdminCmsScreen(),
           ),
-          // Tab 16: Profile
+          // Tab 17: Profile
           const ProfileScreen(),
         ],
       ),

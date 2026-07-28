@@ -212,6 +212,21 @@ func (h *AdminHandler) ApproveBarber(c *gin.Context) {
 	h.db.Model(&barber).Updates(updates)
 	h.db.Model(&models.User{}).Where("id = ?", barber.UserID).Update("role", models.RoleBarber)
 
+	now := time.Now()
+	notif := models.Notification{
+		UserID:         barber.UserID,
+		Role:           string(models.RoleBarber),
+		Title:          "Shop Approved 🎉",
+		Body:           fmt.Sprintf("Your shop '%s' has been approved by Super Admin. Your shop is now live!", barber.ShopName),
+		Type:           models.NotificationType("barber_approved"),
+		Category:       models.CategoryAdmin,
+		Priority:       models.PriorityHigh,
+		DeliveryStatus: models.DeliveryStatusDelivered,
+		IsRead:         false,
+		SentAt:         &now,
+	}
+	h.db.Create(&notif)
+
 	utils.SuccessResponse(c, gin.H{"message": "Barber approved successfully"})
 }
 
@@ -243,18 +258,27 @@ func (h *AdminHandler) RejectBarber(c *gin.Context) {
 
 	h.db.Model(&barber).Updates(updates)
 
-	// In a real app we might want to store the reason in a separate table or a specific field. 
-	// For now we can log it or use an audit log. The user asked for it in `GET /status`.
-	// Let's store it in `metadata` field of user or a similar mechanism if we can't alter barber schema.
-	// Looking at Barber model, we don't have a `RejectReason` field. 
-	// Let's store it in `BarberDocument` remarks, or just create an AuditLog for it.
-	// Actually, the user's schema didn't have reject_reason in Barber table. I'll add an AuditLog.
+	now := time.Now()
+	barberNotif := models.Notification{
+		UserID:         barber.UserID,
+		Role:           string(models.RoleBarber),
+		Title:          "Shop Registration Rejected",
+		Body:           fmt.Sprintf("Your shop '%s' registration was rejected. Reason: %s", barber.ShopName, req.Reason),
+		Type:           models.NotificationType("barber_rejected"),
+		Category:       models.CategoryAdmin,
+		Priority:       models.PriorityHigh,
+		DeliveryStatus: models.DeliveryStatusDelivered,
+		IsRead:         false,
+		SentAt:         &now,
+	}
+	h.db.Create(&barberNotif)
+
 	h.db.Create(&models.AuditLog{
 		UserID:     barber.UserID,
 		Action:     "barber_rejected",
 		EntityType: "barber",
 		EntityID:   barber.ID.String(),
-		NewValues:  models.JSONB([]byte(`{"reason":"` + req.Reason + `"}`)),
+		NewValues:  models.JSONB([]byte(fmt.Sprintf(`{"reason":%q}`, req.Reason))),
 	})
 
 	utils.SuccessResponse(c, gin.H{"message": "Barber rejected successfully"})

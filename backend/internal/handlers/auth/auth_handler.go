@@ -177,6 +177,32 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return h.db.Create(&wallet).Error
 	}, nil)
 
+	// Notify all Admins when a new Barber, Vendor, or Delivery partner registers
+	if user.Role == models.RoleBarber || user.Role == models.RoleVendor || user.Role == models.RoleDelivery {
+		go func(userName, userEmail, userRole string, newUserID uuid.UUID) {
+			var admins []models.User
+			if err := h.db.Where("role = ?", models.RoleAdmin).Find(&admins).Error; err == nil {
+				now := time.Now()
+				roleTitle := strings.Title(userRole)
+				for _, admin := range admins {
+					notif := models.Notification{
+						UserID:         admin.ID,
+						Role:           string(models.RoleAdmin),
+						Title:          fmt.Sprintf("New %s Registered", roleTitle),
+						Body:           fmt.Sprintf("%s (%s) has registered as a new %s.", userName, userEmail, userRole),
+						Type:           models.NotificationType("new_user_registration"),
+						Category:       models.CategoryAdmin,
+						Priority:       models.PriorityHigh,
+						DeliveryStatus: models.DeliveryStatusDelivered,
+						IsRead:         false,
+						SentAt:         &now,
+					}
+					h.db.Create(&notif)
+				}
+			}
+		}(user.FullName, user.Email, string(user.Role), user.ID)
+	}
+
 	tokens, err := h.jwtManager.GenerateTokenPair(user.ID, user.Email, user.Phone, string(user.Role))
 	if err != nil {
 		utils.InternalErrorResponse(c, "Failed to generate tokens")

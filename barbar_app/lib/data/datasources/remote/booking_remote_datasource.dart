@@ -184,8 +184,15 @@ class BookingRemoteDataSource {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getAvailableSlots(String barberId, String date) async {
-    final response = await _apiClient.dio.get('/public/barbers/$barberId/available-slots', queryParameters: {'date': date});
+  Future<List<Map<String, dynamic>>> getAvailableSlots(String barberId, String date, {String? serviceIds, String? staffId}) async {
+    final params = <String, dynamic>{'date': date};
+    if (serviceIds != null && serviceIds.isNotEmpty) {
+      params['service_ids'] = serviceIds;
+    }
+    if (staffId != null && staffId.isNotEmpty) {
+      params['staff_id'] = staffId;
+    }
+    final response = await _apiClient.dio.get('/public/barbers/$barberId/available-slots', queryParameters: params);
     if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
       final data = (response.data['data'] as List<dynamic>?) ?? [];
       return data.cast<Map<String, dynamic>>();
@@ -216,6 +223,70 @@ class BookingRemoteDataSource {
     );
     if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
       throw Exception(response.data['error'] ?? 'Failed to reject request');
+    }
+  }
+
+  Future<void> checkIn(String bookingId, String method, {String? token, double? lat, double? lng}) async {
+    final data = <String, dynamic>{'method': method};
+    if (token != null) data['token'] = token;
+    if (lat != null) data['lat'] = lat;
+    if (lng != null) data['lng'] = lng;
+    final response = await _apiClient.dio.post('/bookings/$bookingId/check-in', data: data);
+    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
+      throw Exception(response.data['error'] ?? 'Check-in failed');
+    }
+  }
+
+  Future<void> imComing(String bookingId) async {
+    final response = await _apiClient.dio.post('/bookings/$bookingId/im-coming');
+    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
+      throw Exception(response.data['error'] ?? 'Failed to mark as coming');
+    }
+  }
+
+  Future<Map<String, dynamic>> getCallPermission(String bookingId) async {
+    final response = await _apiClient.dio.get('/bookings/$bookingId/call-permission');
+    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to get call permission');
+  }
+
+  Future<Map<String, dynamic>> getTodayQueue({String? staffId}) async {
+    final params = <String, dynamic>{};
+    if (staffId != null) params['staff_id'] = staffId;
+    final response = await _apiClient.dio.get('/barber/queue/today', queryParameters: params);
+    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch queue');
+  }
+
+  Future<void> skipCustomer(String bookingId) async {
+    final response = await _apiClient.dio.put('/barber/queue/$bookingId/skip');
+    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
+      throw Exception(response.data['error'] ?? 'Failed to skip customer');
+    }
+  }
+
+  Future<void> startService(String bookingId) async {
+    final response = await _apiClient.dio.put('/barber/queue/$bookingId/start');
+    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
+      throw Exception(response.data['error'] ?? 'Failed to start service');
+    }
+  }
+
+  Future<void> completeService(String bookingId) async {
+    final response = await _apiClient.dio.put('/barber/queue/$bookingId/complete');
+    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
+      throw Exception(response.data['error'] ?? 'Failed to complete service');
+    }
+  }
+
+  Future<void> markNoShow(String bookingId) async {
+    final response = await _apiClient.dio.put('/barber/queue/$bookingId/no-show');
+    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
+      throw Exception(response.data['error'] ?? 'Failed to mark no show');
     }
   }
 }

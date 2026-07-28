@@ -49,6 +49,10 @@ var NotificationMatrix = map[models.NotificationType][]string{
 	models.NotifBookingRejected:  {RoleCustomer},
 	models.NotifBookingCancelled: {RoleCustomer, RoleBarber},
 	models.NotifQueueUpdate:      {RoleCustomer},
+	models.NotifBookingReminder:  {RoleCustomer},
+	models.NotifBookingLate:      {RoleCustomer, RoleBarber},
+	models.NotifBookingNoShow:    {RoleCustomer, RoleBarber},
+	models.NotifGraceExtended:    {RoleCustomer, RoleBarber},
 	models.NotifBarberStarted:    {RoleCustomer},
 	models.NotifBarberCompleted:  {RoleCustomer},
 	models.NotifReviewReceived:   {RoleBarber},
@@ -233,6 +237,41 @@ func (d *notificationDispatcher) buildMessageFallback(event NotificationEvent) (
 		title = "Booking Cancelled"
 		body = "A booking was cancelled."
 		action = ActionOpenBooking
+		priority = models.PriorityHigh
+	case models.NotifBookingReminder:
+		title = "Appointment Reminder"
+		body = "Your appointment is in 15 minutes. Please check in!"
+		action = ActionOpenQueue
+		priority = models.PriorityHigh
+	case models.NotifBookingLate:
+		if event.Role == RoleBarber {
+			title = "Customer Late"
+			body = "A customer is late for their appointment."
+		} else {
+			title = "You're Late"
+			body = "Your appointment time has passed. Please check in or use I'm Coming."
+		}
+		action = ActionOpenQueue
+		priority = models.PriorityHigh
+	case models.NotifBookingNoShow:
+		if event.Role == RoleBarber {
+			title = "No Show"
+			body = "A customer has been marked as no show."
+		} else {
+			title = "Missed Appointment"
+			body = "You missed your appointment and have been marked as no show."
+		}
+		action = ActionOpenQueue
+		priority = models.PriorityHigh
+	case models.NotifGraceExtended:
+		if event.Role == RoleBarber {
+			title = "Grace Extended"
+			body = "Customer grace period has been extended."
+		} else {
+			title = "Grace Extended"
+			body = "Your grace period has been extended. Please check in soon!"
+		}
+		action = ActionOpenQueue
 		priority = models.PriorityHigh
 	case models.NotifQueueUpdate:
 		title = "Queue Update"

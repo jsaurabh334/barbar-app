@@ -8,7 +8,7 @@ import '../bloc/booking/booking_bloc.dart';
 import '../bloc/booking/booking_event.dart';
 
 import 'barber_dashboard_screen.dart';
-import 'barber_bookings_screen.dart';
+import 'barber_queue_screen.dart';
 import 'barber_clients_screen.dart';
 import 'barber_more_screen.dart';
 
@@ -48,7 +48,7 @@ class _BarberDashboardShellState extends State<BarberDashboardShell> {
             webSocketClient: widget.webSocketClient,
             barberRepository: widget.barberRepository,
           ),
-          const BarberBookingsScreen(),
+          const BarberQueueScreen(),
           const BarberClientsScreen(),
           BarberMoreScreen(barberRepository: widget.barberRepository),
         ],
@@ -69,7 +69,7 @@ class _BarberDashboardShellState extends State<BarberDashboardShell> {
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(LucideIcons.layoutDashboard), label: 'Dashboard'),
-          BottomNavigationBarItem(icon: Icon(LucideIcons.calendarDays), label: 'Bookings'),
+          BottomNavigationBarItem(icon: Icon(LucideIcons.listOrdered), label: 'Queue'),
           BottomNavigationBarItem(icon: Icon(LucideIcons.users), label: 'Clients'),
           BottomNavigationBarItem(icon: Icon(LucideIcons.menu), label: 'More'),
         ],

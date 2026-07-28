@@ -181,11 +181,24 @@ func (s *NotificationService) GetUserNotifications(c *gin.Context) {
 	userID := c.MustGet("user").(uuid.UUID)
 	page, pageSize := utils.GetPageParams(c)
 
+	var user models.User
+	role := ""
+	if err := s.db.Select("role").First(&user, userID).Error; err == nil {
+		role = string(user.Role)
+	}
+
 	var notifications []models.Notification
 	var total int64
 
-	s.db.Where("user_id = ?", userID).Count(&total)
-	s.db.Where("user_id = ?", userID).Offset((page-1)*pageSize).Limit(pageSize).Order("created_at DESC").Find(&notifications)
+	query := s.db.Model(&models.Notification{})
+	if role == string(models.RoleAdmin) {
+		query = query.Where("user_id = ? OR role = ?", userID, string(models.RoleAdmin))
+	} else {
+		query = query.Where("user_id = ?", userID)
+	}
+
+	query.Count(&total)
+	query.Offset((page - 1) * pageSize).Limit(pageSize).Order("created_at DESC").Find(&notifications)
 
 	utils.PaginatedResponse(c, notifications, page, pageSize, total)
 }
@@ -199,8 +212,8 @@ func (s *NotificationService) MarkAsRead(c *gin.Context) {
 	}
 
 	now := time.Now()
-	s.db.Model(&models.Notification{}).Where("id = ? AND user_id = ?", notifID, userID).Updates(map[string]interface{}{
-		"is_read":  true,
+	s.db.Model(&models.Notification{}).Where("id = ? AND (user_id = ? OR role = 'admin')", notifID, userID).Updates(map[string]interface{}{
+		"is_read": true,
 		"read_at": &now,
 	})
 
@@ -210,8 +223,8 @@ func (s *NotificationService) MarkAsRead(c *gin.Context) {
 func (s *NotificationService) MarkAllAsRead(c *gin.Context) {
 	userID := c.MustGet("user").(uuid.UUID)
 	now := time.Now()
-	s.db.Model(&models.Notification{}).Where("user_id = ? AND is_read = ?", userID, false).Updates(map[string]interface{}{
-		"is_read":  true,
+	s.db.Model(&models.Notification{}).Where("(user_id = ? OR role = 'admin') AND is_read = ?", userID, false).Updates(map[string]interface{}{
+		"is_read": true,
 		"read_at": &now,
 	})
 
@@ -220,7 +233,20 @@ func (s *NotificationService) MarkAllAsRead(c *gin.Context) {
 
 func (s *NotificationService) GetUnreadCount(userID uuid.UUID) int64 {
 	var count int64
-	s.db.Model(&models.Notification{}).Where("user_id = ? AND is_read = ?", userID, false).Count(&count)
+	var user models.User
+	role := ""
+	if err := s.db.Select("role").First(&user, userID).Error; err == nil {
+		role = string(user.Role)
+	}
+
+	query := s.db.Model(&models.Notification{}).Where("is_read = ?", false)
+	if role == string(models.RoleAdmin) {
+		query = query.Where("user_id = ? OR role = ?", userID, string(models.RoleAdmin))
+	} else {
+		query = query.Where("user_id = ?", userID)
+	}
+
+	query.Count(&count)
 	return count
 }
 

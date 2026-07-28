@@ -29,8 +29,16 @@ abstract class BookingRepository {
   });
   Future<void> payBooking(String bookingId, String method, String status, String reference);
   Future<Map<String, dynamic>> getBookingInvoice(String bookingId);
-  Future<List<Map<String, dynamic>>> getAvailableSlots(String barberId, String date);
+  Future<List<Map<String, dynamic>>> getAvailableSlots(String barberId, String date, {String? serviceIds, String? staffId});
   Future<List<BookingModel>> getHomeServiceRequests();
   Future<void> acceptHomeService(String bookingId);
   Future<void> rejectHomeService(String bookingId, String reason);
+  Future<void> checkIn(String bookingId, String method, {String? token, double? lat, double? lng});
+  Future<void> imComing(String bookingId);
+  Future<Map<String, dynamic>> getCallPermission(String bookingId);
+  Future<Map<String, dynamic>> getTodayQueue({String? staffId});
+  Future<void> skipCustomer(String bookingId);
+  Future<void> startService(String bookingId);
+  Future<void> completeService(String bookingId);
+  Future<void> markNoShow(String bookingId);
 }

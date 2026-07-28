@@ -6,6 +6,9 @@ import '../../data/models/booking_model.dart';
 import '../bloc/booking/booking_bloc.dart';
 import '../bloc/booking/booking_event.dart';
 import '../bloc/booking/booking_state.dart';
+import '../bloc/check_in/check_in_bloc.dart';
+import '../bloc/check_in/check_in_event.dart';
+import 'customer/check_in_screen.dart' show CheckInScreen;
 import 'review_screen.dart';
 
 class BookingHistoryScreen extends StatefulWidget {
@@ -17,6 +20,9 @@ class BookingHistoryScreen extends StatefulWidget {
 
 class _BookingHistoryScreenState extends State<BookingHistoryScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+
+  static const _activeStatuses = ['confirmed', 'checked_in', 'waiting', 'next', 'in_progress'];
+  static const _historyStatuses = ['completed', 'cancelled', 'no_show'];
 
   @override
   void initState() {
@@ -70,18 +76,16 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
               ),
             );
           } else if (state is BookingsLoaded) {
-            final upcoming = state.bookings.where((b) =>
-              b.status == 'pending' || b.status == 'confirmed' || b.status == 'in_progress' || b.status == 'home_service_pending'
-            ).toList()..sort((a, b) => a.scheduledStart.compareTo(b.scheduledStart));
-            final history = state.bookings.where((b) =>
-              b.status == 'completed' || b.status == 'cancelled' || b.status == 'no_show'
-            ).toList()..sort((a, b) => b.scheduledStart.compareTo(a.scheduledStart));
+            final upcoming = state.bookings.where((b) => _activeStatuses.contains(b.status)).toList()
+              ..sort((a, b) => a.scheduledStart.compareTo(b.scheduledStart));
+            final history = state.bookings.where((b) => _historyStatuses.contains(b.status)).toList()
+              ..sort((a, b) => b.scheduledStart.compareTo(a.scheduledStart));
 
             return TabBarView(
               controller: _tabController,
               children: [
-                _buildList(upcoming, 'No upcoming bookings'),
-                _buildList(history, 'No booking history'),
+                _buildUpcomingList(upcoming),
+                _buildHistoryList(history),
               ],
             );
           }
@@ -91,7 +95,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
     );
   }
 
-  Widget _buildList(List<BookingModel> bookings, String emptyText) {
+  Widget _buildUpcomingList(List<BookingModel> bookings) {
     if (bookings.isEmpty) {
       return Center(
         child: Column(
@@ -99,7 +103,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
           children: [
             Icon(LucideIcons.calendarX, size: 48, color: AppColors.textMuted),
             const SizedBox(height: 12),
-            Text(emptyText, style: const TextStyle(color: AppColors.textSecondary)),
+            Text('No upcoming bookings', style: const TextStyle(color: AppColors.textSecondary)),
           ],
         ),
       );
@@ -108,41 +112,55 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: bookings.length,
-      itemBuilder: (context, index) => _buildBookingCard(bookings[index]),
+      itemBuilder: (context, index) => _buildUpcomingCard(bookings[index]),
     );
   }
 
-  Widget _buildBookingCard(BookingModel booking) {
-    final isUpcoming = booking.status == 'pending' || booking.status == 'confirmed' || booking.status == 'in_progress';
-    final statusColor = switch (booking.status) {
-      'pending' => AppColors.warning,
-      'confirmed' => AppColors.primary,
-      'in_progress' => AppColors.info,
-      'completed' => AppColors.success,
-      'cancelled' => AppColors.error,
-      _ => AppColors.textMuted,
-    };
-    final statusLabel = switch (booking.status) {
-      'pending' => 'Pending',
-      'confirmed' => 'Confirmed',
-      'in_progress' => 'In Progress',
-      'completed' => 'Completed',
-      'cancelled' => 'Cancelled',
-      _ => booking.status,
-    };
+  Widget _buildHistoryList(List<BookingModel> bookings) {
+    if (bookings.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(LucideIcons.calendarX, size: 48, color: AppColors.textMuted),
+            const SizedBox(height: 12),
+            Text('No booking history', style: const TextStyle(color: AppColors.textSecondary)),
+          ],
+        ),
+      );
+    }
 
-    return Column(
-      children: [
-        Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: AppColors.cardBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border),
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: bookings.length,
+      itemBuilder: (context, index) => _buildHistoryCard(bookings[index]),
+    );
+  }
+
+  Widget _buildUpcomingCard(BookingModel booking) {
+    final statusColor = _statusColor(booking.status);
+    final statusLabel = _statusLabel(booking.status);
+    final isLate = booking.isLate;
+    final hasQueue = booking.queueAssignedAt != null;
+    final hasImComing = booking.imComingAt != null;
+
+    return GestureDetector(
+      onTap: () => _openCheckIn(booking),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isLate ? AppColors.error.withValues(alpha: 0.4) : AppColors.border,
           ),
-          child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
@@ -152,15 +170,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
                       color: statusColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(
-                      switch (booking.status) {
-                        'completed' => LucideIcons.checkCircle,
-                        'cancelled' => LucideIcons.xCircle,
-                        'in_progress' => LucideIcons.loader,
-                        _ => LucideIcons.clock,
-                      },
-                      color: statusColor,
-                    ),
+                    child: Icon(_statusIcon(booking.status), color: statusColor),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -168,7 +178,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          booking.customerName,
+                          booking.shopName.isNotEmpty ? booking.shopName : 'Barber Shop',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                         ),
                         const SizedBox(height: 4),
@@ -185,21 +195,11 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
                             ),
                           ],
                         ),
-                        if (isUpcoming && booking.queuePosition > 0) ...[
-                          const SizedBox(height: 4),
+                        if (booking.staff != null) ...[
+                          const SizedBox(height: 2),
                           Text(
-                            'Queue #${booking.queuePosition} • Est. ${booking.estimatedWaitMinutes} min',
-                            style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
-                          ),
-                        ],
-                        if (booking.paymentMethod.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            '${booking.paymentMethod.toUpperCase()} • ${booking.paymentStatus == 'paid' ? 'Paid' : booking.paymentStatus == 'initiated' ? 'Processing' : 'Pending'}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: booking.paymentStatus == 'paid' ? AppColors.success : AppColors.textMuted,
-                            ),
+                            'with ${booking.staff!['name'] ?? ''}',
+                            style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
                           ),
                         ],
                       ],
@@ -218,8 +218,171 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
                   ),
                 ],
               ),
+              if (hasQueue || hasImComing || isLate) ...[
+                const Divider(height: 20, color: AppColors.border),
+                if (isLate)
+                  Row(
+                    children: [
+                      const Icon(LucideIcons.alertTriangle, size: 14, color: AppColors.error),
+                      const SizedBox(width: 6),
+                      Text(
+                        _lateMessage(booking),
+                        style: const TextStyle(color: AppColors.error, fontSize: 12, fontWeight: FontWeight.w500),
+                      ),
+                      const Spacer(),
+                    ],
+                  ),
+                if (hasQueue && !isLate)
+                  Row(
+                    children: [
+                      const Icon(LucideIcons.hash, size: 14, color: AppColors.primary),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Queue #${booking.queuePosition}',
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                      if (booking.estimatedWaitMinutes > 0) ...[
+                        const SizedBox(width: 12),
+                        Text(
+                          '~${booking.estimatedWaitMinutes} min',
+                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                        ),
+                      ],
+                      if (booking.status == 'next') ...[
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.success.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text('NEXT', style: TextStyle(color: AppColors.success, fontSize: 10, fontWeight: FontWeight.w900)),
+                        ),
+                      ],
+                    ],
+                  ),
+                if (hasImComing)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      children: [
+                        const Icon(LucideIcons.checkCircle, size: 14, color: AppColors.warning),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Shop notified • Grace extended',
+                          style: TextStyle(color: AppColors.warning, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  if (booking.status == 'confirmed' && hasQueue)
+                    Expanded(
+                      child: _miniButton('CHECK IN', AppColors.success, () => _openCheckIn(booking)),
+                    ),
+                  if (booking.status == 'confirmed' && !hasImComing)
+                    Padding(
+                      padding: EdgeInsets.only(left: booking.status == 'confirmed' && hasQueue ? 8 : 0),
+                      child: _miniButton('I\'M COMING', AppColors.warning, () => _imComing(booking)),
+                    ),
+                  if (booking.status == 'confirmed' && !hasQueue)
+                    Expanded(
+                      child: _miniButton('I\'M COMING', AppColors.warning, () => _imComing(booking)),
+                    ),
+                  if (booking.status == 'waiting' || booking.status == 'checked_in')
+                    Expanded(
+                      child: _miniButton('VIEW QUEUE', AppColors.primary, () => _openCheckIn(booking)),
+                    ),
+                  if (booking.status == 'next')
+                    Expanded(
+                      child: _miniButton('GET READY', AppColors.success, () => _openCheckIn(booking)),
+                    ),
+                  if (booking.status == 'in_progress')
+                    Expanded(
+                      child: _miniButton('IN PROGRESS', AppColors.info, () => _openCheckIn(booking)),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHistoryCard(BookingModel booking) {
+    final statusColor = _statusColor(booking.status);
+    final statusLabel = _statusLabel(booking.status);
+
+    return Column(
+      children: [
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: AppColors.cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(_statusIcon(booking.status), color: statusColor),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        booking.shopName.isNotEmpty ? booking.shopName : 'Barber Shop',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Text(_formatDate(booking.scheduledStart),
+                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          const SizedBox(width: 8),
+                          Text(_formatTime(booking.scheduledStart),
+                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                        ],
+                      ),
+                      if (booking.paymentMethod.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          '${booking.paymentMethod.toUpperCase()} • ${booking.paymentStatus == 'paid' ? 'Paid' : booking.paymentStatus}',
+                          style: TextStyle(fontSize: 11,
+                            color: booking.paymentStatus == 'paid' ? AppColors.success : AppColors.textMuted),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(statusLabel,
+                    style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.w600)),
+                ),
+              ],
             ),
           ),
+        ),
         if (booking.status == 'completed' && booking.paymentStatus == 'paid')
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -250,6 +413,93 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
           ),
       ],
     );
+  }
+
+  void _openCheckIn(BookingModel booking) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BlocProvider.value(
+          value: context.read<CheckInBloc>(),
+          child: CheckInScreen(bookingId: booking.id),
+        ),
+      ),
+    );
+  }
+
+  void _imComing(BookingModel booking) {
+    context.read<CheckInBloc>().add(ImComing(booking.id));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Notifying the shop...')),
+    );
+  }
+
+  Widget _miniButton(String label, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Center(
+          child: Text(label,
+            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
+        ),
+      ),
+    );
+  }
+
+  String _lateMessage(BookingModel booking) {
+    if (booking.graceExtendedUntil != null) {
+      final gt = DateTime.tryParse(booking.graceExtendedUntil!);
+      if (gt != null) {
+        final rem = gt.difference(DateTime.now());
+        if (rem.isNegative) return 'Grace period expired. Check in now!';
+        return 'Late — grace ends in ${rem.inMinutes} min';
+      }
+    }
+    return 'You\'re late! Please check in.';
+  }
+
+  IconData _statusIcon(String status) {
+    switch (status) {
+      case 'confirmed': return LucideIcons.checkCircle;
+      case 'checked_in': return LucideIcons.logIn;
+      case 'waiting': return LucideIcons.clock;
+      case 'next': return LucideIcons.chevronsRight;
+      case 'in_progress': return LucideIcons.scissors;
+      case 'completed': return LucideIcons.checkCircle;
+      case 'cancelled': return LucideIcons.xCircle;
+      default: return LucideIcons.clock;
+    }
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'confirmed': return AppColors.success;
+      case 'checked_in': return AppColors.info;
+      case 'waiting': return AppColors.warning;
+      case 'next': return AppColors.success;
+      case 'in_progress': return AppColors.info;
+      case 'completed': return AppColors.success;
+      case 'cancelled': return AppColors.error;
+      default: return AppColors.textMuted;
+    }
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'confirmed': return 'Confirmed';
+      case 'checked_in': return 'Checked In';
+      case 'waiting': return 'Waiting';
+      case 'next': return 'You\'re Next';
+      case 'in_progress': return 'In Progress';
+      case 'completed': return 'Completed';
+      case 'cancelled': return 'Cancelled';
+      default: return status;
+    }
   }
 
   String _formatDate(String iso) {

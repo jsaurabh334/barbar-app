@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/barbar-app/backend/internal/auth"
@@ -92,7 +93,9 @@ func (h *BarberHandler) Register(c *gin.Context) {
 		Pincode:                req.Pincode,
 		Latitude:               req.Latitude,
 		Longitude:              req.Longitude,
-		Status:                 models.BarberStatusActive,
+		Status:                 models.BarberStatusInactive,
+		VerificationStatus:     models.BarberVerifPending,
+		IsVerified:             false,
 		StartTime:              req.StartTime,
 		EndTime:                req.EndTime,
 		ExperienceYears:        req.ExperienceYears,
@@ -177,15 +180,30 @@ func (h *BarberHandler) Register(c *gin.Context) {
 		}
 	}
 
-	// Auto-approve for easy testing
-	tx.Model(&barber).Updates(map[string]interface{}{
-		"verification_status": models.BarberVerifApproved,
-		"is_verified":         true,
-	})
-	barber.VerificationStatus = models.BarberVerifApproved
-	barber.IsVerified = true
-
 	tx.Commit()
+
+	// Notify all Admins about new shop registration
+	go func(shopName, city, state string, barberID uuid.UUID) {
+		var admins []models.User
+		if err := h.db.Where("role = ?", models.RoleAdmin).Find(&admins).Error; err == nil {
+			now := time.Now()
+			for _, admin := range admins {
+				notif := models.Notification{
+					UserID:         admin.ID,
+					Role:           string(models.RoleAdmin),
+					Title:          "New Barber Shop Registered",
+					Body:           fmt.Sprintf("New shop '%s' registered in %s, %s. Review details in Admin Console.", shopName, city, state),
+					Type:           models.NotificationType("new_shop_registration"),
+					Category:       models.CategoryAdmin,
+					Priority:       models.PriorityHigh,
+					DeliveryStatus: models.DeliveryStatusDelivered,
+					IsRead:         false,
+					SentAt:         &now,
+				}
+				h.db.Create(&notif)
+			}
+		}
+	}(barber.ShopName, barber.City, barber.State, barber.ID)
 
 	utils.CreatedResponse(c, barber)
 }
@@ -341,6 +359,9 @@ func (h *BarberHandler) ListAvailableSlots(c *gin.Context) {
 		return
 	}
 
+	serviceIDsStr := c.Query("service_ids")
+	staffIDStr := c.Query("staff_id")
+
 	var barber models.Barber
 	if err := h.db.First(&barber, barberID).Error; err != nil {
 		utils.NotFoundResponse(c, "Barber not found")
@@ -355,9 +376,9 @@ func (h *BarberHandler) ListAvailableSlots(c *gin.Context) {
 		return
 	}
 
-	dayOfWeek := int(date.Weekday()) // 0=Sunday, 6=Saturday
+	dayOfWeek := int(date.Weekday())
 
-	// Get weekly schedule override if it exists
+	// Get weekly schedule override
 	var weekly models.BarberAvailability
 	startTime := barber.StartTime
 	endTime := barber.EndTime
@@ -370,7 +391,6 @@ func (h *BarberHandler) ListAvailableSlots(c *gin.Context) {
 		return
 	}
 
-	// Parse slot duration from barber config
 	slotDur := barber.SlotDuration
 	if slotDur <= 0 {
 		slotDur = 30
@@ -379,6 +399,47 @@ func (h *BarberHandler) ListAvailableSlots(c *gin.Context) {
 	if buffer < 0 {
 		buffer = 0
 	}
+
+	// If service_ids provided, compute slot duration from max service duration
+	if serviceIDsStr != "" {
+		serviceIDs := parseUUIDList(serviceIDsStr)
+		if len(serviceIDs) > 0 {
+			var services []models.BarberService
+			h.db.Where("id IN ? AND barber_id = ? AND is_active = ?", serviceIDs, barberID, true).Find(&services)
+			if len(services) == len(serviceIDs) {
+				maxDur := 0
+				for _, svc := range services {
+					if svc.DurationMin > maxDur {
+						maxDur = svc.DurationMin
+					}
+				}
+				if maxDur > 0 {
+					slotDur = maxDur
+				}
+			}
+		}
+	}
+
+	// If staff_id provided, filter slots by staff working hours
+	if staffIDStr != "" {
+		staffID, err := uuid.Parse(staffIDStr)
+		if err == nil {
+			var staff models.BarberStaff
+			if h.db.First(&staff, staffID).Error == nil {
+				if staff.StartTime != "" {
+					startTime = staff.StartTime
+				}
+				if staff.EndTime != "" {
+					endTime = staff.EndTime
+				}
+				if staff.DayOff == dayOfWeek {
+					utils.SuccessResponse(c, []map[string]interface{}{})
+					return
+				}
+			}
+		}
+	}
+
 	step := slotDur + buffer
 	if step <= 0 {
 		step = 30
@@ -395,16 +456,14 @@ func (h *BarberHandler) ListAvailableSlots(c *gin.Context) {
 		breakEnd = be.Hour()*60 + be.Minute()
 	}
 
-	// Fetch existing bookings for this date
 	dayStart := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.Local)
 	dayEnd := dayStart.Add(24 * time.Hour)
 	var existingBookings []models.Booking
 	h.db.Where("barber_id = ? AND scheduled_start >= ? AND scheduled_start < ? AND status IN ?",
 		barberID, dayStart, dayEnd,
-		[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
+		[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusCheckedIn, models.BookingStatusInProgress},
 	).Find(&existingBookings)
 
-	// Build occupied time map: for each existing booking, mark its slot range
 	type occupiedRange struct{ startMin, endMin int }
 	occupied := make([]occupiedRange, 0)
 	for _, b := range existingBookings {
@@ -417,7 +476,6 @@ func (h *BarberHandler) ListAvailableSlots(c *gin.Context) {
 		occupied = append(occupied, occupiedRange{startMin: bMin, endMin: bMin + dur})
 	}
 
-	// Generate slots
 	var slots []map[string]interface{}
 	startMin := startParsed.Hour()*60 + startParsed.Minute()
 	endMin := endParsed.Hour()*60 + endParsed.Minute()
@@ -427,17 +485,14 @@ func (h *BarberHandler) ListAvailableSlots(c *gin.Context) {
 	for slotStart := startMin; slotStart+slotDur <= endMin; slotStart += step {
 		slotEnd := slotStart + slotDur
 
-		// Skip break hours
 		if breakStart >= 0 && slotStart >= breakStart && slotStart < breakEnd {
 			continue
 		}
 
-		// Skip past slots (if today)
 		if isToday && slotStart <= now.Hour()*60+now.Minute() {
 			continue
 		}
 
-		// Check overlap with existing bookings
 		available := true
 		for _, occ := range occupied {
 			if slotStart < occ.endMin && slotEnd > occ.startMin {
@@ -456,6 +511,18 @@ func (h *BarberHandler) ListAvailableSlots(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, slots)
+}
+
+func parseUUIDList(s string) []uuid.UUID {
+	parts := strings.Split(s, ",")
+	var ids []uuid.UUID
+	for _, p := range parts {
+		id, err := uuid.Parse(strings.TrimSpace(p))
+		if err == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
 }
 
 func (h *BarberHandler) ListServices(c *gin.Context) {

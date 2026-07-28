@@ -10,6 +10,9 @@ type BookingStatus string
 const (
 	BookingStatusPending             BookingStatus = "pending"
 	BookingStatusConfirmed           BookingStatus = "confirmed"
+	BookingStatusCheckedIn           BookingStatus = "checked_in"
+	BookingStatusWaiting             BookingStatus = "waiting"
+	BookingStatusNext                BookingStatus = "next"
 	BookingStatusInProgress          BookingStatus = "in_progress"
 	BookingStatusCompleted           BookingStatus = "completed"
 	BookingStatusCancelled           BookingStatus = "cancelled"
@@ -67,6 +70,15 @@ type Booking struct {
 	TravelTimeMin     int           `gorm:"default:0" json:"travel_time_minutes"`
 	TravelCharge      float64       `gorm:"default:0" json:"travel_charge"`
 	StaffID           *uuid.UUID    `gorm:"type:uuid;index" json:"staff_id,omitempty"`
+
+	// Queue & Late flags (events, not statuses)
+	QueueAssignedAt    *time.Time  `json:"queue_assigned_at,omitempty"`
+	IsLate             bool        `gorm:"default:false" json:"is_late"`
+	LateAt             *time.Time  `json:"late_at,omitempty"`
+	LateNotifiedAt     *time.Time  `json:"late_notified_at,omitempty"`
+	GraceExtendedUntil *time.Time  `json:"grace_extended_until,omitempty"`
+	ImComingAt         *time.Time  `json:"im_coming_at,omitempty"`
+	ReminderSentAt     *time.Time  `json:"reminder_sent_at,omitempty"`
 
 	// Relations
 	Barber   *Barber          `gorm:"foreignKey:BarberID" json:"barber,omitempty"`

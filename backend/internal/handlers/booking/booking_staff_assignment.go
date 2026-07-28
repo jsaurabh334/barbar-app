@@ -3,32 +3,28 @@ package booking
 import (
 	"fmt"
 	"time"
+
 	"github.com/barbar-app/backend/internal/models"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-// StaffAssignmentResult holds the result of staff auto-assignment
 type StaffAssignmentResult struct {
-	StaffID          uuid.UUID
-	EstimatedWaitMin int
-	QueuePosition    int
-	TotalDuration    int
-	TotalPrice       float64
-	Services         []models.BarberService // Potentially overridden by StaffService
+	StaffID       uuid.UUID
+	TotalDuration int
+	TotalPrice    float64
+	Services      []models.BarberService
 }
 
-// findBestStaff assigning logic
 func (h *BookingHandler) findBestStaff(
 	tx *gorm.DB,
 	barber models.Barber,
 	requestedStaffID *uuid.UUID,
 	serviceIDs []uuid.UUID,
 	scheduledStart time.Time,
-	_ bool, // isHomeService
+	_ bool,
 ) (*StaffAssignmentResult, error) {
 
-	// 1. Fetch original services to know base price and duration
 	var baseServices []models.BarberService
 	if err := tx.Where("id IN ? AND barber_id = ? AND is_active = ?", serviceIDs, barber.ID, true).Find(&baseServices).Error; err != nil {
 		return nil, fmt.Errorf("services not found")
@@ -37,15 +33,25 @@ func (h *BookingHandler) findBestStaff(
 		return nil, fmt.Errorf("one or more services do not belong to this shop or are inactive")
 	}
 
-	// 2. Fetch active staff
+	totalServiceDuration := 0
+	for _, svc := range baseServices {
+		totalServiceDuration += svc.DurationMin
+	}
+
+	var activeBookings int64
+	tx.Model(&models.Booking{}).Where("barber_id = ? AND status IN ?", barber.ID, []models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusCheckedIn, models.BookingStatusInProgress}).Count(&activeBookings)
+	if int(activeBookings) >= barber.MaxQueueSize {
+		return nil, fmt.Errorf("shop is at full capacity")
+	}
+
 	var staffs []models.BarberStaff
 	query := tx.Preload("Services", "is_active = ?", true).
 		Where("barber_id = ? AND is_active = ?", barber.ID, true)
-	
+
 	if requestedStaffID != nil {
 		query = query.Where("id = ?", *requestedStaffID)
 	}
-	
+
 	if err := query.Find(&staffs).Error; err != nil {
 		return nil, fmt.Errorf("error fetching staff")
 	}
@@ -55,19 +61,22 @@ func (h *BookingHandler) findBestStaff(
 	}
 
 	var bestResult *StaffAssignmentResult
-	minWait := -1
 
-	// Helper to check working hours
 	tStr := scheduledStart.Format("15:04")
-	dayOfWeek := int(scheduledStart.Weekday()) // 0=Sun, 1=Mon...
+	dayOfWeek := int(scheduledStart.Weekday())
 
 	for _, staff := range staffs {
-		// a. Check DayOff
 		if staff.DayOff == dayOfWeek {
-			continue // Staff is off today
+			continue
 		}
 
-		// b. Check Working hours (use Staff override if exists, else Shop)
+		if staff.LeaveStart != nil && staff.LeaveEnd != nil {
+			if (scheduledStart.After(*staff.LeaveStart) || scheduledStart.Equal(*staff.LeaveStart)) &&
+				(scheduledStart.Before(*staff.LeaveEnd) || scheduledStart.Equal(*staff.LeaveEnd)) {
+				continue
+			}
+		}
+
 		startTime := staff.StartTime
 		endTime := staff.EndTime
 		if startTime == "" || endTime == "" {
@@ -77,12 +86,23 @@ func (h *BookingHandler) findBestStaff(
 
 		if startTime != "" && endTime != "" {
 			if tStr < startTime || tStr >= endTime {
-				continue // Outside working hours
+				continue
 			}
 		}
 
-		// c. Check if Staff can perform ALL requested services
-		// and calculate overridden prices/durations
+		bookingEndTime := scheduledStart.Add(time.Duration(totalServiceDuration) * time.Minute)
+		if staff.BreakStart != "" && staff.BreakEnd != "" {
+			bs, _ := time.Parse("15:04", staff.BreakStart)
+			be, _ := time.Parse("15:04", staff.BreakEnd)
+			breakStartMin := bs.Hour()*60 + bs.Minute()
+			breakEndMin := be.Hour()*60 + be.Minute()
+			bookingStartMin := scheduledStart.Hour()*60 + scheduledStart.Minute()
+			bookingEndMin := bookingEndTime.Hour()*60 + bookingEndTime.Minute()
+			if bookingStartMin < breakEndMin && bookingEndMin > breakStartMin {
+				continue
+			}
+		}
+
 		canPerformAll := true
 		staffServicesMap := make(map[uuid.UUID]models.StaffService)
 		for _, ss := range staff.Services {
@@ -99,7 +119,6 @@ func (h *BookingHandler) findBestStaff(
 				canPerformAll = false
 				break
 			}
-			// Clone the base service for this staff
 			svc := bs
 			if ss.Price > 0 {
 				svc.Price = ss.Price
@@ -116,74 +135,28 @@ func (h *BookingHandler) findBestStaff(
 			continue
 		}
 
-		// d. Check Overlapping Bookings (Strict Conflict Resolution)
 		newStart := scheduledStart
-		newEnd := scheduledStart.Add(time.Duration(currentDuration + barber.BufferBetweenSlots) * time.Minute)
+		newEnd := scheduledStart.Add(time.Duration(currentDuration+barber.BufferBetweenSlots) * time.Minute)
 
 		var overlapCount int64
 		tx.Model(&models.Booking{}).Where("staff_id = ? AND status IN ? AND scheduled_start < ? AND scheduled_end > ?",
 			staff.ID,
 			[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
 			newEnd, newStart).Count(&overlapCount)
-		
+
 		if overlapCount > 0 {
 			if requestedStaffID != nil {
 				return nil, fmt.Errorf("Selected staff is already booked during this time slot.")
 			}
-			continue // Skip this staff, they have an overlapping booking
+			continue
 		}
 
-		// e. Calculate Queue Position & Estimated Wait for this staff
-		var aheadBookings []models.Booking
-		tx.Where("staff_id = ? AND status IN ? AND (scheduled_start < ? OR (scheduled_start = ? AND created_at < ?))",
-			staff.ID,
-			[]models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress},
-			scheduledStart, scheduledStart, time.Now()).
-			Order("queue_position ASC, scheduled_start ASC").
-			Find(&aheadBookings)
-
-		isWalkIn := scheduledStart.Before(time.Now().Add(30 * time.Minute))
-		estimatedWait := 0
-		
-		if isWalkIn {
-			for _, ab := range aheadBookings {
-				dur := ab.TotalDuration
-				if dur <= 0 {
-					dur = barber.SlotDuration
-				}
-				if ab.Status == models.BookingStatusInProgress {
-					start := ab.CreatedAt
-					if ab.ActualStart != nil {
-						start = *ab.ActualStart
-					} else if !ab.ScheduledStart.IsZero() {
-						start = ab.ScheduledStart
-					}
-					elapsed := int(time.Since(start).Minutes())
-					remaining := dur - elapsed
-					if remaining < 0 {
-						remaining = 0
-					}
-					estimatedWait += remaining + barber.BufferBetweenSlots
-				} else {
-					estimatedWait += dur + barber.BufferBetweenSlots
-				}
-			}
-		}
-
-		// If home service, skip queue logic and just check if they are free? 
-		// For simplicity, we just use estimatedWait as the metric for all.
-		queuePos := len(aheadBookings) + 1
-
-		// Pick Earliest Available (min estimated wait)
-		if minWait == -1 || estimatedWait < minWait {
-			minWait = estimatedWait
+		if bestResult == nil {
 			bestResult = &StaffAssignmentResult{
-				StaffID:          staff.ID,
-				EstimatedWaitMin: estimatedWait,
-				QueuePosition:    queuePos,
-				TotalDuration:    currentDuration,
-				TotalPrice:       currentPrice,
-				Services:         currentServices,
+				StaffID:       staff.ID,
+				TotalDuration: currentDuration,
+				TotalPrice:    currentPrice,
+				Services:      currentServices,
 			}
 		}
 	}

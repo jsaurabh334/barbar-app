@@ -21,6 +21,9 @@ import 'barber_availability_screen.dart';
 import 'barber_documents_screen.dart';
 import 'barber_home_service_screen.dart';
 import 'barber_staff_screen.dart';
+import 'barber/barber_settings_screen.dart';
+import '../bloc/barber_services/barber_services_bloc.dart';
+import '../bloc/barber_documents/barber_documents_bloc.dart';
 
 import '../bloc/auth/auth_bloc.dart';
 import '../bloc/auth/auth_event.dart';
@@ -208,24 +211,30 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
     final pct = _getProfileCompletionPercent();
     if (pct >= 100) return const SizedBox.shrink();
     final color = pct < 50 ? AppColors.error : Colors.orange;
-    return GlassCard(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Icon(LucideIcons.alertTriangle, color: color, size: 20),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Profile ${pct}% complete', style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 13)),
-                  const SizedBox(height: 4),
-                  const Text('Complete your shop details in Settings', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                ],
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => BarberProfileScreen(barberRepository: widget.barberRepository)));
+      },
+      child: GlassCard(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Icon(LucideIcons.alertTriangle, color: color, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Profile $pct% complete — Tap to complete', style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 13)),
+                    const SizedBox(height: 4),
+                    const Text('Complete your shop details, address & photos', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  ],
+                ),
               ),
-            ),
-          ],
+              Icon(LucideIcons.chevronRight, color: color, size: 18),
+            ],
+          ),
         ),
       ),
     );
@@ -310,6 +319,11 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
           label: 'Today',
           value: '$_todayBookings',
           color: AppColors.info,
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Today\'s Total Bookings: $_todayBookings'), backgroundColor: AppColors.info),
+            );
+          },
         ),
         const SizedBox(width: 12),
         _buildStatCard(
@@ -317,6 +331,25 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
           label: 'Earnings',
           value: '₹${_earningsToday.toStringAsFixed(0)}',
           color: AppColors.success,
+          onTap: () async {
+            try {
+              final res = await widget.barberRepository.getEarnings(period: 'today');
+              final total = (res['total_earnings'] as num?)?.toDouble() ?? _earningsToday;
+              if (mounted) {
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: AppColors.cardBg,
+                    title: const Text('Today\'s Earnings', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    content: Text('Total Revenue: ₹${total.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.textSecondary)),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK', style: TextStyle(color: AppColors.primary))),
+                    ],
+                  ),
+                );
+              }
+            } catch (_) {}
+          },
         ),
         const SizedBox(width: 12),
         _buildStatCard(
@@ -324,6 +357,9 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
           label: 'Home Svc',
           value: '$_pendingHomeServices',
           color: AppColors.warning,
+          onTap: () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const BarberHomeServiceScreen()));
+          },
         ),
         const SizedBox(width: 12),
         _buildStatCard(
@@ -331,6 +367,20 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
           label: 'Reviews',
           value: '$_pendingReviews',
           color: AppColors.primary,
+          onTap: () {
+            final rating = (_barberData?['rating'] as num?)?.toDouble() ?? 5.0;
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                backgroundColor: AppColors.cardBg,
+                title: const Text('Customer Reviews', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                content: Text('Average Rating: $rating ⭐\nPending Moderation: $_pendingReviews', style: const TextStyle(color: AppColors.textSecondary)),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close', style: TextStyle(color: AppColors.primary))),
+                ],
+              ),
+            );
+          },
         ),
       ],
     );
@@ -341,26 +391,30 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
     required String label,
     required String value,
     required Color color,
+    VoidCallback? onTap,
   }) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-        decoration: BoxDecoration(
-          color: AppColors.cardBg,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color),
-            ),
-            const SizedBox(height: 2),
-            Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
-          ],
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+          decoration: BoxDecoration(
+            color: AppColors.cardBg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(height: 8),
+              Text(
+                value,
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color),
+              ),
+              const SizedBox(height: 2),
+              Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
+            ],
+          ),
         ),
       ),
     );
@@ -781,13 +835,43 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
                     Navigator.pop(context);
                     Navigator.push(context, MaterialPageRoute(builder: (_) => BarberProfileScreen(barberRepository: widget.barberRepository)));
                   }),
+                  _buildDrawerItem(LucideIcons.scissors, 'Services & Catalog', () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => BlocProvider(
+                      create: (context) => BarberServicesBloc(widget.barberRepository),
+                      child: const BarberServicesScreen(),
+                    )));
+                  }),
                   _buildDrawerItem(LucideIcons.users, 'Staff Management', () {
                     Navigator.pop(context);
                     Navigator.push(context, MaterialPageRoute(builder: (_) => BarberStaffScreen()));
                   }),
+                  _buildDrawerItem(LucideIcons.clock, 'Shift & Working Hours', () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => BlocProvider(
+                      create: (context) => BarberAvailabilityBloc(widget.barberRepository),
+                      child: const BarberAvailabilityScreen(),
+                    )));
+                  }),
+                  _buildDrawerItem(LucideIcons.home, 'Home Service Requests', () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const BarberHomeServiceScreen()));
+                  }),
+                  _buildDrawerItem(LucideIcons.fileText, 'Documents & License', () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => BlocProvider(
+                      create: (context) => BarberDocumentsBloc(widget.barberRepository),
+                      child: const BarberDocumentsScreen(),
+                    )));
+                  }),
                   _buildDrawerItem(LucideIcons.settings, 'Settings', () {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings coming soon')));
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => BarberSettingsScreen(barberRepository: widget.barberRepository),
+                      ),
+                    );
                   }),
                 ],
               ),

@@ -25,6 +25,15 @@ class BookingModel {
   final String? customerNotes;
   final String? staffId;
   final Map<String, dynamic>? staff;
+  final String? queueAssignedAt;
+  final bool isLate;
+  final String? lateAt;
+  final String? graceExtendedUntil;
+  final String? imComingAt;
+  final bool canCallShop;
+  final bool canCallCustomer;
+  final String? maskedShopPhone;
+  final String? maskedCustomerPhone;
 
   BookingModel({
     required this.id,
@@ -50,6 +59,15 @@ class BookingModel {
     this.customerNotes,
     this.staffId,
     this.staff,
+    this.queueAssignedAt,
+    this.isLate = false,
+    this.lateAt,
+    this.graceExtendedUntil,
+    this.imComingAt,
+    this.canCallShop = false,
+    this.canCallCustomer = false,
+    this.maskedShopPhone,
+    this.maskedCustomerPhone,
   });
 
   factory BookingModel.fromJson(Map<String, dynamic> json) {
@@ -101,6 +119,15 @@ class BookingModel {
       customerNotes: json['customer_notes'] as String?,
       staffId: json['staff_id'] as String?,
       staff: json['staff'] as Map<String, dynamic>?,
+      queueAssignedAt: json['queue_assigned_at'] as String?,
+      isLate: json['is_late'] as bool? ?? false,
+      lateAt: json['late_at'] as String?,
+      graceExtendedUntil: json['grace_extended_until'] as String?,
+      imComingAt: json['im_coming_at'] as String?,
+      canCallShop: json['can_call_shop'] as bool? ?? false,
+      canCallCustomer: json['can_call_customer'] as bool? ?? false,
+      maskedShopPhone: json['shop_phone'] as String?,
+      maskedCustomerPhone: json['customer_phone'] as String?,
     );
   }
 
@@ -127,6 +154,11 @@ class BookingModel {
       'customer': customer,
       'travel_time_min': travelTimeMin,
       'customer_notes': customerNotes,
+      'queue_assigned_at': queueAssignedAt,
+      'is_late': isLate,
+      'late_at': lateAt,
+      'grace_extended_until': graceExtendedUntil,
+      'im_coming_at': imComingAt,
     };
   }
 
@@ -152,6 +184,13 @@ class BookingModel {
     Map<String, dynamic>? customer,
     int? travelTimeMin,
     String? customerNotes,
+    String? staffId,
+    Map<String, dynamic>? staff,
+    String? queueAssignedAt,
+    bool? isLate,
+    String? lateAt,
+    String? graceExtendedUntil,
+    String? imComingAt,
   }) {
     return BookingModel(
       id: id ?? this.id,
@@ -175,6 +214,13 @@ class BookingModel {
       customer: customer ?? this.customer,
       travelTimeMin: travelTimeMin ?? this.travelTimeMin,
       customerNotes: customerNotes ?? this.customerNotes,
+      staffId: staffId ?? this.staffId,
+      staff: staff ?? this.staff,
+      queueAssignedAt: queueAssignedAt ?? this.queueAssignedAt,
+      isLate: isLate ?? this.isLate,
+      lateAt: lateAt ?? this.lateAt,
+      graceExtendedUntil: graceExtendedUntil ?? this.graceExtendedUntil,
+      imComingAt: imComingAt ?? this.imComingAt,
     );
   }
 }

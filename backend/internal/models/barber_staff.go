@@ -1,6 +1,8 @@
 package models
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 )
 
@@ -36,6 +38,10 @@ type BarberStaff struct {
 	StartTime   string  `gorm:"size:5;default:'09:00'" json:"start_time"`
 	EndTime     string  `gorm:"size:5;default:'21:00'" json:"end_time"`
 	DayOff      int     `gorm:"default:0" json:"day_off"` // 0=Sun, 1=Mon, etc.
+	BreakStart  string  `gorm:"size:5" json:"break_start,omitempty"`
+	BreakEnd    string  `gorm:"size:5" json:"break_end,omitempty"`
+	LeaveStart  *time.Time `json:"leave_start,omitempty"`
+	LeaveEnd    *time.Time `json:"leave_end,omitempty"`
 
 	// Relations
 	Barber *Barber `gorm:"foreignKey:BarberID" json:"barber,omitempty"`

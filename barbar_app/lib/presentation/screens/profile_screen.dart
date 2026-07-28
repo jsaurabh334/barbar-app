@@ -377,16 +377,18 @@ class _ProfileBodyState extends State<_ProfileBody> with SingleTickerProviderSta
             ),
           ),
           const SizedBox(height: 8),
-          _buildMenuTile(
-            icon: LucideIcons.mapPin,
-            title: 'My Addresses',
-            subtitle: 'Saved delivery addresses',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => AddressScreen(onAddressSelected: (_) {})),
+          if (widget.user.role != 'admin') ...[
+            _buildMenuTile(
+              icon: LucideIcons.mapPin,
+              title: 'My Addresses',
+              subtitle: 'Saved delivery addresses',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => AddressScreen(onAddressSelected: (_) {})),
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
+            const SizedBox(height: 24),
+          ],
 
           // Support & More
           _buildSectionTitle('SUPPORT & MORE'),
@@ -711,6 +713,7 @@ class _ProfileBodyState extends State<_ProfileBody> with SingleTickerProviderSta
   }
 
   Widget _buildQuickActions() {
+    final isAdmin = widget.user.role == 'admin';
     return Row(
       children: [
         Expanded(
@@ -725,18 +728,35 @@ class _ProfileBodyState extends State<_ProfileBody> with SingleTickerProviderSta
           ),
         ),
         const SizedBox(width: 12),
-        Expanded(
-          child: _buildQuickActionCard(
-            icon: LucideIcons.mapPin,
-            label: 'Addresses',
-            color: AppColors.info,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => AddressScreen(onAddressSelected: (_) {})),
+        if (!isAdmin) ...[
+          Expanded(
+            child: _buildQuickActionCard(
+              icon: LucideIcons.mapPin,
+              label: 'Addresses',
+              color: AppColors.info,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => AddressScreen(onAddressSelected: (_) {})),
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 12),
+          const SizedBox(width: 12),
+        ],
+        if (isAdmin) ...[
+          Expanded(
+            child: _buildQuickActionCard(
+              icon: LucideIcons.barChart3,
+              label: 'Analytics',
+              color: AppColors.info,
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('View Dashboard for overall platform analytics')),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 12),
+        ],
         Expanded(
           child: _buildQuickActionCard(
             icon: LucideIcons.settings,

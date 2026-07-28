@@ -97,8 +97,8 @@ class BookingRepositoryImpl implements BookingRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getAvailableSlots(String barberId, String date) async {
-    return await _remoteDataSource.getAvailableSlots(barberId, date);
+  Future<List<Map<String, dynamic>>> getAvailableSlots(String barberId, String date, {String? serviceIds, String? staffId}) async {
+    return await _remoteDataSource.getAvailableSlots(barberId, date, serviceIds: serviceIds, staffId: staffId);
   }
 
   @override
@@ -114,5 +114,45 @@ class BookingRepositoryImpl implements BookingRepository {
   @override
   Future<void> rejectHomeService(String bookingId, String reason) async {
     await _remoteDataSource.rejectHomeService(bookingId, reason);
+  }
+
+  @override
+  Future<void> checkIn(String bookingId, String method, {String? token, double? lat, double? lng}) async {
+    await _remoteDataSource.checkIn(bookingId, method, token: token, lat: lat, lng: lng);
+  }
+
+  @override
+  Future<void> imComing(String bookingId) async {
+    await _remoteDataSource.imComing(bookingId);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getCallPermission(String bookingId) async {
+    return await _remoteDataSource.getCallPermission(bookingId);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getTodayQueue({String? staffId}) async {
+    return await _remoteDataSource.getTodayQueue(staffId: staffId);
+  }
+
+  @override
+  Future<void> skipCustomer(String bookingId) async {
+    await _remoteDataSource.skipCustomer(bookingId);
+  }
+
+  @override
+  Future<void> startService(String bookingId) async {
+    await _remoteDataSource.startService(bookingId);
+  }
+
+  @override
+  Future<void> completeService(String bookingId) async {
+    await _remoteDataSource.completeService(bookingId);
+  }
+
+  @override
+  Future<void> markNoShow(String bookingId) async {
+    await _remoteDataSource.markNoShow(bookingId);
   }
 }

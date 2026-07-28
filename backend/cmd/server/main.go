@@ -18,6 +18,7 @@ import (
 	deliverySvc "github.com/barbar-app/backend/internal/services/delivery"
 	notifService "github.com/barbar-app/backend/internal/services/notification"
 	orderService "github.com/barbar-app/backend/internal/services/order"
+	queueService "github.com/barbar-app/backend/internal/services/queue"
 	"github.com/barbar-app/backend/internal/utils"
 	"github.com/barbar-app/backend/internal/websocket"
 )
@@ -73,6 +74,11 @@ func main() {
 
 	// Start stale presence cleanup
 	presenceSvc.StartStalePresenceCleanup(context.Background())
+
+	// Initialize and start BookingScheduler (queue assign + late + no-show)
+	queueSvc := queueService.NewQueueService(db, hub, dispatcher)
+	bookingScheduler := queueService.NewBookingScheduler(queueSvc, 30*time.Second, 15, 30)
+	bookingScheduler.Start(context.Background())
 
 	// Setup Router
 	router := routes.SetupRouter(db, cfg, jwtManager, hub, notifSvc, dispatcher, orderSvc, presenceSvc)

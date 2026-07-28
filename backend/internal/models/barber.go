@@ -58,6 +58,7 @@ type Barber struct {
 	IsFeatured         bool                     `gorm:"default:false;index" json:"is_featured"`
 	IsAvailable        bool                     `gorm:"default:true;index" json:"is_available"`
 	CurrentQueueLength int                      `gorm:"default:0" json:"current_queue_length"`
+	QueueVersion       int64                    `gorm:"default:0" json:"queue_version"`
 	AverageWaitTime    float64                  `gorm:"default:0" json:"average_wait_time"`
 	Tags               JSONB                    `gorm:"type:jsonb" json:"tags,omitempty"`
 	BusinessDays       JSONB                    `gorm:"type:jsonb" json:"business_days,omitempty"`

@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:barbar_app/presentation/bloc/admin/admin_barber_details_bloc.dart';
 import 'package:barbar_app/domain/repositories/admin_repository.dart';
 import 'package:intl/intl.dart';
 import 'package:barbar_app/core/utils/status_helper.dart';
+import 'package:barbar_app/core/theme/app_theme.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AdminBarberDetailsScreen extends StatelessWidget {
   final String barberId;
@@ -30,25 +34,31 @@ class _BarberDetailsView extends StatefulWidget {
 }
 
 class _BarberDetailsViewState extends State<_BarberDetailsView> {
-
   void _showRejectDialog(BuildContext context, String barberId) {
     final reasonController = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Reject Application'),
+        backgroundColor: const Color(0xFF1E1E2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Reject Application', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
         content: TextField(
           controller: reasonController,
-          decoration: const InputDecoration(
-            labelText: 'Reason',
-            hintText: 'e.g. Shop license is blurred',
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            labelText: 'Reason for rejection',
+            labelStyle: const TextStyle(color: Colors.white70),
+            hintText: 'e.g. Invalid shop license, blurred photos',
+            hintStyle: const TextStyle(color: Colors.white30),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.white24)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary)),
           ),
           maxLines: 2,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -58,8 +68,11 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
                     RejectBarberDetailsEvent(barberId, reasonController.text.trim()),
                   );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Reject'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Reject', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -71,19 +84,26 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Reject Document'),
+        backgroundColor: const Color(0xFF1E1E2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Reject Document', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
         content: TextField(
           controller: reasonController,
-          decoration: const InputDecoration(
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
             labelText: 'Rejection Reason',
-            hintText: 'e.g. Image is blurry, name mismatch',
+            labelStyle: const TextStyle(color: Colors.white70),
+            hintText: 'e.g. Image blurry, name mismatch',
+            hintStyle: const TextStyle(color: Colors.white30),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.white24)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary)),
           ),
           maxLines: 2,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -93,8 +113,11 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
                     RejectKycDocumentEvent(documentId, reasonController.text.trim()),
                   );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Reject'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Reject', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -102,7 +125,6 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
   }
 
   void _showImageViewer(BuildContext context, String url, String title) {
-    // Advanced image viewer: zoom, rotate, download
     double _rotation = 0;
     showDialog(
       context: context,
@@ -124,9 +146,9 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
                         child: CachedNetworkImage(
                           imageUrl: url,
                           fit: BoxFit.contain,
-                          placeholder: (_, __) => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                          placeholder: (_, __) => const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
                           errorWidget: (_, __, ___) => const Center(
-                            child: Icon(Icons.broken_image, color: Colors.white, size: 50),
+                            child: Icon(LucideIcons.imageOff, color: Colors.white54, size: 50),
                           ),
                         ),
                       ),
@@ -136,7 +158,7 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
                     top: 40,
                     right: 20,
                     child: IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                      icon: const Icon(LucideIcons.x, color: Colors.white, size: 28),
                       onPressed: () => Navigator.pop(ctx),
                     ),
                   ),
@@ -148,24 +170,16 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.rotate_left, color: Colors.white, size: 30),
+                          icon: const Icon(LucideIcons.rotateCcw, color: Colors.white, size: 26),
                           onPressed: () {
-                            setState(() => _rotation -= 1.5708); // -90 deg
+                            setState(() => _rotation -= 1.5708);
                           },
                         ),
                         const SizedBox(width: 20),
                         IconButton(
-                          icon: const Icon(Icons.rotate_right, color: Colors.white, size: 30),
+                          icon: const Icon(LucideIcons.rotateCw, color: Colors.white, size: 26),
                           onPressed: () {
-                            setState(() => _rotation += 1.5708); // +90 deg
-                          },
-                        ),
-                        const SizedBox(width: 20),
-                        IconButton(
-                          icon: const Icon(Icons.download, color: Colors.white, size: 30),
-                          onPressed: () {
-                            // Mock download
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Downloading image...')));
+                            setState(() => _rotation += 1.5708);
                           },
                         ),
                       ],
@@ -176,7 +190,7 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
                     left: 20,
                     child: Text(
                       title,
-                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   )
                 ],
@@ -192,44 +206,54 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Approve this barber?'),
-        content: const Text('Are you sure you want to approve this application? They will become active immediately.'),
+        backgroundColor: const Color(0xFF1E1E2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Approve Barber Shop?', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: const Text('This shop will be approved and become active immediately on Barbar.', style: TextStyle(color: Colors.white70)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
               context.read<AdminBarberDetailsBloc>().add(ApproveBarberDetailsEvent(barberId));
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: const Text('Approve'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Approve', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
-  
+
   void _showSuspendDialog(BuildContext context, String barberId) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Suspend Barber?'),
-        content: const Text('Are you sure you want to suspend this barber? They will be hidden from the map.'),
+        backgroundColor: const Color(0xFF1E1E2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Suspend Barber Shop?', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: const Text('Are you sure you want to suspend this barber? They will be hidden from customer search.', style: TextStyle(color: Colors.white70)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
               context.read<AdminBarberDetailsBloc>().add(SuspendBarberDetailsEvent(barberId));
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            child: const Text('Suspend'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Suspend', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -239,24 +263,43 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF0F0F15),
       appBar: AppBar(
-        title: const Text('Barber Details'),
+        backgroundColor: const Color(0xFF0F0F15),
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(LucideIcons.arrowLeft, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          'Barber Details',
+          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+        ),
       ),
       body: BlocConsumer<AdminBarberDetailsBloc, AdminBarberDetailsState>(
         listener: (context, state) {
           if (state is AdminBarberDetailsActionSuccess) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message, style: const TextStyle(color: Colors.white)), backgroundColor: Colors.green),
+              SnackBar(
+                content: Text(state.message, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600)),
+                backgroundColor: Colors.green,
+                behavior: SnackBarBehavior.floating,
+              ),
             );
           } else if (state is AdminBarberDetailsError) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message), backgroundColor: Colors.red),
+              SnackBar(
+                content: Text(state.message, style: GoogleFonts.outfit(color: Colors.white)),
+                backgroundColor: Colors.redAccent,
+                behavior: SnackBarBehavior.floating,
+              ),
             );
           }
         },
         builder: (context, state) {
           if (state is AdminBarberDetailsLoading || state is AdminBarberDetailsInitial) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
           }
 
           if (state is AdminBarberDetailsLoaded) {
@@ -269,184 +312,355 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
               }
             }
 
+            final isApproved = StatusHelper.isApproved(barber.verificationStatus);
+            final isPending = StatusHelper.isPending(barber.verificationStatus);
+            final statusColor = isApproved
+                ? Colors.greenAccent
+                : (isPending ? Colors.orangeAccent : Colors.redAccent);
+
             return SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // --- Header ---
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 40,
-                        backgroundImage: barber.shopImage != null ? NetworkImage(barber.shopImage!) : null,
-                        child: barber.shopImage == null ? const Icon(Icons.store, size: 40) : null,
+                  // --- Glassmorphic Header Card ---
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16.0),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF1E1E2E),
+                          const Color(0xFF141420),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(barber.shopName, style: Theme.of(context).textTheme.headlineSmall),
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: StatusHelper.isApproved(barber.verificationStatus) ? Colors.green.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                (barber.verificationStatus ?? 'pending').toUpperCase(),
-                                style: TextStyle(
-                                  color: StatusHelper.isApproved(barber.verificationStatus) ? Colors.green : Colors.orange,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text("Submitted: $submittedDate", style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                          ],
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
                         ),
-                      )
-                    ],
-                  ),
-                  const Divider(height: 32),
-
-                  // --- Owner Information ---
-                  const Text("Owner Information", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.person),
-                    title: Text(barber.ownerName ?? 'N/A'),
-                    subtitle: Text(barber.phone ?? 'N/A'),
-                  ),
-                  const Divider(height: 32),
-
-                  // --- Shop Information ---
-                  const Text("Shop Information", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.location_on),
-                    title: Text("${barber.address}"),
-                    subtitle: Text("${barber.city}"),
-                  ),
-                  const Divider(height: 32),
-                  
-                  // --- Location ---
-                  const Text("Location", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Text("Lat: ${barber.latitude}, Lng: ${barber.longitude}"),
-                  TextButton.icon(
-                    onPressed: () {
-                      // Open maps logic
-                    },
-                    icon: const Icon(Icons.map),
-                    label: const Text("Open in Maps"),
-                  ),
-                  const Divider(height: 32),
-
-                  // --- Services ---
-                  const Text("Services", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  if (barber.services != null && barber.services!.isNotEmpty)
-                    DataTable(
-                      columns: const [
-                        DataColumn(label: Text('Service')),
-                        DataColumn(label: Text('Duration')),
-                        DataColumn(label: Text('Price')),
                       ],
-                      rows: barber.services!.map((svc) {
-                        return DataRow(cells: [
-                          DataCell(Text(svc['name'] ?? 'N/A')),
-                          DataCell(Text("${svc['duration_minutes'] ?? 0} min")),
-                          DataCell(Text("₹${svc['price'] ?? 0}")),
-                        ]);
-                      }).toList(),
-                    )
-                  else
-                    const Text("No services added."),
-                  const Divider(height: 32),
-
-                  // --- Documents (KYC) ---
-                  const Text("Documents (KYC)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  if (state.kycDocuments.isNotEmpty)
-                    ...state.kycDocuments.map((doc) => Card(
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.primary, width: 2),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(40),
+                            child: (barber.fullShopImage != null && barber.fullShopImage!.isNotEmpty)
+                                ? CachedNetworkImage(
+                                    imageUrl: barber.fullShopImage!,
+                                    width: 72,
+                                    height: 72,
+                                    fit: BoxFit.cover,
+                                    placeholder: (_, __) => Container(
+                                      width: 72,
+                                      height: 72,
+                                      color: const Color(0xFF2B2B3D),
+                                      child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
+                                    ),
+                                    errorWidget: (_, __, ___) => Container(
+                                      width: 72,
+                                      height: 72,
+                                      color: const Color(0xFF2B2B3D),
+                                      child: const Icon(LucideIcons.scissors, size: 36, color: AppColors.primary),
+                                    ),
+                                  )
+                                : Container(
+                                    width: 72,
+                                    height: 72,
+                                    color: const Color(0xFF2B2B3D),
+                                    child: const Icon(LucideIcons.scissors, size: 36, color: AppColors.primary),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              ListTile(
-                                leading: const Icon(Icons.file_present),
-                                title: Text(doc.docType),
-                                subtitle: Text(
-                                  doc.status.toUpperCase(),
-                                  style: TextStyle(
-                                    color: doc.status == 'approved' ? Colors.green : (doc.status == 'rejected' ? Colors.red : Colors.orange),
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.zoom_in),
-                                      onPressed: () => _showImageViewer(context, doc.docFrontUrl, doc.docType),
-                                      tooltip: 'View Document',
-                                    ),
-                                  ],
+                              Text(
+                                barber.shopName,
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              if (doc.status == 'pending' || doc.status == 'under_review')
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: statusColor.withOpacity(0.5), width: 1),
+                                    ),
+                                    child: Text(
+                                      (barber.verificationStatus ?? 'pending').toUpperCase(),
+                                      style: GoogleFonts.outfit(
+                                        color: statusColor,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 1,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(LucideIcons.calendar, size: 13, color: Colors.white54),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    submittedDate,
+                                    style: GoogleFonts.outfit(color: Colors.white54, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        )
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // --- Owner Information ---
+                  _buildSectionCard(
+                    title: "Owner Information",
+                    icon: LucideIcons.userCheck,
+                    child: Column(
+                      children: [
+                        _buildDetailRow(LucideIcons.user, "Name", barber.ownerName ?? 'N/A'),
+                        const Divider(color: Colors.white10, height: 16),
+                        _buildDetailRow(LucideIcons.phone, "Phone", barber.phone ?? 'N/A'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // --- Shop Information & Location ---
+                  _buildSectionCard(
+                    title: "Shop & Location",
+                    icon: LucideIcons.mapPin,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildDetailRow(LucideIcons.navigation, "City", "${barber.city ?? ''}, ${barber.state ?? ''}"),
+                        const Divider(color: Colors.white10, height: 16),
+                        _buildDetailRow(
+                          LucideIcons.globe,
+                          "Coordinates",
+                          "Lat: ${barber.latitude ?? 0.0}, Lng: ${barber.longitude ?? 0.0}",
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              final url = Uri.parse("https://www.google.com/maps/search/?api=1&query=${barber.latitude},${barber.longitude}");
+                              if (await canLaunchUrl(url)) {
+                                await launchUrl(url, mode: LaunchMode.externalApplication);
+                              }
+                            },
+                            icon: const Icon(LucideIcons.map, size: 16, color: AppColors.primary),
+                            label: Text("Open in Google Maps", style: GoogleFonts.outfit(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: AppColors.primary.withOpacity(0.5)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // --- Services Catalog ---
+                  _buildSectionCard(
+                    title: "Services Catalog",
+                    icon: LucideIcons.scissors,
+                    child: (barber.services != null && barber.services!.isNotEmpty)
+                        ? Column(
+                            children: barber.services!.map((svc) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 6.0),
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF141420),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.white12),
+                                  ),
                                   child: Row(
                                     children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primary.withOpacity(0.1),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(LucideIcons.scissors, size: 16, color: AppColors.primary),
+                                      ),
+                                      const SizedBox(width: 12),
                                       Expanded(
-                                        child: OutlinedButton(
-                                          onPressed: () => _showKycRejectDialog(context, doc.id),
-                                          style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
-                                          child: const Text('REJECT'),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              svc['name'] ?? 'N/A',
+                                              style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                            ),
+                                            Text(
+                                              "${svc['duration_minutes'] ?? 30} mins duration",
+                                              style: GoogleFonts.outfit(color: Colors.white54, fontSize: 12),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: ElevatedButton(
-                                          onPressed: () {
-                                            context.read<AdminBarberDetailsBloc>().add(ApproveKycDocumentEvent(doc.id));
-                                          },
-                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                                          child: const Text('APPROVE'),
+                                      Text(
+                                        "₹${svc['price'] ?? 0}",
+                                        style: GoogleFonts.outfit(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 16,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                              if (doc.rejectReason != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
-                                  child: Text('Reason: ${doc.rejectReason}', style: const TextStyle(color: Colors.red)),
+                              );
+                            }).toList(),
+                          )
+                        : Text("No services registered.", style: GoogleFonts.outfit(color: Colors.white54)),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // --- Documents (KYC) ---
+                  _buildSectionCard(
+                    title: "KYC Documents",
+                    icon: LucideIcons.fileCheck,
+                    child: (state.kycDocuments.isNotEmpty)
+                        ? Column(
+                            children: state.kycDocuments.map((doc) {
+                              final docApproved = doc.status == 'approved';
+                              final docRejected = doc.status == 'rejected';
+                              final docColor = docApproved
+                                  ? Colors.greenAccent
+                                  : (docRejected ? Colors.redAccent : Colors.orangeAccent);
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF141420),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: Colors.white12),
                                 ),
-                            ],
-                          ),
-                        ))
-                  else
-                    const Text("No KYC documents found."),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(LucideIcons.fileText, color: AppColors.primary, size: 20),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            doc.docType.replaceAll('_', ' ').toUpperCase(),
+                                            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: docColor.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: docColor.withOpacity(0.4)),
+                                          ),
+                                          child: Text(
+                                            doc.status.toUpperCase(),
+                                            style: GoogleFonts.outfit(color: docColor, fontWeight: FontWeight.bold, fontSize: 10),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(LucideIcons.eye, color: Colors.white70, size: 20),
+                                          onPressed: () => _showImageViewer(context, doc.docFrontUrl, doc.docType),
+                                          tooltip: 'View Image',
+                                        ),
+                                      ],
+                                    ),
+                                    if (doc.status == 'pending' || doc.status == 'under_review') ...[
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: OutlinedButton(
+                                              onPressed: () => _showKycRejectDialog(context, doc.id),
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: Colors.redAccent,
+                                                side: const BorderSide(color: Colors.redAccent),
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                              ),
+                                              child: const Text('REJECT'),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: ElevatedButton(
+                                              onPressed: () {
+                                                context.read<AdminBarberDetailsBloc>().add(ApproveKycDocumentEvent(doc.id));
+                                              },
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.green,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                              ),
+                                              child: const Text('APPROVE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                    if (doc.rejectReason != null && doc.rejectReason!.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: Text(
+                                          'Reason: ${doc.rejectReason}',
+                                          style: GoogleFonts.outfit(color: Colors.redAccent, fontSize: 12),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          )
+                        : Text("No KYC documents uploaded.", style: GoogleFonts.outfit(color: Colors.white54)),
+                  ),
+                  const SizedBox(height: 24),
 
-                  const SizedBox(height: 32),
-
-                  // --- Actions ---
+                  // --- Action Buttons ---
                   if (StatusHelper.isPending(barber.verificationStatus))
                     Row(
                       children: [
                         Expanded(
                           child: OutlinedButton(
                             onPressed: () => _showRejectDialog(context, barber.id),
-                            style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
-                            child: const Padding(
-                              padding: EdgeInsets.all(16.0),
-                              child: Text("REJECT"),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.redAccent,
+                              side: const BorderSide(color: Colors.redAccent, width: 1.5),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            child: Text(
+                              "REJECT",
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                           ),
                         ),
@@ -454,29 +668,40 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () => _showApproveDialog(context, barber.id),
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                            child: const Padding(
-                              padding: EdgeInsets.all(16.0),
-                              child: Text("APPROVE"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              elevation: 4,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            child: Text(
+                              "APPROVE SHOP",
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
                             ),
                           ),
                         ),
                       ],
                     ),
-                  
+
                   if (StatusHelper.isApproved(barber.verificationStatus) && StatusHelper.isActive(barber.status))
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton(
+                      child: ElevatedButton.icon(
                         onPressed: () => _showSuspendDialog(context, barber.id),
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-                        child: const Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Text("SUSPEND BARBER"),
+                        icon: const Icon(LucideIcons.ban, color: Colors.black, size: 20),
+                        label: Text(
+                          "SUSPEND BARBER",
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 16, color: Colors.black),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orangeAccent,
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                       ),
                     ),
-                    
+
                   const SizedBox(height: 40),
                 ],
               ),
@@ -486,6 +711,60 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
           return const SizedBox.shrink();
         },
       ),
+    );
+  }
+
+  Widget _buildSectionCard({required String title, required IconData icon, required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E2E),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: GoogleFonts.outfit(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: Colors.white54),
+        const SizedBox(width: 10),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: GoogleFonts.outfit(color: Colors.white38, fontSize: 11)),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

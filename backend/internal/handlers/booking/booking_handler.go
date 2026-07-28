@@ -207,7 +207,7 @@ func (h *BookingHandler) Create(c *gin.Context) {
 
 	// Validate duplicate booking by same customer
 	var customerDuplicate int64
-	h.db.Model(&models.Booking{}).Where("customer_id = ? AND scheduled_start = ? AND status IN ?", customerID, req.ScheduledStart, []models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress}).Count(&customerDuplicate)
+	h.db.Model(&models.Booking{}).Where("customer_id = ? AND scheduled_start = ? AND status IN ?", customerID, req.ScheduledStart, ActiveStatuses()).Count(&customerDuplicate)
 	if customerDuplicate > 0 {
 		utils.BadRequestResponse(c, "You already have a booking at this time")
 		return
@@ -238,10 +238,49 @@ func (h *BookingHandler) Create(c *gin.Context) {
 
 	totalDuration := assignment.TotalDuration
 	totalPrice := assignment.TotalPrice
-	queuePosition := assignment.QueuePosition
-	estimatedWait := assignment.EstimatedWaitMin
 	services := assignment.Services
 	assignedStaffID := assignment.StaffID
+
+	// Queue assigned immediately for walk-ins (within 30 min), otherwise at T-30 by scheduler
+	isWalkIn := req.ScheduledStart.Before(time.Now().Add(30 * time.Minute))
+	var queuePosition int
+	var estimatedWait int
+	var queueAssignedAt *time.Time
+
+	if isWalkIn {
+		var aheadCount int64
+		tx.Model(&models.Booking{}).
+			Where("staff_id = ? AND status IN ?", assignedStaffID, []models.BookingStatus{models.BookingStatusConfirmed, models.BookingStatusCheckedIn, models.BookingStatusWaiting, models.BookingStatusInProgress}).
+			Count(&aheadCount)
+		queuePosition = int(aheadCount) + 1
+		now := time.Now()
+		queueAssignedAt = &now
+
+		var aheadBookings []models.Booking
+		tx.Where("staff_id = ? AND status IN ?", assignedStaffID, []models.BookingStatus{models.BookingStatusInProgress, models.BookingStatusCheckedIn, models.BookingStatusWaiting}).Order("queue_position ASC").Find(&aheadBookings)
+		for _, ab := range aheadBookings {
+			dur := ab.TotalDuration
+			if dur <= 0 {
+				dur = barber.SlotDuration
+			}
+			if ab.Status == models.BookingStatusInProgress {
+				start := ab.CreatedAt
+				if ab.ActualStart != nil {
+					start = *ab.ActualStart
+				} else if !ab.ScheduledStart.IsZero() {
+					start = ab.ScheduledStart
+				}
+				elapsed := int(time.Since(start).Minutes())
+				remaining := dur - elapsed
+				if remaining < 0 {
+					remaining = 0
+				}
+				estimatedWait += remaining + barber.BufferBetweenSlots
+			} else {
+				estimatedWait += dur + barber.BufferBetweenSlots
+			}
+		}
+	}
 
 	// Apply coupon if provided
 	var discountAmount float64
@@ -326,6 +365,7 @@ func (h *BookingHandler) Create(c *gin.Context) {
 		ScheduledEnd:     req.ScheduledStart.Add(time.Duration(totalDuration) * time.Minute),
 		QueuePosition:    queuePosition,
 		EstimatedWaitMin: estimatedWait,
+		QueueAssignedAt:  queueAssignedAt,
 		TotalDuration:    totalDuration,
 		TotalPrice:       totalPrice,
 		DiscountAmount:   discountAmount,
@@ -376,8 +416,8 @@ func (h *BookingHandler) Create(c *gin.Context) {
 		ChangedByRole:  "customer",
 	})
 
-	// Update barber's current queue length (shop bookings only)
-	if !req.IsHomeService {
+	// Update barber's current queue length for walk-ins only
+	if isWalkIn && !req.IsHomeService {
 		tx.Model(&barber).Update("current_queue_length", barber.CurrentQueueLength+1)
 	}
 
@@ -394,7 +434,9 @@ func (h *BookingHandler) Create(c *gin.Context) {
 
 	tx.Commit()
 
-	h.refreshQueue(booking.BarberID)
+	if isWalkIn {
+		h.refreshQueue(booking.BarberID)
+	}
 
 	// Reload with relations
 	h.db.Preload("Services").Preload("Staff").Preload("Barber").Preload("Customer").First(&booking, booking.ID)
@@ -506,7 +548,7 @@ func (h *BookingHandler) UpdateStatus(c *gin.Context) {
 	}
 
 	var req struct {
-		Status string `json:"status" binding:"required,oneof=confirmed in_progress completed no_show"`
+		Status string `json:"status" binding:"required,oneof=confirmed cancelled in_progress completed no_show"`
 		Notes  string `json:"notes"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1388,4 +1430,270 @@ func (h *BookingHandler) ListAvailableStaff(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, results)
+}
+
+func (h *BookingHandler) CheckIn(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+	bookingID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid booking ID")
+		return
+	}
+
+	var req struct {
+		Method string  `json:"method" binding:"required,oneof=qr manual gps"`
+		Token  string  `json:"token,omitempty"`
+		Lat    float64 `json:"lat,omitempty"`
+		Lng    float64 `json:"lng,omitempty"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "Invalid input: "+err.Error())
+		return
+	}
+
+	var booking models.Booking
+	if err := h.db.First(&booking, bookingID).Error; err != nil {
+		utils.NotFoundResponse(c, "Booking not found")
+		return
+	}
+	if booking.CustomerID != userID {
+		utils.ForbiddenResponse(c, "Not your booking")
+		return
+	}
+
+	if err := ValidateTransition(booking.Status, models.BookingStatusCheckedIn); err != nil {
+		utils.BadRequestResponse(c, err.Error())
+		return
+	}
+
+	var barber models.Barber
+	h.db.First(&barber, booking.BarberID)
+
+	qSvc := queue.NewQueueService(h.db, h.hub, h.notifSvc)
+
+	switch req.Method {
+	case "qr":
+		if !qSvc.CheckInService().VerifyQR(bookingID, req.Token) {
+			utils.BadRequestResponse(c, "Invalid QR token")
+			return
+		}
+	case "gps":
+		if barber.Latitude == 0 && barber.Longitude == 0 {
+			utils.BadRequestResponse(c, "GPS check-in not available for this shop")
+			return
+		}
+		ok, err := qSvc.CheckInService().ValidateGPS(bookingID, req.Lat, req.Lng, 100)
+		if err != nil || !ok {
+			utils.BadRequestResponse(c, "You must be within 100m of the shop to check in")
+			return
+		}
+	}
+
+	if err := qSvc.CheckInService().CheckIn(bookingID, req.Method); err != nil {
+		utils.InternalErrorResponse(c, err.Error())
+		return
+	}
+
+	utils.SuccessResponse(c, gin.H{"message": "Checked in successfully"})
+}
+
+func (h *BookingHandler) ImComing(c *gin.Context) {
+	bookingID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid booking ID")
+		return
+	}
+
+	qSvc := queue.NewQueueService(h.db, h.hub, h.notifSvc)
+	if err := qSvc.CheckInService().ImComing(bookingID); err != nil {
+		utils.BadRequestResponse(c, err.Error())
+		return
+	}
+
+	utils.SuccessResponse(c, gin.H{"message": "Marked as coming"})
+}
+
+func (h *BookingHandler) GetCallPermission(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+	claims := c.MustGet("claims").(*auth.Claims)
+
+	bookingID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid booking ID")
+		return
+	}
+
+	qSvc := queue.NewQueueService(h.db, h.hub, h.notifSvc)
+	shopPhone, customerPhone, err := qSvc.GetMaskedPhone(bookingID, userID, claims.Role)
+	if err != nil {
+		utils.NotFoundResponse(c, "Booking not found")
+		return
+	}
+
+	utils.SuccessResponse(c, gin.H{
+		"can_call_shop":     qSvc.CanCallShop(bookingID, userID),
+		"can_call_customer": qSvc.CanCallCustomer(bookingID, userID),
+		"shop_phone":        shopPhone,
+		"customer_phone":    customerPhone,
+	})
+}
+
+func (h *BookingHandler) GetTodayQueue(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+	var barber models.Barber
+	if err := h.db.Where("user_id = ?", userID).First(&barber).Error; err != nil {
+		utils.NotFoundResponse(c, "Barber profile not found")
+		return
+	}
+
+	staffFilter := c.Query("staff_id")
+
+	todayStart := time.Now().Truncate(24 * time.Hour)
+	todayEnd := todayStart.Add(24 * time.Hour)
+
+	query := h.db.Where("barber_id = ? AND scheduled_start >= ? AND scheduled_start < ? AND status IN ?",
+		barber.ID, todayStart, todayEnd,
+		[]models.BookingStatus{models.BookingStatusCheckedIn, models.BookingStatusWaiting, models.BookingStatusNext, models.BookingStatusInProgress, models.BookingStatusConfirmed})
+
+	if staffFilter != "" {
+		if staffID, err := uuid.Parse(staffFilter); err == nil {
+			query = query.Where("staff_id = ?", staffID)
+		}
+	}
+
+	var bookings []models.Booking
+	query.Preload("Customer").Preload("Services").Order("queue_position ASC, scheduled_start ASC").Find(&bookings)
+
+	var serving, next, waiting, late, upcoming []map[string]interface{}
+	for _, b := range bookings {
+		item := map[string]interface{}{
+			"id":                 b.ID,
+			"customer_name":      b.Customer.FullName,
+			"customer_phone":     b.Customer.Phone,
+			"services":           b.Services,
+			"queue_position":     b.QueuePosition,
+			"estimated_wait_min": b.EstimatedWaitMin,
+			"scheduled_start":    b.ScheduledStart,
+			"check_in_at":        b.CheckInAt,
+			"is_late":            b.IsLate,
+			"queue_assigned_at":  b.QueueAssignedAt,
+		}
+
+		switch b.Status {
+		case models.BookingStatusInProgress:
+			serving = append(serving, item)
+		case models.BookingStatusNext:
+			next = append(next, item)
+		case models.BookingStatusWaiting, models.BookingStatusCheckedIn:
+			if b.IsLate {
+				late = append(late, item)
+			} else {
+				waiting = append(waiting, item)
+			}
+		case models.BookingStatusConfirmed:
+			upcoming = append(upcoming, item)
+		}
+	}
+
+	utils.SuccessResponse(c, gin.H{
+		"shop_name": barber.ShopName,
+		"shop_address": barber.Address + ", " + barber.City,
+		"serving":  serving,
+		"next":     next,
+		"waiting":  waiting,
+		"late":     late,
+		"upcoming": upcoming,
+	})
+}
+
+func (h *BookingHandler) QueueSkip(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+	bookingID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid booking ID")
+		return
+	}
+
+	var barber models.Barber
+	if err := h.db.Where("user_id = ?", userID).First(&barber).Error; err != nil {
+		utils.NotFoundResponse(c, "Barber profile not found")
+		return
+	}
+
+	qSvc := queue.NewQueueService(h.db, h.hub, h.notifSvc)
+	if err := qSvc.SkipCustomer(bookingID); err != nil {
+		utils.InternalErrorResponse(c, err.Error())
+		return
+	}
+
+	utils.SuccessResponse(c, gin.H{"message": "Customer skipped"})
+}
+
+func (h *BookingHandler) QueueStartService(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+	bookingID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid booking ID")
+		return
+	}
+
+	var barber models.Barber
+	if err := h.db.Where("user_id = ?", userID).First(&barber).Error; err != nil {
+		utils.NotFoundResponse(c, "Barber profile not found")
+		return
+	}
+
+	qSvc := queue.NewQueueService(h.db, h.hub, h.notifSvc)
+	if err := qSvc.StartService(bookingID); err != nil {
+		utils.InternalErrorResponse(c, err.Error())
+		return
+	}
+
+	utils.SuccessResponse(c, gin.H{"message": "Service started"})
+}
+
+func (h *BookingHandler) QueueCompleteService(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+	bookingID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid booking ID")
+		return
+	}
+
+	var barber models.Barber
+	if err := h.db.Where("user_id = ?", userID).First(&barber).Error; err != nil {
+		utils.NotFoundResponse(c, "Barber profile not found")
+		return
+	}
+
+	qSvc := queue.NewQueueService(h.db, h.hub, h.notifSvc)
+	if err := qSvc.CompleteService(bookingID); err != nil {
+		utils.InternalErrorResponse(c, err.Error())
+		return
+	}
+
+	utils.SuccessResponse(c, gin.H{"message": "Service completed"})
+}
+
+func (h *BookingHandler) QueueNoShow(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+	bookingID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid booking ID")
+		return
+	}
+
+	var barber models.Barber
+	if err := h.db.Where("user_id = ?", userID).First(&barber).Error; err != nil {
+		utils.NotFoundResponse(c, "Barber profile not found")
+		return
+	}
+
+	qSvc := queue.NewQueueService(h.db, h.hub, h.notifSvc)
+	if err := qSvc.MarkNoShow(bookingID, "marked by barber"); err != nil {
+		utils.InternalErrorResponse(c, err.Error())
+		return
+	}
+
+	utils.SuccessResponse(c, gin.H{"message": "Marked as no show"})
 }

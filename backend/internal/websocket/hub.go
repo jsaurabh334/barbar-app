@@ -9,6 +9,7 @@ import (
 
 	"github.com/barbar-app/backend/internal/auth"
 	"github.com/barbar-app/backend/internal/config"
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/google/uuid"
 )
@@ -31,7 +32,19 @@ const (
 	MsgDriverLocation  MessageType = "driver.location_updated"
 	MsgOrderStatusChanged  MessageType = "order.status_changed"
 	MsgDeliveryOTPGenerated MessageType = "delivery_otp_generated"
+
+	MsgPing        MessageType = "ping"
+	MsgPong        MessageType = "pong"
+	MsgSyncRequest  MessageType = "sync_request"
+	MsgSyncResponse MessageType = "sync_response"
 )
+
+type EventRecord struct {
+	ID        string      `json:"id"`
+	Type      MessageType `json:"type"`
+	Payload   interface{} `json:"payload"`
+	Timestamp time.Time   `json:"timestamp"`
+}
 
 type WSMessage struct {
 	Type    MessageType  `json:"type"`
@@ -59,6 +72,8 @@ type Hub struct {
 	register chan *Client
 	unregister chan *Client
 	broadcast chan *WSMessage
+	events   []EventRecord
+	eventMu  sync.Mutex
 	mu       sync.RWMutex
 }
 
@@ -79,7 +94,55 @@ func NewHub(cfg *config.Config, jwt *auth.JWTManager) *Hub {
 		register:   make(chan *Client, 100),
 		unregister: make(chan *Client, 100),
 		broadcast:  make(chan *WSMessage, 100),
+		events:     make([]EventRecord, 0, 1000),
 	}
+}
+
+func (h *Hub) RecordEvent(msg *WSMessage) {
+	h.eventMu.Lock()
+	defer h.eventMu.Unlock()
+	record := EventRecord{
+		ID:        uuid.New().String(),
+		Type:      msg.Type,
+		Payload:   msg.Payload,
+		Timestamp: time.Now(),
+	}
+	h.events = append(h.events, record)
+	if len(h.events) > 1000 {
+		h.events = h.events[len(h.events)-500:]
+	}
+}
+
+func (h *Hub) GetEventsSince(since time.Time) []EventRecord {
+	h.eventMu.Lock()
+	defer h.eventMu.Unlock()
+	var result []EventRecord
+	for _, e := range h.events {
+		if e.Timestamp.After(since) {
+			result = append(result, e)
+		}
+	}
+	return result
+}
+
+func (h *Hub) HandleSyncEndpoint(c *gin.Context) {
+	sinceStr := c.Query("since")
+	if sinceStr == "" {
+		c.JSON(400, gin.H{"error": "since query param required (RFC3339)"})
+		return
+	}
+	since, err := time.Parse(time.RFC3339, sinceStr)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "invalid since format, use RFC3339"})
+		return
+	}
+	events := h.GetEventsSince(since)
+	c.JSON(200, gin.H{"events": events, "count": len(events)})
+}
+
+func (h *Hub) BroadcastEvent(msg *WSMessage) {
+	h.RecordEvent(msg)
+	h.broadcast <- msg
 }
 
 func (h *Hub) Run() {
@@ -206,6 +269,9 @@ func (h *Hub) addToRoom(room string, client *Client) {
 func (h *Hub) SendToUser(userID uuid.UUID, msg *WSMessage) {
 	room := "user:" + userID.String()
 	msg.Room = room
+	if msg.Type == MsgQueueUpdate || msg.Type == MsgBookingUpdate || msg.Type == MsgStatusChange {
+		h.RecordEvent(msg)
+	}
 	h.broadcast <- msg
 }
 
