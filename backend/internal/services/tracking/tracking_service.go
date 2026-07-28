@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/barbar-app/backend/internal/models"
@@ -132,7 +133,7 @@ func (s *Service) GetTracking(ctx context.Context, orderID uuid.UUID) (*Tracking
 			driverInfo.Avatar = order.DeliveryPartner.Avatar
 		}
 		if order.DeliveryPartner.Phone != "" {
-			driverInfo.Phone = order.DeliveryPartner.Phone
+			driverInfo.Phone = maskPhone(order.DeliveryPartner.Phone)
 		}
 
 		// Fetch DeliveryPartner details (vehicle, rating) — need another query
@@ -212,4 +213,11 @@ func parseFloatPtr(s string) (*float64, bool) {
 		return nil, false
 	}
 	return &v, true
+}
+
+func maskPhone(phone string) string {
+	if len(phone) < 6 {
+		return phone
+	}
+	return phone[:2] + strings.Repeat("*", len(phone)-4) + phone[len(phone)-2:]
 }

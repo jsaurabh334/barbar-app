@@ -45,7 +45,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ""
-      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required — set this to a 32+ char random string}
       JWT_ISSUER: barbar-app
       BASE_URL: ${BASE_URL:-http://localhost:8080}
       SMTP_HOST: ${SMTP_HOST:-}
