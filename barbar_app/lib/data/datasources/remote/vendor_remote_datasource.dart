@@ -377,4 +377,28 @@ class VendorRemoteDataSource {
       throw Exception(response.data['error'] ?? 'Failed to delete variant');
     }
   }
+
+  Future<List<dynamic>> getBankAccounts() async {
+    final response = await _apiClient.dio.get('/vendor/bank-accounts');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return (response.data['data'] as List<dynamic>?) ?? [];
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch bank accounts');
+  }
+
+  Future<Map<String, dynamic>> addBankAccount(Map<String, dynamic> data) async {
+    final response = await _apiClient.dio.post('/vendor/bank-accounts', data: data);
+    if (response.statusCode == 201 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to add bank account');
+  }
+
+  Future<Map<String, dynamic>> updateBankAccount(String accountId, Map<String, dynamic> data) async {
+    final response = await _apiClient.dio.put('/vendor/bank-accounts/$accountId', data: data);
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to update bank account');
+  }
 }

@@ -18,4 +18,9 @@ class WalletRepositoryImpl implements WalletRepository {
   }) async {
     await _remoteDataSource.requestWithdrawal(amount: amount, bankAccountId: bankAccountId);
   }
+
+  @override
+  Future<List<dynamic>> getWithdrawals() async {
+    return await _remoteDataSource.getWithdrawals();
+  }
 }

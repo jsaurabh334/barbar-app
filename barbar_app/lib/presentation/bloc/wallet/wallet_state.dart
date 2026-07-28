@@ -15,11 +15,12 @@ class WalletLoading extends WalletState {}
 class WalletLoaded extends WalletState {
   final double balance;
   final List<TransactionModel> transactions;
+  final List<dynamic> withdrawals;
 
-  const WalletLoaded({required this.balance, required this.transactions});
+  const WalletLoaded({required this.balance, required this.transactions, this.withdrawals = const []});
 
   @override
-  List<Object?> get props => [balance, transactions];
+  List<Object?> get props => [balance, transactions, withdrawals];
 }
 
 class WithdrawalSuccess extends WalletState {

@@ -18,3 +18,5 @@ class RequestWithdrawal extends WalletEvent {
   @override
   List<Object?> get props => [amount, bankAccountId];
 }
+
+class FetchWithdrawals extends WalletEvent {}

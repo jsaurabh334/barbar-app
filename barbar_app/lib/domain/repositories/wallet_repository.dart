@@ -4,4 +4,5 @@ abstract class WalletRepository {
     required double amount,
     required String bankAccountId,
   });
+  Future<List<dynamic>> getWithdrawals();
 }

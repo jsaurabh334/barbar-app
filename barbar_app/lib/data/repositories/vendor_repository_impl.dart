@@ -202,4 +202,20 @@ class VendorRepositoryImpl implements VendorRepository {
   Future<void> deleteVariant(String productId, String variantId) async {
     await _remoteDataSource.deleteVariant(productId, variantId);
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> getBankAccounts() async {
+    final data = await _remoteDataSource.getBankAccounts();
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  @override
+  Future<Map<String, dynamic>> addBankAccount(Map<String, dynamic> data) async {
+    return await _remoteDataSource.addBankAccount(data);
+  }
+
+  @override
+  Future<Map<String, dynamic>> updateBankAccount(String accountId, Map<String, dynamic> data) async {
+    return await _remoteDataSource.updateBankAccount(accountId, data);
+  }
 }

@@ -43,4 +43,12 @@ class WalletRemoteDataSource {
       throw Exception(response.data['error'] ?? 'Withdrawal request failed');
     }
   }
+
+  Future<List<dynamic>> getWithdrawals() async {
+    final response = await _apiClient.dio.get('/wallet/withdrawals');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return (response.data['data'] as List<dynamic>?) ?? [];
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch withdrawals');
+  }
 }

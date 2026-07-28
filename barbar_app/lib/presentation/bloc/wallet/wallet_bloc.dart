@@ -10,6 +10,7 @@ class WalletBloc extends Bloc<WalletEvent, WalletState> {
   WalletBloc(this._walletRepository) : super(WalletInitial()) {
     on<FetchWalletDetails>(_onFetchWalletDetails);
     on<RequestWithdrawal>(_onRequestWithdrawal);
+    on<FetchWithdrawals>(_onFetchWithdrawals);
   }
 
   Future<void> _onFetchWalletDetails(FetchWalletDetails event, Emitter<WalletState> emit) async {
@@ -37,6 +38,25 @@ class WalletBloc extends Bloc<WalletEvent, WalletState> {
         balance: details['balance'] as double,
         transactions: (details['transactions'] as List).cast<TransactionModel>(),
       ));
+    } catch (e) {
+      emit(WalletFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onFetchWithdrawals(FetchWithdrawals event, Emitter<WalletState> emit) async {
+    try {
+      final withdrawals = await _walletRepository.getWithdrawals();
+      if (state is WalletLoaded) {
+        final current = state as WalletLoaded;
+        emit(WalletLoaded(balance: current.balance, transactions: current.transactions, withdrawals: withdrawals));
+      } else {
+        final details = await _walletRepository.getWalletDetails();
+        emit(WalletLoaded(
+          balance: details['balance'] as double,
+          transactions: (details['transactions'] as List).cast<TransactionModel>(),
+          withdrawals: withdrawals,
+        ));
+      }
     } catch (e) {
       emit(WalletFailure(e.toString().replaceAll('Exception: ', '')));
     }

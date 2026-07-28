@@ -54,4 +54,9 @@ abstract class VendorRepository {
   Future<ProductVariantModel> createVariant(String productId, Map<String, dynamic> data);
   Future<ProductVariantModel> updateVariant(String productId, String variantId, Map<String, dynamic> data);
   Future<void> deleteVariant(String productId, String variantId);
+
+  // Bank Accounts
+  Future<List<Map<String, dynamic>>> getBankAccounts();
+  Future<Map<String, dynamic>> addBankAccount(Map<String, dynamic> data);
+  Future<Map<String, dynamic>> updateBankAccount(String accountId, Map<String, dynamic> data);
 }
