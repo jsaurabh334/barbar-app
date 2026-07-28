@@ -7,6 +7,7 @@ import 'package:barbar_app/presentation/widgets/admin/admin_error_state.dart';
 import 'package:barbar_app/presentation/widgets/admin/admin_loading_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 class AdminOrdersScreen extends StatefulWidget {
@@ -273,7 +274,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> with SingleTicker
                         children: [
                           const Icon(LucideIcons.calendar, size: 20, color: Colors.grey),
                           const SizedBox(width: 12),
-                          Text(_selectedDateRange == null ? 'Select Date Range' : '\/\/\ - \/\/', style: const TextStyle(color: Colors.white)),
+                          Text(_selectedDateRange == null ? 'Select Date Range' : '${_formatDate(_selectedDateRange!.start)} - ${_formatDate(_selectedDateRange!.end)}', style: const TextStyle(color: Colors.white)),
                         ],
                       ),
                     ),
@@ -319,6 +320,8 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> with SingleTicker
       },
     );
   }
+
+  String _formatDate(DateTime dt) => DateFormat('MMM dd, yyyy').format(dt);
 }
 
 class _OrderCard extends StatelessWidget {
