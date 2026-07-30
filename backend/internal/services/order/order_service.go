@@ -27,15 +27,21 @@ var otpPepper = func() string {
 }()
 
 var AllowedTransitions = map[models.OrderStatus][]models.OrderStatus{
-	models.OrderStatusPending:          {models.OrderStatusAccepted, models.OrderStatusCancelled},
-	models.OrderStatusAccepted:         {models.OrderStatusPacked, models.OrderStatusCancelled},
-	models.OrderStatusPacked:           {models.OrderStatusReadyForPickup},
-	models.OrderStatusReadyForPickup:   {models.OrderStatusDriverAssigned},
-	models.OrderStatusDriverAssigned:   {models.OrderStatusDriverAccepted, models.OrderStatusReadyForPickup},
-	models.OrderStatusDriverAccepted:   {models.OrderStatusPickedUp},
-	models.OrderStatusPickedUp:         {models.OrderStatusOutForDelivery},
-	models.OrderStatusOutForDelivery:   {models.OrderStatusDelivered},
-	models.OrderStatusDelivered:        {models.OrderStatusReturnRequested},
+	models.OrderStatusPending:           {models.OrderStatusAccepted, models.OrderStatusCancelled},
+	models.OrderStatusAccepted:          {models.OrderStatusPacked, models.OrderStatusCancelled},
+	models.OrderStatusPacked:            {models.OrderStatusReadyForPickup},
+	models.OrderStatusReadyForPickup:    {models.OrderStatusDriverAssigned},
+	models.OrderStatusDriverAssigned:    {models.OrderStatusDriverAccepted, models.OrderStatusReadyForPickup},
+	models.OrderStatusDriverAccepted:    {models.OrderStatusPickedUp},
+	models.OrderStatusPickedUp:          {models.OrderStatusOutForDelivery},
+	models.OrderStatusOutForDelivery:    {models.OrderStatusDelivered},
+	models.OrderStatusDelivered:         {models.OrderStatusReturnRequested},
+	models.OrderStatusReturnRequested:   {models.OrderStatusReturnApproved, models.OrderStatusReturnRejected},
+	models.OrderStatusReturnApproved:    {models.OrderStatusReturnPickupAssigned},
+	models.OrderStatusReturnPickupAssigned: {models.OrderStatusReturnPickedUp, models.OrderStatusReturnApproved},
+	models.OrderStatusReturnPickedUp:    {models.OrderStatusReturnReceived},
+	models.OrderStatusReturnReceived:    {models.OrderStatusRefundProcessing},
+	models.OrderStatusRefundProcessing:  {models.OrderStatusRefunded},
 }
 
 type OrderService struct {
@@ -190,6 +196,30 @@ func (s *OrderService) TransitionOrder(ctx context.Context, orderID, userID uuid
 		order.PickedUpAt = &now
 	case models.OrderStatusOutForDelivery:
 		s.generateDeliveryOTP(&order)
+	case models.OrderStatusReturnApproved:
+		order.ReturnApprovedAt = &now
+		order.ReturnApprovedBy = &userID
+	case models.OrderStatusReturnRejected:
+		order.ReturnRejectReason = note
+	case models.OrderStatusReturnPickupAssigned:
+		order.DeliveryPartnerID = &userID
+		order.AssignedAt = &now
+		s.db.Create(&models.OrderDeliveryAssignment{
+			OrderID:        order.ID,
+			DeliveryUserID: userID,
+			AssignedAt:     now,
+			ExpiresAt:      now.Add(5 * time.Minute),
+			Status:         models.AssignmentPending,
+		})
+	case models.OrderStatusReturnPickedUp:
+		order.PickedUpAt = &now
+	case models.OrderStatusReturnReceived:
+		order.ReturnReceivedAt = &now
+		// Auto-trigger refund processing
+		var refund models.RefundRequest
+		if err := s.db.Where("order_id = ?", order.ID).First(&refund).Error; err == nil {
+			s.db.Model(&refund).Update("status", "refund_processing")
+		}
 	}
 
 	order.Status = newStatus
@@ -247,6 +277,22 @@ func (s *OrderService) getNotificationForTransition(toStatus models.OrderStatus)
 		return models.NotifOrderDelivered
 	case models.OrderStatusCancelled:
 		return models.NotifOrderCancelled
+	case models.OrderStatusReturnRequested:
+		return models.NotifReturnRequested
+	case models.OrderStatusReturnApproved:
+		return models.NotifReturnApproved
+	case models.OrderStatusReturnRejected:
+		return models.NotifReturnRejected
+	case models.OrderStatusReturnPickupAssigned:
+		return models.NotifReturnPickupAssigned
+	case models.OrderStatusReturnPickedUp:
+		return models.NotifReturnPickedUp
+	case models.OrderStatusReturnReceived:
+		return models.NotifReturnReceived
+	case models.OrderStatusRefundProcessing:
+		return models.NotifRefundInitiated
+	case models.OrderStatusRefunded:
+		return models.NotifRefundCompleted
 	}
 	return ""
 }
@@ -343,6 +389,23 @@ func (s *OrderService) dispatchNotificationEvent(ctx context.Context, order *mod
 		if err := s.db.First(&vendor, order.VendorID).Error; err == nil {
 			notify(vendor.UserID, notification.RoleVendor)
 		}
+	case models.NotifReturnRequested:
+		notify(order.CustomerID, notification.RoleCustomer)
+		var v models.Vendor
+		if err := s.db.First(&v, order.VendorID).Error; err == nil {
+			notify(v.UserID, notification.RoleVendor)
+		}
+	case models.NotifReturnApproved, models.NotifReturnRejected:
+		notify(order.CustomerID, notification.RoleCustomer)
+	case models.NotifReturnPickupAssigned:
+		notify(order.CustomerID, notification.RoleCustomer)
+		if order.DeliveryPartnerID != nil {
+			notify(*order.DeliveryPartnerID, notification.RoleDelivery)
+		}
+	case models.NotifReturnPickedUp:
+		notify(order.CustomerID, notification.RoleCustomer)
+	case models.NotifReturnReceived:
+		notify(order.CustomerID, notification.RoleCustomer)
 	}
 }
 
@@ -405,6 +468,8 @@ func (s *OrderService) FindActiveOrderByDriver(ctx context.Context, deliveryUser
 			models.OrderStatusDriverAccepted,
 			models.OrderStatusPickedUp,
 			models.OrderStatusOutForDelivery,
+			models.OrderStatusReturnPickupAssigned,
+			models.OrderStatusReturnPickedUp,
 		},
 	).Order("id ASC").Limit(1).Find(&order).Error
 	if err != nil {
@@ -529,6 +594,38 @@ func (s *OrderService) generateDeliveryOTP(order *models.Order) {
 	})
 }
 
+func (s *OrderService) GenerateReturnPickupOTP(order *models.Order) {
+	code := fmt.Sprintf("%04d", mustRandomInt(10000))
+	otpHash := hashOTP(code)
+
+	now := time.Now()
+	otp := models.DeliveryOTP{
+		OrderID:   order.ID,
+		Type:      "return_pickup",
+		OTP:       otpHash,
+		ExpiresAt: now.Add(30 * time.Minute),
+	}
+	s.db.Where("order_id = ? AND type = ?", order.ID, "return_pickup").Assign(models.DeliveryOTP{
+		OTP:        otpHash,
+		ExpiresAt:  now.Add(30 * time.Minute),
+		VerifiedAt: nil,
+		Attempts:   0,
+	}).FirstOrCreate(&otp)
+
+	var customer models.User
+	if err := s.db.First(&customer, order.CustomerID).Error; err == nil {
+		s.wsHub.SendToRoom("order:"+order.ID.String(), &websocket.WSMessage{
+			Type: websocket.MessageType("return_pickup_otp_generated"),
+			Payload: map[string]interface{}{
+				"version":           1,
+				"event":             "return_pickup_otp_generated",
+				"order_id":          order.ID.String(),
+				"return_pickup_otp": code,
+			},
+		})
+	}
+}
+
 func (s *OrderService) VerifyDeliveryOTP(ctx context.Context, orderID, userID uuid.UUID, otp string, otpType string) (*models.Order, error) {
 	var order models.Order
 	if err := s.db.First(&order, orderID).Error; err != nil {
@@ -544,6 +641,11 @@ func (s *OrderService) VerifyDeliveryOTP(ctx context.Context, orderID, userID uu
 		targetType = "pickup"
 		if order.Status != models.OrderStatusDriverAccepted && order.Status != models.OrderStatusDriverAssigned {
 			return nil, fmt.Errorf("order is not ready for pickup verification")
+		}
+	} else if otpType == "return_pickup" {
+		targetType = "return_pickup"
+		if order.Status != models.OrderStatusReturnPickupAssigned {
+			return nil, fmt.Errorf("order is not ready for return pickup verification")
 		}
 	} else {
 		if order.Status != models.OrderStatusOutForDelivery {
@@ -577,6 +679,9 @@ func (s *OrderService) VerifyDeliveryOTP(ctx context.Context, orderID, userID uu
 
 	if targetType == "pickup" {
 		return s.TransitionOrder(ctx, orderID, userID, "delivery", models.OrderStatusPickedUp, "Pickup OTP verified")
+	}
+	if targetType == "return_pickup" {
+		return s.TransitionOrder(ctx, orderID, userID, "delivery", models.OrderStatusReturnPickedUp, "Return pickup OTP verified")
 	}
 
 	return s.TransitionOrder(ctx, orderID, userID, "delivery", models.OrderStatusDelivered, "Delivery OTP verified")

@@ -133,4 +133,9 @@ class BarberRepositoryImpl implements BarberRepository {
       files.map((f) => f as File).toList(),
     );
   }
+
+  @override
+  Future<String> uploadStaffImage(dynamic file) async {
+    return await _remoteDataSource.uploadStaffImage(file as File);
+  }
 }

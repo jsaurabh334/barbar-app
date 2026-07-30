@@ -7,7 +7,7 @@ import 'package:barbar_app/presentation/bloc/admin/admin_finance_bloc.dart';
 import 'package:barbar_app/presentation/screens/admin/admin_refunds_screen.dart';
 import 'package:barbar_app/presentation/screens/admin/admin_tax_settings_screen.dart';
 import 'package:barbar_app/presentation/bloc/admin/admin_reports_bloc.dart';
-import 'package:barbar_app/presentation/screens/admin/admin_revenue_analytics_screen.dart';
+import 'package:barbar_app/presentation/screens/admin/admin_reports_dashboard.dart';
 import 'package:barbar_app/presentation/bloc/admin/admin_settlements_bloc.dart';
 import 'package:barbar_app/presentation/screens/admin/finance/admin_settlements_screen.dart';
 import 'package:barbar_app/presentation/bloc/admin/admin_wallet_bloc.dart';
@@ -246,16 +246,9 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> with SingleTick
             create: (context) => AdminFinanceBloc(adminRepository: context.read<AdminRepository>())..add(const LoadTaxSettings()),
             child: const AdminTaxSettingsScreen(),
           ),
-          MultiBlocProvider(
-            providers: [
-              BlocProvider(
-                create: (context) => AdminFinanceBloc(adminRepository: context.read<AdminRepository>())..add(const LoadRevenueAnalytics()),
-              ),
-              BlocProvider(
-                create: (context) => AdminReportsBloc(adminRepository: context.read<AdminRepository>())..add(LoadRevenueReport()),
-              ),
-            ],
-            child: const AdminRevenueAnalyticsScreen(),
+          BlocProvider(
+            create: (context) => AdminReportsBloc(adminRepository: context.read<AdminRepository>()),
+            child: const AdminReportsDashboard(),
           ),
           BlocProvider(
             create: (context) => AdminSettlementsBloc(adminRepository: context.read<AdminRepository>())..add(LoadSettlements()),

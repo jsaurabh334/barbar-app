@@ -51,6 +51,15 @@ const (
 	ProductRefurb  ProductCondition = "refurbished"
 )
 
+type ProductVisibility string
+
+const (
+	VisibilityRetail       ProductVisibility = "retail"
+	VisibilityProfessional ProductVisibility = "professional"
+	VisibilityBoth         ProductVisibility = "both"
+	VisibilityHidden       ProductVisibility = "hidden"
+)
+
 type Product struct {
 	BaseModel
 	VendorID          uuid.UUID        `gorm:"type:uuid;index;not null" json:"vendor_id"`
@@ -63,12 +72,15 @@ type Product struct {
 	ShortDescription  string           `gorm:"type:text" json:"short_description,omitempty"`
 	BrandName         string           `gorm:"size:255" json:"brand_name,omitempty"`
 	Condition         ProductCondition `gorm:"size:50;default:new" json:"condition"`
+	Visibility        ProductVisibility `gorm:"size:50;default:both;index" json:"visibility"`
 	BasePrice         float64          `gorm:"not null" json:"base_price"`
+	ProfessionalPrice *float64         `json:"professional_price,omitempty"`
 	DiscountPrice     float64          `json:"discount_price,omitempty"`
 	DiscountPercent   float64          `json:"discount_percent,omitempty"`
 	TaxPercent        float64          `gorm:"default:0" json:"tax_percent"`
 	Unit              string           `gorm:"size:50;default:piece" json:"unit"`
 	MinOrderQty       int              `gorm:"default:1" json:"min_order_qty"`
+	ProfessionalMOQ   int              `gorm:"default:1" json:"professional_moq"`
 	MaxOrderQty       int              `gorm:"default:100" json:"max_order_qty"`
 	TotalStock        int              `gorm:"default:0" json:"total_stock"`
 	ReservedStock     int              `gorm:"default:0" json:"reserved_stock"`

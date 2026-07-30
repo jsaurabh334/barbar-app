@@ -1,3 +1,5 @@
+import 'barber_model.dart';
+
 class StaffModel {
   final String id;
   final String barberId;
@@ -44,6 +46,11 @@ class StaffModel {
   String get roleLabel => role == 'manager' ? 'Manager' : 'Specialist';
 
   String get ratingDisplay => rating > 0 ? rating.toStringAsFixed(1) : 'New';
+
+  String? get fullImageUrl {
+    if (image == null || image!.isEmpty) return null;
+    return BarberModel.getFullImageUrl(image);
+  }
 
   factory StaffModel.fromJson(Map<String, dynamic> json) {
     List<String> parsedLanguages = [];

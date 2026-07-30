@@ -36,6 +36,7 @@ class FakeBookingRepository implements BookingRepository {
       queuePosition: 0,
       estimatedWaitMinutes: 0,
       finalPrice: 0,
+      paymentStatus: 'pending',
     );
     _bookings.add(booking);
     return booking;
@@ -45,6 +46,26 @@ class FakeBookingRepository implements BookingRepository {
   Future<Map<String, dynamic>> getQueuePosition(String bookingId) async {
     if (shouldThrow) throw Exception('Queue position error');
     return {'current_position': 1, 'people_ahead': 0, 'estimated_wait_min': 5};
+  }
+
+  @override
+  Future<BookingModel> getBookingById(String bookingId) async {
+    if (shouldThrow) throw Exception('Get booking error');
+    return _bookings.firstWhere(
+      (b) => b.id == bookingId,
+      orElse: () => BookingModel(
+        id: bookingId,
+        barberId: 'barber-1',
+        customerId: 'customer-1',
+        status: 'confirmed',
+        scheduledStart: '2026-07-28T10:00:00Z',
+        scheduledEnd: '2026-07-28T11:00:00Z',
+        queuePosition: 0,
+        estimatedWaitMinutes: 0,
+        finalPrice: 0,
+        paymentStatus: 'pending',
+      ),
+    );
   }
 
   @override

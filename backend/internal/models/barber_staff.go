@@ -52,8 +52,8 @@ type BarberStaff struct {
 
 type StaffService struct {
 	BaseModel
-	StaffID   uuid.UUID `gorm:"type:uuid;index;not null" json:"staff_id"`
-	ServiceID uuid.UUID `gorm:"type:uuid;index;not null" json:"service_id"`
+	StaffID   uuid.UUID `gorm:"type:uuid;index;uniqueIndex:idx_staff_service;not null" json:"staff_id"`
+	ServiceID uuid.UUID `gorm:"type:uuid;index;uniqueIndex:idx_staff_service;not null" json:"service_id"`
 	
 	// Overrides
 	Price       float64 `gorm:"default:0" json:"price"`

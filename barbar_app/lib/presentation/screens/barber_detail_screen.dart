@@ -969,7 +969,7 @@ class _BarberDetailScreenState extends State<BarberDetailScreen> {
                   radius: 28,
                   backgroundColor: AppColors.background,
                   backgroundImage: imageUrl != null && imageUrl.isNotEmpty
-                      ? CachedNetworkImageProvider(imageUrl)
+                      ? CachedNetworkImageProvider(BarberModel.getFullImageUrl(imageUrl))
                       : null,
                   child: imageUrl == null || imageUrl.isEmpty
                       ? const Icon(LucideIcons.user, color: AppColors.textSecondary)

@@ -37,10 +37,10 @@ func (b *Booking) ServiceModeDisplay() ServiceMode {
 
 type Booking struct {
 	BaseModel
-	BarberID          uuid.UUID     `gorm:"type:uuid;index;not null" json:"barber_id"`
-	CustomerID        uuid.UUID     `gorm:"type:uuid;index;not null" json:"customer_id"`
-	Status            BookingStatus `gorm:"size:50;default:pending;index" json:"status"`
-	ScheduledStart    time.Time     `gorm:"index;not null" json:"scheduled_start"`
+	BarberID          uuid.UUID     `gorm:"type:uuid;index:idx_bookings_barber_status,priority:1;not null" json:"barber_id"`
+	CustomerID        uuid.UUID     `gorm:"type:uuid;index:idx_bookings_customer_status,priority:1;not null" json:"customer_id"`
+	Status            BookingStatus `gorm:"size:50;default:pending;index:idx_bookings_barber_status,priority:2;index:idx_bookings_customer_status,priority:2" json:"status"`
+	ScheduledStart    time.Time     `gorm:"index:idx_bookings_barber_status,priority:3;not null" json:"scheduled_start"`
 	ScheduledEnd      time.Time     `json:"scheduled_end"`
 	ActualStart       *time.Time    `json:"actual_start,omitempty"`
 	ActualEnd         *time.Time    `json:"actual_end,omitempty"`

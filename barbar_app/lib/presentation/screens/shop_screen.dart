@@ -6,11 +6,14 @@ import '../../core/theme/app_theme.dart';
 import '../../data/models/product_model.dart';
 import '../../data/models/category_model.dart';
 import '../../domain/repositories/directory_repository.dart';
+import '../bloc/auth/auth_bloc.dart';
+import '../bloc/auth/auth_state.dart';
 import '../bloc/marketplace/marketplace_bloc.dart';
 import '../bloc/marketplace/marketplace_event.dart';
 import '../bloc/marketplace/marketplace_state.dart';
 import 'order_history_screen.dart';
 import 'select_address_screen.dart';
+import 'checkout_screen.dart';
 import 'vendor_detail_screen.dart';
 import 'product_detail_screen.dart';
 
@@ -25,6 +28,7 @@ class _ShopScreenState extends State<ShopScreen> {
   final _couponController = TextEditingController();
   List<CategoryModel> _categories = [];
   String? _selectedCategoryId;
+  String _selectedPaymentMethod = 'cod';
 
   @override
   void initState() {
@@ -89,8 +93,38 @@ class _ShopScreenState extends State<ShopScreen> {
             if (products.isEmpty) {
               return const Center(child: Text('No grooming products registered yet.'));
             }
+            final authState = context.read<AuthBloc>().state;
+            final isBarber = authState is AuthAuthenticated && authState.user.role == 'barber';
             return Column(
               children: [
+                if (isBarber)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(LucideIcons.star, size: 18, color: AppColors.primary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text('Professional Pricing Active',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary)),
+                              Text('You are seeing exclusive business pricing.',
+                                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 if (_categories.isNotEmpty) _buildCategoryFilter(),
                 Expanded(
                   child: filtered.isEmpty
@@ -185,6 +219,8 @@ class _ShopScreenState extends State<ShopScreen> {
 
   Widget _buildProductCard(ProductModel product, Map<String, int> cart) {
     final cartQty = cart[product.id] ?? 0;
+    final authState = context.read<AuthBloc>().state;
+    final isBarber = authState is AuthAuthenticated && authState.user.role == 'barber';
     // Resolve primary image: prefer first image in list, fallback to imageUrl
     final images = product.images ?? (product.imageUrl != null ? [product.imageUrl!] : <String>[]);
     final primaryImage = product.imageUrl ?? (images.isNotEmpty ? images.first : null);
@@ -228,6 +264,21 @@ class _ShopScreenState extends State<ShopScreen> {
                                   color: AppColors.textSecondary),
                             ),
                     ),
+                    // Badge: PRO badge for professional products
+                    if (isBarber && product.hasProfessionalPrice)
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text('PRO',
+                              style: TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
                     // Badge: show image count if >1
                     if (images.length > 1)
                       Positioned(
@@ -302,32 +353,72 @@ class _ShopScreenState extends State<ShopScreen> {
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (product.discountPrice != null) ...[
-                          Text(
-                            '₹${product.basePrice.toInt()}',
-                            style: const TextStyle(
-                              decoration: TextDecoration.lineThrough,
-                              color: AppColors.textMuted,
-                              fontSize: 11,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (isBarber && product.hasProfessionalPrice) ...[
+                            Text(
+                              '₹${product.basePrice.toInt()}',
+                              style: const TextStyle(
+                                decoration: TextDecoration.lineThrough,
+                                color: AppColors.textMuted,
+                                fontSize: 11,
+                              ),
                             ),
-                          ),
-                          Text(
-                            '₹${product.discountPrice!.toInt()}',
-                            style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 15),
-                          ),
-                        ] else
-                          Text(
-                            '₹${product.basePrice.toInt()}',
-                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
-                          ),
-                      ],
+                            const SizedBox(height: 2),
+                            Text(
+                              'Professional ₹${product.professionalPrice!.toInt()}',
+                              style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 15),
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.success.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'Save ₹${(product.basePrice - product.professionalPrice!).toInt()}',
+                                    style: const TextStyle(fontSize: 9, color: AppColors.success, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                if (product.professionalMoq > 1) ...[
+                                  const SizedBox(width: 4),
+                                  Text('MOQ: ${product.professionalMoq}',
+                                    style: const TextStyle(fontSize: 9, color: AppColors.textSecondary),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ] else if (product.hasDiscount) ...[
+                            Text(
+                              '₹${product.basePrice.toInt()}',
+                              style: const TextStyle(
+                                decoration: TextDecoration.lineThrough,
+                                color: AppColors.textMuted,
+                                fontSize: 11,
+                              ),
+                            ),
+                            Text(
+                              '₹${product.displayPrice.toInt()}',
+                              style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 15),
+                            ),
+                          ] else
+                            Text(
+                              '₹${product.displayPrice.toInt()}',
+                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                            ),
+                        ],
+                      ),
                     ),
                     if (cartQty > 0)
                       Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
                             icon: const Icon(LucideIcons.minusCircle, size: 18),
@@ -347,8 +438,19 @@ class _ShopScreenState extends State<ShopScreen> {
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        onPressed: () => context.read<MarketplaceBloc>().add(AddToCart(product)),
-                        child: const Text('ADD', style: TextStyle(fontSize: 11, color: Colors.black)),
+                        onPressed: () {
+                          if (isBarber && product.hasProfessionalPrice && product.professionalMoq > 1) {
+                            context.read<MarketplaceBloc>().add(AddToCart(product, quantity: product.professionalMoq));
+                          } else {
+                            context.read<MarketplaceBloc>().add(AddToCart(product));
+                          }
+                        },
+                        child: Text(
+                          isBarber && product.hasProfessionalPrice && product.professionalMoq > 1
+                              ? 'ADD ${product.professionalMoq}'
+                              : 'ADD',
+                          style: const TextStyle(fontSize: 11, color: Colors.black),
+                        ),
                       ),
                   ],
                 ),
@@ -371,6 +473,9 @@ class _ShopScreenState extends State<ShopScreen> {
   }
 
   void _showCartDrawer(BuildContext context) {
+    final authState = context.read<AuthBloc>().state;
+    final isBarber = authState is AuthAuthenticated && authState.user.role == 'barber';
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -382,9 +487,17 @@ class _ShopScreenState extends State<ShopScreen> {
 
             final cartProducts = state.products.where((p) => state.cart.containsKey(p.id)).toList();
             double subTotal = 0.0;
+            double retailTotal = 0.0;
+            bool hasMoqViolation = false;
             for (var p in cartProducts) {
-              subTotal += (p.discountPrice ?? p.basePrice) * state.cart[p.id]!;
+              final qty = state.cart[p.id]!;
+              subTotal += p.getActivePrice(isBarber) * qty;
+              retailTotal += p.basePrice * qty;
+              if (isBarber && p.hasProfessionalPrice && qty < p.professionalMoq) {
+                hasMoqViolation = true;
+              }
             }
+            final savings = retailTotal - subTotal;
 
             return DraggableScrollableSheet(
               initialChildSize: 0.6,
@@ -406,7 +519,7 @@ class _ShopScreenState extends State<ShopScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('SHOPPING CART', style: Theme.of(context).textTheme.titleLarge),
+                          Text(isBarber ? 'PROFESSIONAL CART' : 'SHOPPING CART', style: Theme.of(context).textTheme.titleLarge),
                           IconButton(
                             icon: const Icon(LucideIcons.trash2, color: AppColors.error),
                             onPressed: () {
@@ -426,29 +539,56 @@ class _ShopScreenState extends State<ShopScreen> {
                           itemBuilder: (context, index) {
                             final p = cartProducts[index];
                             final qty = state.cart[p.id]!;
-                            return ListTile(
-                              leading: CachedNetworkImage(
-                                imageUrl: p.imageUrl ?? '',
-                                width: 48,
-                                height: 48,
-                                fit: BoxFit.cover,
-                                errorWidget: (c, _, __) => const Icon(LucideIcons.package),
-                              ),
-                              title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text('₹${(p.discountPrice ?? p.basePrice).toInt()} x $qty'),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(LucideIcons.minusSquare),
-                                    onPressed: () => context.read<MarketplaceBloc>().add(RemoveFromCart(p.id)),
+                            final belowMoq = isBarber && p.hasProfessionalPrice && qty < p.professionalMoq;
+                            return Column(
+                              children: [
+                                ListTile(
+                                  leading: CachedNetworkImage(
+                                    imageUrl: p.imageUrl ?? '',
+                                    width: 48,
+                                    height: 48,
+                                    fit: BoxFit.cover,
+                                    errorWidget: (c, _, __) => const Icon(LucideIcons.package),
                                   ),
-                                  IconButton(
-                                    icon: const Icon(LucideIcons.plusSquare, color: AppColors.primary),
-                                    onPressed: () => context.read<MarketplaceBloc>().add(AddToCart(p)),
+                                  title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(isBarber && p.hasProfessionalPrice
+                                          ? 'Professional: ₹${p.getActivePrice(isBarber).toInt()} x $qty'
+                                          : '₹${p.getActivePrice(isBarber).toInt()} x $qty'),
+                                      if (isBarber && p.hasProfessionalPrice)
+                                        Text('Retail: ₹${p.basePrice.toInt()} each',
+                                            style: const TextStyle(fontSize: 11, color: AppColors.textMuted, decoration: TextDecoration.lineThrough)),
+                                    ],
                                   ),
-                                ],
-                              ),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(LucideIcons.minusSquare),
+                                        onPressed: () => context.read<MarketplaceBloc>().add(RemoveFromCart(p.id)),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(LucideIcons.plusSquare, color: AppColors.primary),
+                                        onPressed: () => context.read<MarketplaceBloc>().add(AddToCart(p)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (belowMoq)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 72, bottom: 8),
+                                    child: Row(
+                                      children: [
+                                        const Icon(LucideIcons.alertTriangle, size: 14, color: AppColors.error),
+                                        const SizedBox(width: 4),
+                                        Text('Minimum order quantity is ${p.professionalMoq}.',
+                                            style: const TextStyle(fontSize: 12, color: AppColors.error, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ),
+                              ],
                             );
                           },
                         ),
@@ -456,6 +596,41 @@ class _ShopScreenState extends State<ShopScreen> {
                       
                       // Bill Details
                       const Divider(color: AppColors.border),
+                      if (isBarber && savings > 0) ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Retail Total:', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                            Text('₹${retailTotal.toInt()}', style: const TextStyle(color: AppColors.textMuted, fontSize: 13, decoration: TextDecoration.lineThrough)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Professional Discount:', style: TextStyle(color: AppColors.success, fontSize: 13)),
+                            Text('-₹${savings.toInt()}', style: const TextStyle(color: AppColors.success, fontSize: 13, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.success.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('You saved on this order',
+                                  style: TextStyle(fontSize: 12, color: AppColors.success, fontWeight: FontWeight.bold)),
+                              Text('₹${savings.toInt()}',
+                                  style: const TextStyle(fontSize: 12, color: AppColors.success, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -481,27 +656,36 @@ class _ShopScreenState extends State<ShopScreen> {
                           prefixIcon: Icon(LucideIcons.tag),
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
                       
                       ElevatedButton(
-                        onPressed: () async {
+                        onPressed: hasMoqViolation
+                            ? null
+                            : () async {
                           final address = await Navigator.push<Map<String, dynamic>>(
                             context,
                             MaterialPageRoute(builder: (_) => const SelectAddressScreen()),
                           );
                           if (address != null && context.mounted) {
-                            final addressId = address['id'] as String;
-                            context.read<MarketplaceBloc>().add(
-                              PlaceOrder(
-                                vendorId: cartProducts.first.vendorId,
-                                shippingAddressId: addressId,
-                                couponCode: _couponController.text.isNotEmpty ? _couponController.text : null,
+                            final success = await Navigator.push<bool>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => CheckoutScreen(
+                                  address: address,
+                                  subTotal: subTotal,
+                                  vendorId: cartProducts.first.vendorId,
+                                  couponCode: _couponController.text.isNotEmpty ? _couponController.text : null,
+                                ),
                               ),
                             );
-                            Navigator.pop(context);
+                            if (success == true && context.mounted) {
+                              Navigator.pop(context); // Close cart sheet
+                            }
                           }
                         },
-                        child: Text('PLACE ORDER (₹${(subTotal + 50).toInt()})'),
+                        child: Text(hasMoqViolation
+                            ? 'MINIMUM ORDER QUANTITY NOT MET'
+                            : 'PLACE ORDER (₹${(subTotal + 50).toInt()})'),
                       ),
                     ],
                   ),

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -65,30 +66,44 @@ type Client struct {
 }
 
 type Hub struct {
-	cfg      *config.Config
-	jwt      *auth.JWTManager
-	clients  map[uuid.UUID]*Client
-	rooms    map[string]map[uuid.UUID]*Client
-	register chan *Client
-	unregister chan *Client
-	broadcast chan *WSMessage
-	events   []EventRecord
-	eventMu  sync.Mutex
-	mu       sync.RWMutex
-}
-
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
+	cfg             *config.Config
+	jwt             *auth.JWTManager
+	upgrader        websocket.Upgrader
+	AuthorizeRoom   func(userID uuid.UUID, role, room string) bool
+	clients         map[uuid.UUID]*Client
+	rooms           map[string]map[uuid.UUID]*Client
+	register        chan *Client
+	unregister      chan *Client
+	broadcast       chan *WSMessage
+	events          []EventRecord
+	eventMu         sync.Mutex
+	mu              sync.RWMutex
 }
 
 func NewHub(cfg *config.Config, jwt *auth.JWTManager) *Hub {
+	allowedOrigins := parseAllowedOrigins(cfg.Server.AllowOrigins)
 	return &Hub{
-		cfg:        cfg,
-		jwt:        jwt,
+		cfg: cfg,
+		jwt: jwt,
+		upgrader: websocket.Upgrader{
+			ReadBufferSize:  1024,
+			WriteBufferSize: 1024,
+			CheckOrigin: func(r *http.Request) bool {
+				origin := r.Header.Get("Origin")
+				if cfg.IsDevMode() && len(allowedOrigins) == 0 {
+					return true
+				}
+				if origin == "" || len(allowedOrigins) == 0 {
+					return false
+				}
+				for _, allowed := range allowedOrigins {
+					if strings.EqualFold(origin, allowed) {
+						return true
+					}
+				}
+				return false
+			},
+		},
 		clients:    make(map[uuid.UUID]*Client),
 		rooms:      make(map[string]map[uuid.UUID]*Client),
 		register:   make(chan *Client, 100),
@@ -96,6 +111,21 @@ func NewHub(cfg *config.Config, jwt *auth.JWTManager) *Hub {
 		broadcast:  make(chan *WSMessage, 100),
 		events:     make([]EventRecord, 0, 1000),
 	}
+}
+
+func parseAllowedOrigins(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
 }
 
 func (h *Hub) RecordEvent(msg *WSMessage) {
@@ -213,7 +243,7 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade error: %v", err)
 		return
@@ -327,18 +357,29 @@ func (c *Client) readPump() {
 			c.Send <- []byte(`{"type":"pong"}`)
 		case "join_room":
 			if room, ok := msg.Payload.(string); ok {
+				if c.Hub.AuthorizeRoom != nil && !c.Hub.AuthorizeRoom(c.UserID, c.Role, room) {
+					continue
+				}
 				c.Rooms[room] = true
 				c.Hub.addToRoom(room, c)
 			}
 		case "subscribe_barber":
 			if barberID, ok := msg.Payload.(string); ok {
-				c.Rooms["barber:"+barberID] = true
-				c.Hub.addToRoom("barber:"+barberID, c)
+				room := "barber:" + barberID
+				if c.Hub.AuthorizeRoom != nil && !c.Hub.AuthorizeRoom(c.UserID, c.Role, room) {
+					continue
+				}
+				c.Rooms[room] = true
+				c.Hub.addToRoom(room, c)
 			}
 		case "subscribe_order":
 			if orderID, ok := msg.Payload.(string); ok {
-				c.Rooms["order:"+orderID] = true
-				c.Hub.addToRoom("order:"+orderID, c)
+				room := "order:" + orderID
+				if c.Hub.AuthorizeRoom != nil && !c.Hub.AuthorizeRoom(c.UserID, c.Role, room) {
+					continue
+				}
+				c.Rooms[room] = true
+				c.Hub.addToRoom(room, c)
 			}
 		}
 	}

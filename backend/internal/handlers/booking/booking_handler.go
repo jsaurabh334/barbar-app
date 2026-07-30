@@ -973,6 +973,11 @@ func (h *BookingHandler) AcceptHomeService(c *gin.Context) {
 		return
 	}
 
+	if booking.ScheduledStart.Before(time.Now()) {
+		utils.BadRequestResponse(c, "Cannot accept: booking time has passed")
+		return
+	}
+
 	// Travel buffer check — accounts for travel_to/travel_back of all bookings
 	travelTimeMin := booking.TravelTimeMin
 	if travelTimeMin <= 0 {
@@ -1041,12 +1046,14 @@ func (h *BookingHandler) AcceptHomeService(c *gin.Context) {
 
 	estimatedWait += travelTimeMin
 
+	now := time.Now()
 	tx := h.db.Begin()
 
 	oldStatus := booking.Status
 	booking.Status = models.BookingStatusConfirmed
 	booking.QueuePosition = queuePosition
 	booking.EstimatedWaitMin = estimatedWait
+	booking.QueueAssignedAt = &now
 
 	if err := tx.Save(&booking).Error; err != nil {
 		tx.Rollback()
@@ -1068,7 +1075,7 @@ func (h *BookingHandler) AcceptHomeService(c *gin.Context) {
 
 	h.refreshQueue(barber.ID)
 
-	go h.sendBookingNotifications(&booking)
+	go h.sendStatusUpdateNotifications(&booking)
 
 	utils.SuccessResponse(c, booking)
 }
@@ -1564,19 +1571,41 @@ func (h *BookingHandler) GetTodayQueue(c *gin.Context) {
 	var bookings []models.Booking
 	query.Preload("Customer").Preload("Services").Order("queue_position ASC, scheduled_start ASC").Find(&bookings)
 
+	var staffMembers []models.BarberStaff
+	h.db.Where("barber_id = ? AND is_active = ?", barber.ID, true).Find(&staffMembers)
+
+	var staffData []map[string]interface{}
+	for _, s := range staffMembers {
+		staffData = append(staffData, map[string]interface{}{
+			"id":   s.ID,
+			"name": s.Name,
+		})
+	}
+
 	var serving, next, waiting, late, upcoming []map[string]interface{}
 	for _, b := range bookings {
 		item := map[string]interface{}{
-			"id":                 b.ID,
-			"customer_name":      b.Customer.FullName,
-			"customer_phone":     b.Customer.Phone,
-			"services":           b.Services,
-			"queue_position":     b.QueuePosition,
-			"estimated_wait_min": b.EstimatedWaitMin,
-			"scheduled_start":    b.ScheduledStart,
-			"check_in_at":        b.CheckInAt,
-			"is_late":            b.IsLate,
-			"queue_assigned_at":  b.QueueAssignedAt,
+			"id":                     b.ID,
+			"barber_id":              b.BarberID,
+			"customer_id":            b.CustomerID,
+			"status":                 string(b.Status),
+			"scheduled_start":        b.ScheduledStart,
+			"scheduled_end":          b.ScheduledEnd,
+			"queue_position":         b.QueuePosition,
+			"estimated_wait_minutes": b.EstimatedWaitMin,
+			"final_price":            b.FinalPrice,
+			"payment_status":         b.PaymentStatus,
+			"customer_name":          b.Customer.FullName,
+			"customer_phone":         b.Customer.Phone,
+			"customer": map[string]interface{}{
+				"full_name": b.Customer.FullName,
+				"phone":     b.Customer.Phone,
+			},
+			"services":          b.Services,
+			"is_home_service":   b.IsHomeService,
+			"check_in_at":       b.CheckInAt,
+			"is_late":           b.IsLate,
+			"queue_assigned_at": b.QueueAssignedAt,
 		}
 
 		switch b.Status {
@@ -1596,13 +1625,14 @@ func (h *BookingHandler) GetTodayQueue(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, gin.H{
-		"shop_name": barber.ShopName,
+		"shop_name":    barber.ShopName,
 		"shop_address": barber.Address + ", " + barber.City,
-		"serving":  serving,
-		"next":     next,
-		"waiting":  waiting,
-		"late":     late,
-		"upcoming": upcoming,
+		"serving":      serving,
+		"next":         next,
+		"waiting":      waiting,
+		"late":         late,
+		"upcoming":     upcoming,
+		"staff":        staffData,
 	})
 }
 

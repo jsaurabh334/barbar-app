@@ -86,7 +86,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => CustomerOrderTrackingScreen(orderId: order.id),
+          builder: (_) => CustomerOrderTrackingScreen(orderId: order.id, order: order),
         ),
       );
       if (context.mounted) {
@@ -184,10 +184,46 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
+                  const SizedBox(height: 14),
+                  if (order.status == 'pending' || order.status == 'accepted' || order.status == 'confirmed')
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => _showCancelDialog(order),
+                            icon: const Icon(LucideIcons.xCircle, size: 16),
+                            label: const Text('CANCEL', style: TextStyle(fontSize: 12)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.error,
+                              side: const BorderSide(color: AppColors.error),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (order.status == 'delivered')
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _showReturnDialog(order),
+                          icon: const Icon(LucideIcons.rotateCcw, size: 16),
+                          label: const Text('REQUEST RETURN', style: TextStyle(fontSize: 12)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                        ),
+                      ),
+                    ),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
                   onPressed: openTracking,
                   icon: Icon(btnConfig.$2, size: 16),
                   label: Text(
@@ -304,5 +340,86 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       default:
         return LucideIcons.helpCircle;
     }
+  }
+
+  void _showCancelDialog(OrderModel order) {
+    final reasonController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.cardBg,
+        title: const Text('Cancel Order', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Are you sure you want to cancel this order?', style: TextStyle(color: Colors.white70)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                hintText: 'Reason for cancellation (optional)',
+                border: OutlineInputBorder(),
+              ),
+              style: const TextStyle(color: Colors.white),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('NO', style: TextStyle(color: Colors.grey))),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.read<MarketplaceBloc>().add(CancelOrder(
+                orderId: order.id,
+                reason: reasonController.text.isNotEmpty ? reasonController.text : null,
+              ));
+            },
+            child: const Text('YES, CANCEL', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showReturnDialog(OrderModel order) {
+    final reasonController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.cardBg,
+        title: const Text('Return Request', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Why do you want to return this order?', style: TextStyle(color: Colors.white70)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                hintText: 'Describe the issue...',
+                border: OutlineInputBorder(),
+              ),
+              style: const TextStyle(color: Colors.white),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL', style: TextStyle(color: Colors.grey))),
+          TextButton(
+            onPressed: () {
+              if (reasonController.text.trim().isEmpty) return;
+              Navigator.pop(ctx);
+              context.read<MarketplaceBloc>().add(SubmitReturnRequest(
+                orderId: order.id,
+                reason: reasonController.text.trim(),
+              ));
+            },
+            child: const Text('SUBMIT', style: TextStyle(color: AppColors.primary)),
+          ),
+        ],
+      ),
+    );
   }
 }

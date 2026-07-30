@@ -228,6 +228,34 @@ class VendorRemoteDataSource {
     throw Exception(response.data['error'] ?? 'Failed to set order ready for pickup');
   }
 
+  // ==================== Returns ====================
+
+  Future<Map<String, dynamic>> approveReturn(String orderId) async {
+    final response = await _apiClient.dio.put('/vendor/orders/$orderId/approve-return');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to approve return');
+  }
+
+  Future<Map<String, dynamic>> rejectReturn(String orderId, {String? reason}) async {
+    final data = <String, dynamic>{};
+    if (reason != null) data['reason'] = reason;
+    final response = await _apiClient.dio.put('/vendor/orders/$orderId/reject-return', data: data);
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to reject return');
+  }
+
+  Future<Map<String, dynamic>> receiveReturn(String orderId) async {
+    final response = await _apiClient.dio.put('/vendor/orders/$orderId/receive-return');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to confirm return receipt');
+  }
+
   // ==================== Delivery ====================
 
   Future<Map<String, dynamic>> getOrderDeliveryInfo(String orderId) async {

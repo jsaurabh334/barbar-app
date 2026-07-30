@@ -5,6 +5,13 @@ import (
 	"time"
 )
 
+type BuyerType string
+
+const (
+	BuyerTypeCustomer BuyerType = "customer"
+	BuyerTypeBarber   BuyerType = "barber"
+)
+
 type OrderStatus string
 
 const (
@@ -22,10 +29,16 @@ const (
 	OrderStatusOutForDelivery  OrderStatus = "out_for_delivery"
 	OrderStatusDelivered       OrderStatus = "delivered"
 	OrderStatusCancelled       OrderStatus = "cancelled"
-	OrderStatusReturnRequested OrderStatus = "return_requested"
-	OrderStatusReturned        OrderStatus = "returned"
-	OrderStatusRefunded        OrderStatus = "refunded"
-	OrderStatusPartiallyRefunded OrderStatus = "partially_refunded"
+	OrderStatusReturnRequested    OrderStatus = "return_requested"
+	OrderStatusReturnApproved     OrderStatus = "return_approved"
+	OrderStatusReturnRejected     OrderStatus = "return_rejected"
+	OrderStatusReturnPickupAssigned OrderStatus = "return_pickup_assigned"
+	OrderStatusReturnPickedUp     OrderStatus = "return_picked_up"
+	OrderStatusReturnReceived     OrderStatus = "return_received"
+	OrderStatusRefundProcessing   OrderStatus = "refund_processing"
+	OrderStatusReturned           OrderStatus = "returned"
+	OrderStatusRefunded           OrderStatus = "refunded"
+	OrderStatusPartiallyRefunded  OrderStatus = "partially_refunded"
 )
 
 type PaymentStatus string
@@ -40,10 +53,11 @@ const (
 
 type Order struct {
 	BaseModel
-	CustomerID        uuid.UUID     `gorm:"type:uuid;index;not null" json:"customer_id"`
-	VendorID          uuid.UUID     `gorm:"type:uuid;index" json:"vendor_id"`
+	CustomerID        uuid.UUID     `gorm:"type:uuid;index:idx_orders_customer_status,priority:1;not null" json:"customer_id"`
+	VendorID          uuid.UUID     `gorm:"type:uuid;index:idx_orders_vendor_status,priority:1" json:"vendor_id"`
+	BuyerType         BuyerType     `gorm:"size:20;default:customer;index" json:"buyer_type"`
 	OrderNumber       string        `gorm:"size:50;uniqueIndex" json:"order_number"`
-	Status            OrderStatus   `gorm:"size:50;default:pending;index" json:"status"`
+	Status            OrderStatus   `gorm:"size:50;default:pending;index:idx_orders_customer_status,priority:2;index:idx_orders_vendor_status,priority:2;index:idx_orders_dp_status,priority:2" json:"status"`
 	ItemsTotal        float64       `gorm:"default:0" json:"items_total"`
 	ShippingCharge    float64       `gorm:"default:0" json:"shipping_charge"`
 	TaxAmount         float64       `gorm:"default:0" json:"tax_amount"`
@@ -59,10 +73,15 @@ type Order struct {
 	BillingAddressID  *uuid.UUID    `gorm:"type:uuid" json:"billing_address_id,omitempty"`
 	DeliveryNotes     string        `gorm:"type:text" json:"delivery_notes,omitempty"`
 	CancellationReason string       `gorm:"type:text" json:"cancellation_reason,omitempty"`
+	CancelledBy       *uuid.UUID    `gorm:"type:uuid" json:"cancelled_by,omitempty"`
 	CancelledAt       *time.Time    `json:"cancelled_at,omitempty"`
-	DeliveredAt       *time.Time    `json:"delivered_at,omitempty"`
-	ReturnReason      string        `gorm:"type:text" json:"return_reason,omitempty"`
-	ReturnRequestedAt *time.Time    `json:"return_requested_at,omitempty"`
+	DeliveredAt       *time.Time    `gorm:"index:idx_orders_dp_delivered,priority:2" json:"delivered_at,omitempty"`
+	ReturnReason       string        `gorm:"type:text" json:"return_reason,omitempty"`
+	ReturnRequestedAt  *time.Time    `json:"return_requested_at,omitempty"`
+	ReturnApprovedAt   *time.Time    `json:"return_approved_at,omitempty"`
+	ReturnApprovedBy   *uuid.UUID    `gorm:"type:uuid" json:"return_approved_by,omitempty"`
+	ReturnReceivedAt   *time.Time    `json:"return_received_at,omitempty"`
+	ReturnRejectReason string        `gorm:"type:text" json:"return_reject_reason,omitempty"`
 	CommissionAmount  float64       `gorm:"default:0" json:"commission_amount"`
 	PlatformFee       float64       `gorm:"default:0" json:"platform_fee"`
 	VendorEarnings    float64       `gorm:"default:0" json:"vendor_earnings"`
@@ -70,7 +89,7 @@ type Order struct {
 	TrackingNumber    string        `gorm:"size:255" json:"tracking_number,omitempty"`
 	CourierPartner    string        `gorm:"size:255" json:"courier_partner,omitempty"`
 	EstimatedDelivery *time.Time    `json:"estimated_delivery,omitempty"`
-	DeliveryPartnerID *uuid.UUID    `gorm:"type:uuid;index" json:"delivery_partner_id,omitempty"`
+	DeliveryPartnerID *uuid.UUID    `gorm:"type:uuid;index:idx_orders_dp_status,priority:1;index:idx_orders_dp_delivered,priority:1" json:"delivery_partner_id,omitempty"`
 	WarehouseID       *uuid.UUID    `gorm:"type:uuid" json:"warehouse_id,omitempty"`
 	AssignedAt        *time.Time    `json:"assigned_at,omitempty"`
 	PickedUpAt        *time.Time    `json:"picked_up_at,omitempty"`

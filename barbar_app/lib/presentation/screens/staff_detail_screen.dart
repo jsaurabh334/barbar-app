@@ -91,10 +91,10 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
                   CircleAvatar(
                     radius: 48,
                     backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                    backgroundImage: widget.staff.image != null && widget.staff.image!.isNotEmpty
-                        ? NetworkImage(widget.staff.image!)
+                    backgroundImage: widget.staff.fullImageUrl != null
+                        ? NetworkImage(widget.staff.fullImageUrl!)
                         : null,
-                    child: widget.staff.image == null || widget.staff.image!.isEmpty
+                    child: widget.staff.fullImageUrl == null
                         ? const Icon(LucideIcons.user, size: 40, color: AppColors.primary)
                         : null,
                   ),

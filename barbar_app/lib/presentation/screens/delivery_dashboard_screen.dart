@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
@@ -29,7 +29,8 @@ class DeliveryDashboardScreen extends StatefulWidget {
   const DeliveryDashboardScreen({super.key});
 
   @override
-  State<DeliveryDashboardScreen> createState() => _DeliveryDashboardScreenState();
+  State<DeliveryDashboardScreen> createState() =>
+      _DeliveryDashboardScreenState();
 }
 
 class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
@@ -40,6 +41,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
   Timer? _heartbeatTimer;
   Timer? _gpsTimer;
   List<OrderModel> _orders = [];
+  Map<String, dynamic> _dashboardStats = {};
+  bool _dashboardLoading = false;
 
   // Using OpenStreetMap via flutter_map - completely free, no API key needed!
 
@@ -75,6 +78,15 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
     });
   }
 
+  Future<void> _fetchDashboardStats() async {
+    setState(() => _dashboardLoading = true);
+    try {
+      final stats = await context.read<DeliveryRepository>().getDeliveryDashboard();
+      if (mounted) setState(() => _dashboardStats = stats);
+    } catch (_) {}
+    if (mounted) setState(() => _dashboardLoading = false);
+  }
+
   Future<void> _toggleOnline(bool online) async {
     setState(() => _presenceLoading = true);
     try {
@@ -89,12 +101,15 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
     setState(() => _presenceLoading = false);
   }
 
-  bool get _isOnline => _presenceStatus == 'online' || _presenceStatus == 'busy';
+  bool get _isOnline =>
+      _presenceStatus == 'online' || _presenceStatus == 'busy';
 
   bool get _hasActiveDelivery => _orders.any((o) =>
-    o.status == OrderModel.driverAccepted ||
-    o.status == OrderModel.pickedUp ||
-    o.status == OrderModel.outForDelivery);
+      o.status == OrderModel.driverAccepted ||
+      o.status == OrderModel.pickedUp ||
+      o.status == OrderModel.outForDelivery ||
+      o.status == OrderModel.returnPickupAssigned ||
+      o.status == OrderModel.returnPickedUp);
 
   void _startGpsTracking() {
     _gpsTimer?.cancel();
@@ -112,11 +127,11 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
         );
         if (mounted) {
           context.read<DeliveryBloc>().add(UpdateDeliveryLocation(
-            latitude: position.latitude,
-            longitude: position.longitude,
-            speed: position.speed,
-            bearing: position.heading,
-          ));
+                latitude: position.latitude,
+                longitude: position.longitude,
+                speed: position.speed,
+                bearing: position.heading,
+              ));
         }
       } catch (_) {}
     });
@@ -135,7 +150,10 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
         elevation: 0,
         title: const Text(
           'DELIVERY CONSOLE',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2, color: Colors.black),
+          style: TextStyle(
+              fontWeight: FontWeight.bold,
+              letterSpacing: 2,
+              color: Colors.black),
         ),
         actions: [
           IconButton(
@@ -143,7 +161,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+                MaterialPageRoute(
+                    builder: (context) => const NotificationsScreen()),
               );
             },
           ),
@@ -161,9 +180,12 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
           });
         },
         items: const [
-          BottomNavigationBarItem(icon: Icon(LucideIcons.navigation), label: 'Tasks'),
-          BottomNavigationBarItem(icon: Icon(LucideIcons.history), label: 'History'),
-          BottomNavigationBarItem(icon: Icon(LucideIcons.user), label: 'Profile'),
+          BottomNavigationBarItem(
+              icon: Icon(LucideIcons.navigation), label: 'Tasks'),
+          BottomNavigationBarItem(
+              icon: Icon(LucideIcons.history), label: 'History'),
+          BottomNavigationBarItem(
+              icon: Icon(LucideIcons.user), label: 'Profile'),
         ],
       ),
       body: BlocListener<DeliveryBloc, DeliveryState>(
@@ -211,14 +233,16 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
           current is DeliveryInitial,
       builder: (context, state) {
         if (state is DeliveryLoading && _orders.isEmpty) {
-          return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+          return const Center(
+              child: CircularProgressIndicator(color: AppColors.primary));
         }
         if (state is DeliveryFailure && _orders.isEmpty) {
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(LucideIcons.alertCircle, size: 48, color: AppColors.error),
+                const Icon(LucideIcons.alertCircle,
+                    size: 48, color: AppColors.error),
                 const SizedBox(height: 12),
                 Text(
                   state.error,
@@ -227,8 +251,10 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
-                  onPressed: () => context.read<DeliveryBloc>().add(FetchAssignedOrders()),
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                  onPressed: () =>
+                      context.read<DeliveryBloc>().add(FetchAssignedOrders()),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary),
                   child: const Text('Retry'),
                 ),
               ],
@@ -237,11 +263,13 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
         }
 
         final orders = state is DeliveryOrdersLoaded ? state.orders : _orders;
-        final activeOrders = orders.where((o) =>
-          o.status != 'delivered' && o.status != 'cancelled').toList();
+        final activeOrders = orders
+            .where((o) => o.status != 'delivered' && o.status != 'cancelled')
+            .toList();
 
         final authState = context.watch<AuthBloc>().state;
-        final driverName = (authState is AuthAuthenticated && authState.user.fullName.isNotEmpty)
+        final driverName = (authState is AuthAuthenticated &&
+                authState.user.fullName.isNotEmpty)
             ? authState.user.fullName
             : 'Delivery Partner';
 
@@ -268,8 +296,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                 _buildCurrentDeliveryCard(activeOrders),
                 const SizedBox(height: 16),
                 ...activeOrders.map((o) => _buildOrderCard(o, onTap: () {
-                  setState(() => _selectedOrder = o);
-                })),
+                      setState(() => _selectedOrder = o);
+                    })),
               ],
             ],
           ),
@@ -284,12 +312,17 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
       decoration: BoxDecoration(
         color: AppColors.cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _isOnline ? Colors.greenAccent.withValues(alpha: 0.4) : AppColors.border),
+        border: Border.all(
+            color: _isOnline
+                ? Colors.greenAccent.withValues(alpha: 0.4)
+                : AppColors.border),
       ),
       child: Row(
         children: [
           CircleAvatar(
-            backgroundColor: _isOnline ? Colors.greenAccent.withValues(alpha: 0.15) : AppColors.surface,
+            backgroundColor: _isOnline
+                ? Colors.greenAccent.withValues(alpha: 0.15)
+                : AppColors.surface,
             child: Icon(
               _isOnline ? LucideIcons.radio : LucideIcons.power,
               color: _isOnline ? Colors.greenAccent : AppColors.textSecondary,
@@ -302,14 +335,21 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Welcome, $name 👋',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+                  'Welcome, $name ðŸ‘‹',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.white),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _isOnline ? '🟢 ONLINE • Ready for orders' : '⚪ OFFLINE • Toggle switch to start',
+                  _isOnline
+                      ? 'ðŸŸ¢ ONLINE â€¢ Ready for orders'
+                      : 'âšª OFFLINE â€¢ Toggle switch to start',
                   style: TextStyle(
-                    color: _isOnline ? Colors.greenAccent : AppColors.textSecondary,
+                    color: _isOnline
+                        ? Colors.greenAccent
+                        : AppColors.textSecondary,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -342,7 +382,9 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: _isOnline ? Colors.greenAccent.withValues(alpha: 0.1) : AppColors.surface,
+              color: _isOnline
+                  ? Colors.greenAccent.withValues(alpha: 0.1)
+                  : AppColors.surface,
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -353,8 +395,11 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
           ),
           const SizedBox(height: 20),
           Text(
-            _isOnline ? 'Scanning for Delivery Orders...' : 'You are currently Offline',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+            _isOnline
+                ? 'Scanning for Delivery Orders...'
+                : 'You are currently Offline',
+            style: const TextStyle(
+                fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
@@ -362,18 +407,21 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
             _isOnline
                 ? 'Your location is active and visible to Admin. Incoming assigned orders will pop up here instantly.'
                 : 'Turn on the ONLINE switch above to start receiving delivery task assignments.',
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
+            style: const TextStyle(
+                color: AppColors.textSecondary, fontSize: 13, height: 1.4),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 20),
           OutlinedButton.icon(
-            onPressed: () => context.read<DeliveryBloc>().add(FetchAssignedOrders()),
+            onPressed: () =>
+                context.read<DeliveryBloc>().add(FetchAssignedOrders()),
             icon: const Icon(LucideIcons.refreshCw, size: 16),
             label: const Text('Refresh Orders'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
               side: const BorderSide(color: AppColors.primary),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
             ),
           ),
         ],
@@ -382,10 +430,14 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
   }
 
   Widget _buildCurrentDeliveryCard(List<OrderModel> orders) {
-    final active = orders.where((o) =>
-      o.status == OrderModel.driverAccepted ||
-      o.status == OrderModel.pickedUp ||
-      o.status == OrderModel.outForDelivery).toList();
+    final active = orders
+        .where((o) =>
+            o.status == OrderModel.driverAccepted ||
+            o.status == OrderModel.pickedUp ||
+            o.status == OrderModel.outForDelivery ||
+            o.status == OrderModel.returnPickupAssigned ||
+            o.status == OrderModel.returnPickedUp)
+        .toList();
 
     if (active.isEmpty) return const SizedBox.shrink();
 
@@ -420,7 +472,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                       color: AppColors.primary.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(LucideIcons.navigation, size: 16, color: AppColors.primary),
+                    child: const Icon(LucideIcons.navigation,
+                        size: 16, color: AppColors.primary),
                   ),
                   const SizedBox(width: 10),
                   const Text(
@@ -437,31 +490,38 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
               const SizedBox(height: 12),
               Text(
                 order.orderNumber,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(LucideIcons.store, size: 14, color: AppColors.textSecondary),
+                  const Icon(LucideIcons.store,
+                      size: 14, color: AppColors.textSecondary),
                   const SizedBox(width: 6),
-              Text(
+                  Text(
                     'Pickup Location',
-                    style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                    style: const TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary),
                   ),
                   const SizedBox(width: 12),
-                  const Icon(LucideIcons.arrowRight, size: 14, color: AppColors.primary),
+                  const Icon(LucideIcons.arrowRight,
+                      size: 14, color: AppColors.primary),
                   const SizedBox(width: 6),
-                  const Icon(LucideIcons.home, size: 14, color: AppColors.textSecondary),
+                  const Icon(LucideIcons.home,
+                      size: 14, color: AppColors.textSecondary),
                   const SizedBox(width: 6),
                   Text(
                     order.customerName ?? 'Customer',
-                    style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                    style: const TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: _statusColor(order.status).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
@@ -481,9 +541,13 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                 children: [
                   Text(
                     'Tap to open routing map',
-                    style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold),
                   ),
-                  Icon(LucideIcons.arrowRight, size: 16, color: AppColors.primary),
+                  Icon(LucideIcons.arrowRight,
+                      size: 16, color: AppColors.primary),
                 ],
               ),
             ],
@@ -503,14 +567,16 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
           current is DeliveryInitial,
       builder: (context, state) {
         if (state is DeliveryLoading && state is! DeliveryOrdersLoaded) {
-          return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+          return const Center(
+              child: CircularProgressIndicator(color: AppColors.primary));
         }
         if (state is DeliveryFailure) {
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(LucideIcons.alertCircle, size: 48, color: AppColors.error),
+                const Icon(LucideIcons.alertCircle,
+                    size: 48, color: AppColors.error),
                 const SizedBox(height: 12),
                 Text(
                   state.error,
@@ -519,8 +585,10 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
-                  onPressed: () => context.read<DeliveryBloc>().add(FetchAssignedOrders()),
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                  onPressed: () =>
+                      context.read<DeliveryBloc>().add(FetchAssignedOrders()),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary),
                   child: const Text('Retry'),
                 ),
               ],
@@ -529,8 +597,10 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
         }
 
         final history = state is DeliveryOrdersLoaded
-            ? state.orders.where((o) =>
-                o.status == 'delivered' || o.status == 'cancelled').toList()
+            ? state.orders
+                .where(
+                    (o) => o.status == 'delivered' || o.status == 'cancelled')
+                .toList()
             : <OrderModel>[];
 
         if (history.isEmpty) {
@@ -552,22 +622,34 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
   }
 
   Widget _buildProfileTab() {
+    // Fetch dashboard stats when profile tab is shown
+    if (_dashboardStats.isEmpty && !_dashboardLoading) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _fetchDashboardStats());
+    }
+
     return BlocBuilder<DeliveryBloc, DeliveryState>(
-      buildWhen: (previous, current) => current is DeliveryProfileLoaded,
+      buildWhen: (previous, current) => current is DeliveryProfileLoaded || current is DeliveryDashboardLoaded,
       builder: (context, state) {
         String name = 'Delivery Agent';
         String partnerId = '';
-        int trips = 0;
-        double earnings = 0;
+        final todayEarnings = (_dashboardStats['today_earnings'] as num?)?.toDouble() ?? 0;
+        final completedDeliveries = (_dashboardStats['completed_deliveries'] as num?)?.toInt() ?? 0;
+        final activeOrders = (_dashboardStats['active_orders'] as num?)?.toInt() ?? 0;
+        final distance = (_dashboardStats['distance_travelled'] as num?)?.toDouble() ?? 0;
+        final pendingDeliveries = (_dashboardStats['pending_deliveries'] as num?)?.toInt() ?? 0;
 
         if (state is DeliveryProfileLoaded) {
           final p = state.profile;
           name = p.user?.fullName ?? 'Delivery Agent';
           partnerId = p.id.length > 8 ? p.id.substring(0, 8) : p.id;
         }
+        if (state is DeliveryDashboardLoaded) {
+          _dashboardStats = state.stats;
+        }
 
         final authState = context.watch<AuthBloc>().state;
-        if ((name == 'Delivery Agent' || name.isEmpty) && authState is AuthAuthenticated) {
+        if ((name == 'Delivery Agent' || name.isEmpty) &&
+            authState is AuthAuthenticated) {
           name = authState.user.fullName;
         }
 
@@ -583,7 +665,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                     const CircleAvatar(
                       radius: 50,
                       backgroundColor: AppColors.cardBg,
-                      child: Icon(LucideIcons.user, size: 50, color: AppColors.primary),
+                      child: Icon(LucideIcons.user,
+                          size: 50, color: AppColors.primary),
                     ),
                     Positioned(
                       bottom: 0,
@@ -594,7 +677,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                           color: Colors.greenAccent,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.check, size: 14, color: Colors.black),
+                        child: const Icon(Icons.check,
+                            size: 14, color: Colors.black),
                       ),
                     )
                   ],
@@ -604,7 +688,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
               Center(
                 child: Text(
                   name,
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 22, fontWeight: FontWeight.bold),
                 ),
               ),
               if (partnerId.isNotEmpty) ...[
@@ -612,7 +697,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                 Center(
                   child: Text(
                     'partner-id: $partnerId',
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    style: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 13),
                   ),
                 ),
               ],
@@ -629,10 +715,69 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                       ),
                       child: Column(
                         children: [
-                          const Text('Trip Earnings', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          const Text("Today's Earnings",
+                              style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12)),
                           const SizedBox(height: 6),
                           Text(
-                            '₹${earnings.toInt()}',
+                            'â‚¹${todayEarnings.toInt()}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20,
+                                color: AppColors.primary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBg,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                        child: Column(
+                          children: [
+                            const Text('Completed',
+                                style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 12)),
+                            const SizedBox(height: 6),
+                            Text(
+                              '$completedDeliveries',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 20,
+                                  color: AppColors.primary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBg,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Column(
+                        children: [
+                          const Text('Active Orders',
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          const SizedBox(height: 6),
+                          Text(
+                            '$activeOrders',
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.primary),
                           ),
                         ],
@@ -650,11 +795,38 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                       ),
                       child: Column(
                         children: [
-                          const Text('Completed Trips', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          const Text('Distance (km)',
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                           const SizedBox(height: 6),
                           Text(
-                            '$trips',
+                            distance.toStringAsFixed(1),
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.primary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBg,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Column(
+                        children: [
+                          const Text('Pending Deliveries',
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          const SizedBox(height: 6),
+                          Text(
+                            '$pendingDeliveries',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.warning),
                           ),
                         ],
                       ),
@@ -672,76 +844,97 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                 child: Column(
                   children: [
                     ListTile(
-                      leading: const Icon(LucideIcons.wallet, color: AppColors.primary),
+                      leading: const Icon(LucideIcons.wallet,
+                          color: AppColors.primary),
                       title: const Text('Wallet & Withdrawals'),
                       trailing: const Icon(LucideIcons.chevronRight, size: 18),
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const DeliveryWalletScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const DeliveryWalletScreen()),
                       ),
                     ),
                     const Divider(height: 1, color: AppColors.border),
                     ListTile(
-                      leading: const Icon(LucideIcons.trendingUp, color: AppColors.primary),
+                      leading: const Icon(LucideIcons.trendingUp,
+                          color: AppColors.primary),
                       title: const Text('Earnings History'),
                       trailing: const Icon(LucideIcons.chevronRight, size: 18),
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const DeliveryEarningsScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const DeliveryEarningsScreen()),
                       ),
                     ),
                     const Divider(height: 1, color: AppColors.border),
                     ListTile(
-                      leading: const Icon(LucideIcons.building2, color: AppColors.primary),
+                      leading: const Icon(LucideIcons.building2,
+                          color: AppColors.primary),
                       title: const Text('Bank Account'),
                       trailing: const Icon(LucideIcons.chevronRight, size: 18),
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const DeliveryBankScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const DeliveryBankScreen()),
                       ),
                     ),
                     const Divider(height: 1, color: AppColors.border),
                     ListTile(
-                      leading: const Icon(LucideIcons.shieldAlert, color: AppColors.primary),
+                      leading: const Icon(LucideIcons.shieldAlert,
+                          color: AppColors.primary),
                       title: const Text('License & Vehicle Verification'),
                       trailing: const Text(
                         'VERIFIED',
-                        style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                        style: TextStyle(
+                            color: Colors.greenAccent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12),
                       ),
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const DeliveryVerificationScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const DeliveryVerificationScreen()),
                       ),
                     ),
                     const Divider(height: 1, color: AppColors.border),
                     ListTile(
-                      leading: const Icon(LucideIcons.navigation2, color: AppColors.primary),
+                      leading: const Icon(LucideIcons.navigation2,
+                          color: AppColors.primary),
                       title: const Text('GPS Calibration'),
                       trailing: const Icon(LucideIcons.chevronRight, size: 18),
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const DeliveryGpsCalibrationScreen()),
+                        MaterialPageRoute(
+                            builder: (_) =>
+                                const DeliveryGpsCalibrationScreen()),
                       ),
                     ),
                     const Divider(height: 1, color: AppColors.border),
                     ListTile(
-                      leading: const Icon(LucideIcons.headphones, color: AppColors.primary),
+                      leading: const Icon(LucideIcons.headphones,
+                          color: AppColors.primary),
                       title: const Text('Support Hotline'),
                       trailing: const Icon(LucideIcons.chevronRight, size: 18),
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const DeliverySupportScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const DeliverySupportScreen()),
                       ),
                     ),
                     const Divider(height: 1, color: AppColors.border),
                     ListTile(
-                      leading: const Icon(LucideIcons.logOut, color: AppColors.error),
-                      title: const Text('Logout', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
-                      onTap: () => context.read<AuthBloc>().add(LogoutRequested()),
+                      leading: const Icon(LucideIcons.logOut,
+                          color: AppColors.error),
+                      title: const Text('Logout',
+                          style: TextStyle(
+                              color: AppColors.error,
+                              fontWeight: FontWeight.bold)),
+                      onTap: () =>
+                          context.read<AuthBloc>().add(LogoutRequested()),
                     ),
                   ],
                 ),
-              )
+              ),
             ],
           ),
         );
@@ -772,17 +965,22 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                 children: [
                   Text(
                     o.orderNumber,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 15),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: color.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       o.status.toUpperCase().replaceAll('_', ' '),
-                      style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                          color: color,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
@@ -796,12 +994,16 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                     children: [
                       const Text(
                         'Pickup Point',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: 11),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Pickup Location',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white.withValues(alpha: 0.9)),
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Colors.white.withValues(alpha: 0.9)),
                       ),
                     ],
                   ),
@@ -810,27 +1012,34 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                     children: [
                       const Text(
                         'Customer Pay',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: 11),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '₹${o.finalAmount.toInt()}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
+                        'â‚¹${o.finalAmount.toInt()}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: AppColors.primary),
                       ),
                     ],
                   ),
                 ],
               ),
-              if (o.shippingAddress != null && o.shippingAddress!['line1'] != null) ...[
+              if (o.shippingAddress != null &&
+                  o.shippingAddress!['line1'] != null) ...[
                 const SizedBox(height: 12),
                 const Text(
                   'Delivery Location',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                  style:
+                      TextStyle(color: AppColors.textSecondary, fontSize: 11),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   '${o.shippingAddress!['line1']}${o.shippingAddress!['city'] != null ? ', ${o.shippingAddress!['city']}' : ''}',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.normal),
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.normal),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -845,14 +1054,22 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                       child: SizedBox(
                         height: 44,
                         child: ElevatedButton.icon(
-                          onPressed: () => context.read<DeliveryBloc>().add(AcceptAssignment(o.id)),
-                          icon: const Icon(LucideIcons.checkCircle, size: 16, color: Colors.white),
-                          label: const Text('Accept', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                          onPressed: () => context
+                              .read<DeliveryBloc>()
+                              .add(AcceptAssignment(o.id)),
+                          icon: const Icon(LucideIcons.checkCircle,
+                              size: 16, color: Colors.white),
+                          label: const Text('Accept',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: Colors.white)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF10B981),
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
                           ),
                         ),
                       ),
@@ -862,14 +1079,22 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                       child: SizedBox(
                         height: 44,
                         child: ElevatedButton.icon(
-                          onPressed: () => context.read<DeliveryBloc>().add(RejectAssignment(o.id)),
-                          icon: const Icon(LucideIcons.xCircle, size: 16, color: Colors.white),
-                          label: const Text('Decline', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                          onPressed: () => context
+                              .read<DeliveryBloc>()
+                              .add(RejectAssignment(o.id)),
+                          icon: const Icon(LucideIcons.xCircle,
+                              size: 16, color: Colors.white),
+                          label: const Text('Decline',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: Colors.white)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFEF4444),
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
                           ),
                         ),
                       ),
@@ -886,9 +1111,13 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                   children: [
                     Text(
                       'Tap to open routing map',
-                      style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold),
                     ),
-                    Icon(LucideIcons.arrowRight, size: 16, color: AppColors.primary),
+                    Icon(LucideIcons.arrowRight,
+                        size: 16, color: AppColors.primary),
                   ],
                 ),
               ],
@@ -900,13 +1129,23 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
   }
 
   Widget _buildRouteTrackingView(OrderModel o) {
-    final vLat = (o.vendorLatitude != null && o.vendorLatitude! != 0) ? o.vendorLatitude! : 21.2514;
-    final vLng = (o.vendorLongitude != null && o.vendorLongitude! != 0) ? o.vendorLongitude! : 81.6296;
-    final cLat = (o.customerLatitude != null && o.customerLatitude! != 0) ? o.customerLatitude! : 21.2400;
-    final cLng = (o.customerLongitude != null && o.customerLongitude! != 0) ? o.customerLongitude! : 81.6350;
+    final hasVendorCoords = o.vendorLatitude != null &&
+        o.vendorLatitude! != 0 &&
+        o.vendorLongitude != null &&
+        o.vendorLongitude! != 0;
+    final hasCustomerCoords = o.customerLatitude != null &&
+        o.customerLatitude! != 0 &&
+        o.customerLongitude != null &&
+        o.customerLongitude! != 0;
 
-    final vendorPos = ll.LatLng(vLat, vLng);
-    final customerPos = ll.LatLng(cLat, cLng);
+    final hasValidCoords = hasVendorCoords && hasCustomerCoords;
+
+    if (!hasValidCoords) {
+      return _buildNoLocationView(o);
+    }
+
+    final vendorPos = ll.LatLng(o.vendorLatitude!, o.vendorLongitude!);
+    final customerPos = ll.LatLng(o.customerLatitude!, o.customerLongitude!);
 
     return Column(
       children: [
@@ -924,8 +1163,12 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(o.orderNumber, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    Text('Transit Route Tracking', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                    Text(o.orderNumber,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text('Transit Route Tracking',
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: 11)),
                   ],
                 ),
               ),
@@ -942,7 +1185,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.yourcompany.barbarapp',
                   ),
                   MarkerLayer(
@@ -951,13 +1195,15 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                         point: vendorPos,
                         width: 48,
                         height: 48,
-                        child: const Icon(LucideIcons.store, color: Colors.orange, size: 36),
+                        child: const Icon(LucideIcons.store,
+                            color: Colors.orange, size: 36),
                       ),
                       Marker(
                         point: customerPos,
                         width: 48,
                         height: 48,
-                        child: const Icon(LucideIcons.home, color: Colors.yellowAccent, size: 36),
+                        child: const Icon(LucideIcons.home,
+                            color: Colors.yellowAccent, size: 36),
                       ),
                     ],
                   ),
@@ -988,17 +1234,24 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                         children: [
                           const Text(
                             'ROUTE DETAIL',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1.5),
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                letterSpacing: 1.5),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: AppColors.primary.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               o.status.toUpperCase().replaceAll('_', ' '),
-                              style: const TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold),
                             ),
                           )
                         ],
@@ -1006,12 +1259,15 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          const Icon(LucideIcons.store, color: AppColors.primary, size: 16),
+                          const Icon(LucideIcons.store,
+                              color: AppColors.primary, size: 16),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               'Pickup: Vendor Store',
-                              style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.9)),
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white.withValues(alpha: 0.9)),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1021,12 +1277,15 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          const Icon(LucideIcons.home, color: Colors.yellowAccent, size: 16),
+                          const Icon(LucideIcons.home,
+                              color: Colors.yellowAccent, size: 16),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               'Dropoff: ${_formatAddress(o.shippingAddress)}',
-                              style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.9)),
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white.withValues(alpha: 0.9)),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1038,18 +1297,36 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: () => NavigationLauncher.launchMapsNavigation(
+                              onPressed: () =>
+                                  NavigationLauncher.launchMapsNavigation(
                                 context: context,
-                                latitude: (o.status == OrderModel.pickedUp || o.status == OrderModel.outForDelivery) ? cLat : vLat,
-                                longitude: (o.status == OrderModel.pickedUp || o.status == OrderModel.outForDelivery) ? cLng : vLng,
-                                title: (o.status == OrderModel.pickedUp || o.status == OrderModel.outForDelivery) ? 'Customer Location' : 'Vendor Pickup Location',
+                                latitude: (o.status == OrderModel.pickedUp ||
+                                        o.status == OrderModel.outForDelivery)
+                                    ? o.customerLatitude!
+                                    : o.vendorLatitude!,
+                                longitude: (o.status == OrderModel.pickedUp ||
+                                        o.status == OrderModel.outForDelivery)
+                                    ? o.customerLongitude!
+                                    : o.vendorLongitude!,
+                                title: (o.status == OrderModel.pickedUp ||
+                                        o.status == OrderModel.outForDelivery)
+                                    ? 'Customer Location'
+                                    : 'Vendor Pickup Location',
                               ),
-                              icon: const Icon(LucideIcons.navigation2, size: 16, color: AppColors.primary),
-                              label: const Text('Google GPS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary)),
+                              icon: const Icon(LucideIcons.navigation2,
+                                  size: 16, color: AppColors.primary),
+                              label: const Text('Google GPS',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                      color: AppColors.primary)),
                               style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: AppColors.primary),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                side:
+                                    const BorderSide(color: AppColors.primary),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
                               ),
                             ),
                           ),
@@ -1078,28 +1355,36 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
           children: [
             Expanded(
               child: ElevatedButton.icon(
-                onPressed: () => context.read<DeliveryBloc>().add(AcceptAssignment(o.id)),
+                onPressed: () =>
+                    context.read<DeliveryBloc>().add(AcceptAssignment(o.id)),
                 icon: const Icon(LucideIcons.checkCircle, size: 16),
-                label: const Text('ACCEPT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                label: const Text('ACCEPT',
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.success,
                   foregroundColor: Colors.black,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: ElevatedButton.icon(
-                onPressed: () => context.read<DeliveryBloc>().add(RejectAssignment(o.id)),
+                onPressed: () =>
+                    context.read<DeliveryBloc>().add(RejectAssignment(o.id)),
                 icon: const Icon(LucideIcons.xCircle, size: 16),
-                label: const Text('REJECT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                label: const Text('REJECT',
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.error,
                   foregroundColor: Colors.black,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
               ),
             ),
@@ -1110,36 +1395,44 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
         return ElevatedButton.icon(
           onPressed: () => _showOtpVerification(context, o, otpType: 'pickup'),
           icon: const Icon(LucideIcons.package, size: 18),
-          label: const Text('VERIFY PICKUP OTP', style: TextStyle(fontWeight: FontWeight.bold)),
+          label: const Text('VERIFY PICKUP OTP',
+              style: TextStyle(fontWeight: FontWeight.bold)),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF14B8A6),
             foregroundColor: Colors.black,
             padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       case OrderModel.pickedUp:
         return ElevatedButton.icon(
-          onPressed: () => context.read<DeliveryBloc>().add(OutForDelivery(o.id)),
+          onPressed: () =>
+              context.read<DeliveryBloc>().add(OutForDelivery(o.id)),
           icon: const Icon(LucideIcons.navigation, size: 18),
-          label: const Text('OUT FOR DELIVERY', style: TextStyle(fontWeight: FontWeight.bold)),
+          label: const Text('OUT FOR DELIVERY',
+              style: TextStyle(fontWeight: FontWeight.bold)),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFFFF6B35),
             foregroundColor: Colors.black,
             padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       case OrderModel.outForDelivery:
         return ElevatedButton.icon(
-          onPressed: () => _showOtpVerification(context, o, otpType: 'delivery'),
+          onPressed: () =>
+              _showOtpVerification(context, o, otpType: 'delivery'),
           icon: const Icon(LucideIcons.checkCircle, size: 18),
-          label: const Text('CONFIRM DELIVERY', style: TextStyle(fontWeight: FontWeight.bold)),
+          label: const Text('CONFIRM DELIVERY',
+              style: TextStyle(fontWeight: FontWeight.bold)),
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.success,
             foregroundColor: Colors.black,
             padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       case OrderModel.delivered:
@@ -1154,8 +1447,44 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
             children: [
               Icon(LucideIcons.checkCircle, color: AppColors.success, size: 20),
               SizedBox(width: 12),
-              Text('Order Delivered', style: TextStyle(color: AppColors.success, fontWeight: FontWeight.bold)),
+              Text('Order Delivered',
+                  style: TextStyle(
+                      color: AppColors.success, fontWeight: FontWeight.bold)),
             ],
+          ),
+        );
+      case OrderModel.returnPickupAssigned:
+        return Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () =>
+                    context.read<DeliveryBloc>().add(AcceptReturnPickup(o.id)),
+                icon: const Icon(LucideIcons.rotateCcw, size: 16),
+                label: const Text('ACCEPT RETURN',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B5CF6),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ],
+        );
+      case OrderModel.returnPickedUp:
+        return ElevatedButton.icon(
+          onPressed: () =>
+              _showOtpVerification(context, o, otpType: 'return_pickup'),
+          icon: const Icon(LucideIcons.rotateCcw, size: 18),
+          label: const Text('VERIFY RETURN PICKUP',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF8B5CF6),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       default:
@@ -1163,18 +1492,22 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
     }
   }
 
-  void _showOtpVerification(BuildContext context, OrderModel order, {String otpType = 'delivery'}) {
+  void _showOtpVerification(BuildContext context, OrderModel order,
+      {String otpType = 'delivery'}) {
     final bloc = context.read<DeliveryBloc>();
     final isPickup = otpType == 'pickup';
+    final isReturnPickup = otpType == 'return_pickup';
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => DeliveryOtpScreen(
           orderId: order.id,
-          title: isPickup ? 'Pickup OTP' : 'Delivery OTP',
-          subtitle: isPickup
-              ? 'Ask the vendor for the Pickup OTP to confirm parcel collection'
-              : 'Ask the customer for the OTP to confirm delivery',
+          title: isReturnPickup ? 'Return Pickup OTP' : isPickup ? 'Pickup OTP' : 'Delivery OTP',
+          subtitle: isReturnPickup
+              ? 'Ask the customer for the Return Pickup OTP'
+              : isPickup
+                  ? 'Ask the vendor for the Pickup OTP to confirm parcel collection'
+                  : 'Ask the customer for the OTP to confirm delivery',
           otpType: otpType,
         ),
       ),
@@ -1183,7 +1516,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
         if (isPickup) {
           bloc.add(FetchAssignedOrders());
         } else {
-          bloc.add(DeliverOrder(order.id));
+          bloc.add(FetchAssignedOrders());
         }
       }
     });
@@ -1203,6 +1536,12 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
         return Colors.teal;
       case 'driver_assigned':
         return Colors.cyan;
+      case 'return_pickup_assigned':
+        return const Color(0xFF8B5CF6);
+      case 'return_picked_up':
+        return const Color(0xFF7C3AED);
+      case 'return_received':
+        return Colors.indigoAccent;
       default:
         return AppColors.primary;
     }
@@ -1216,5 +1555,59 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
       if (addr['state'] != null) addr['state'] as String,
     ];
     return parts.isNotEmpty ? parts.join(', ') : 'Dropoff Location';
+  }
+
+  Widget _buildNoLocationView(OrderModel o) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          color: AppColors.cardBg,
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(LucideIcons.arrowLeft),
+                onPressed: () => setState(() => _selectedOrder = null),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(o.orderNumber,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text('Route Tracking',
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: 11)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(LucideIcons.mapPin,
+                    size: 64, color: AppColors.textMuted),
+                const SizedBox(height: 16),
+                const Text('Location Data Unavailable',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                const Text(
+                  'Vendor or customer location coordinates are not available for this order.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

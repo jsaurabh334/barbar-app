@@ -158,4 +158,14 @@ class DeliveryRepositoryImpl implements DeliveryRepository {
   Future<List<Map<String, dynamic>>> getWithdrawalHistory() async {
     return await _remoteDataSource.getWithdrawalHistory();
   }
+
+  @override
+  Future<Map<String, dynamic>> getDeliveryDashboard() async {
+    return await _remoteDataSource.getDeliveryDashboard();
+  }
+
+  @override
+  Future<void> acceptReturnPickup(String orderId) async {
+    return await _remoteDataSource.acceptReturnPickup(orderId);
+  }
 }

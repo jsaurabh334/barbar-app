@@ -54,9 +54,15 @@ func RunMigrations(db *gorm.DB) {
 		db.Exec("SET session_replication_role = 'replica'")
 	}
 
-	// Ensure the UUID generation extension is available
+	// Ensure extensions are available
 	if err := db.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`).Error; err != nil {
 		log.Fatalf("Failed to create uuid-ossp extension: %v", err)
+	}
+	if err := db.Exec(`CREATE EXTENSION IF NOT EXISTS "cube"`).Error; err != nil {
+		log.Printf("Warning: cube extension not available (geospatial queries limited): %v", err)
+	}
+	if err := db.Exec(`CREATE EXTENSION IF NOT EXISTS "earthdistance"`).Error; err != nil {
+		log.Printf("Warning: earthdistance extension not available (geospatial queries limited): %v", err)
 	}
 
 	err := db.AutoMigrate(
@@ -93,11 +99,14 @@ func RunMigrations(db *gorm.DB) {
 		&models.ProductVariant{},
 		&models.ProductImage{},
 		&models.SubCategory{},
+		&models.Brand{},
+		&models.ProductAttribute{},
 
 		// Transaction-level — FK → User, Barber, Vendor, Product, Category
 		&models.Booking{},
 		&models.BookingService{},
 		&models.BookingStatusLog{},
+		&models.QueueAuditLog{},
 		&models.CartItem{},
 		&models.WishlistItem{},
 		&models.Coupon{},

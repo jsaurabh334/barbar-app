@@ -68,6 +68,7 @@ type Barber struct {
 	ServiceRadiusKm    float64                  `gorm:"default:0" json:"service_radius_km"`
 	TravelChargePerKm  float64                  `gorm:"default:0" json:"travel_charge_per_km"`
 	BaseTravelCharge   float64                  `gorm:"default:0" json:"base_travel_charge"`
+	GSTNumber          string                   `gorm:"size:50" json:"gst_number,omitempty"`
 
 	// Relations
 	User     *User            `gorm:"foreignKey:UserID" json:"user,omitempty"`
@@ -97,8 +98,8 @@ type BarberService struct {
 
 type BarberAvailability struct {
 	BaseModel
-	BarberID  uuid.UUID `gorm:"type:uuid;index" json:"barber_id"`
-	DayOfWeek int       `gorm:"index" json:"day_of_week"`
+	BarberID  uuid.UUID `gorm:"type:uuid;index;uniqueIndex:idx_barber_day;not null" json:"barber_id"`
+	DayOfWeek int       `gorm:"index;uniqueIndex:idx_barber_day" json:"day_of_week"`
 	StartTime string    `gorm:"size:5" json:"start_time"`
 	EndTime   string    `gorm:"size:5" json:"end_time"`
 	IsActive  bool      `gorm:"default:true" json:"is_active"`
@@ -106,8 +107,8 @@ type BarberAvailability struct {
 
 type BarberHoliday struct {
 	BaseModel
-	BarberID  uuid.UUID `gorm:"type:uuid;index" json:"barber_id"`
-	Date      time.Time `gorm:"index" json:"date"`
+	BarberID  uuid.UUID `gorm:"type:uuid;index;uniqueIndex:idx_barber_date;not null" json:"barber_id"`
+	Date      time.Time `gorm:"index;uniqueIndex:idx_barber_date" json:"date"`
 	Reason    string    `gorm:"size:255" json:"reason"`
 	IsActive  bool      `gorm:"default:true" json:"is_active"`
 }

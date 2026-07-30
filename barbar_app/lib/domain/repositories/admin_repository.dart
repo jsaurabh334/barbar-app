@@ -4,6 +4,7 @@ import 'package:barbar_app/data/models/user_model.dart';
 import 'package:barbar_app/data/models/vendor_model.dart';
 import 'package:barbar_app/data/models/delivery_partner_model.dart';
 import 'package:barbar_app/data/models/kyc_document_model.dart';
+import 'package:barbar_app/data/models/barber_document_model.dart';
 import 'package:barbar_app/data/models/admin_customer_details_model.dart';
 
 abstract class AdminRepository {
@@ -35,6 +36,9 @@ abstract class AdminRepository {
   Future<List<KycDocumentModel>> getKycDocuments(String userId);
   Future<void> approveKycDocument(String documentId);
   Future<void> rejectKycDocument(String documentId, String reason);
+
+  Future<List<BarberDocumentModel>> getBarberDocuments(String barberId);
+  Future<void> verifyBarberDocument(String documentId, String status, {String? remarks});
 
   Future<Map<String, dynamic>> getAllReviews({int page = 1, int limit = 20, String? status});
   Future<void> moderateReview(String reviewId, String status, {String reason = ''});

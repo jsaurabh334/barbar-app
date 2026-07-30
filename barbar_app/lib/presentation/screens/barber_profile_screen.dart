@@ -22,6 +22,7 @@ class BarberProfileScreen extends StatefulWidget {
 
 class _BarberProfileScreenState extends State<BarberProfileScreen> {
   final _nameController = TextEditingController();
+  final _gstController = TextEditingController();
   final _descController = TextEditingController();
   final _addressController = TextEditingController();
   final _cityController = TextEditingController();
@@ -65,6 +66,7 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _gstController.dispose();
     _descController.dispose();
     _addressController.dispose();
     _cityController.dispose();
@@ -87,6 +89,7 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
     _ownerPhone = (userMap?['phone'] as String?) ?? (profile['phone'] as String?) ?? '';
 
     _nameController.text = (profile['shop_name'] as String?) ?? '';
+    _gstController.text = (profile['gst_number'] as String?) ?? '';
     _descController.text = (profile['shop_description'] as String?) ?? '';
     _addressController.text = (profile['address'] as String?) ?? '';
     _cityController.text = (profile['city'] as String?) ?? '';
@@ -120,6 +123,7 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
   void _save() {
     context.read<BarberProfileBloc>().add(UpdateBarberProfile({
       'shop_name': _nameController.text,
+      if (_gstController.text.isNotEmpty) 'gst_number': _gstController.text,
       'shop_description': _descController.text,
       'address': _addressController.text,
       'city': _cityController.text,
@@ -343,6 +347,7 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
                   child: Column(
                     children: [
                       _buildField('Shop Name', _nameController, Icons.tag),
+                      _buildField('GST Number (Optional)', _gstController, Icons.receipt),
                       _buildField('Description', _descController, Icons.description, maxLines: 3),
                       _buildField('Address', _addressController, Icons.location_on),
                       Row(
@@ -823,6 +828,8 @@ class _BarberProfileScreenState extends State<BarberProfileScreen> {
                 _buildInfoRow(Icons.work, 'Experience', '${_expController.text} Years'),
                 _buildInfoRow(Icons.access_time, 'Working Hours', '$_startTime - $_endTime'),
                 _buildInfoRow(Icons.home, 'Home Service', _isHomeServiceAvailable ? 'Available' : 'In-Shop Only'),
+                if (_gstController.text.isNotEmpty)
+                  _buildInfoRow(Icons.receipt, 'GST Number', _gstController.text),
               ],
             ),
           ),

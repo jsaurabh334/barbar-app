@@ -66,7 +66,7 @@ func TestRegisterDuplicate(t *testing.T) {
     router, db := setupTestRouter(t)
     // Create an existing partner directly
     userID := uuid.New()
-    dp := models.DeliveryPartner{ID: uuid.New(), UserID: userID, VehicleType: "bike", LicenseNumber: "XYZ"}
+    dp := models.DeliveryPartner{BaseModel: models.BaseModel{ID: uuid.New()}, UserID: userID, VehicleType: "bike", LicenseNumber: "XYZ"}
     db.Create(&dp)
     // Inject same user ID via middleware
     router.Use(func(c *gin.Context) { c.Set("user", userID); c.Next() })
@@ -91,7 +91,7 @@ func TestUpdateLocationSuccess(t *testing.T) {
     router, db := setupTestRouter(t)
     userID := uuid.New()
     // Create profile first
-    db.Create(&models.DeliveryPartner{ID: uuid.New(), UserID: userID, VehicleType: "bike", LicenseNumber: "ABC"})
+    db.Create(&models.DeliveryPartner{BaseModel: models.BaseModel{ID: uuid.New()}, UserID: userID, VehicleType: "bike", LicenseNumber: "ABC"})
     router.Use(func(c *gin.Context) { c.Set("user", userID); c.Next() })
     payload := map[string]float64{"latitude": 10.0, "longitude": 20.0}
     body, _ := json.Marshal(payload)
@@ -105,7 +105,7 @@ func TestUpdateLocationSuccess(t *testing.T) {
 func TestUpdateAvailabilitySuccess(t *testing.T) {
     router, db := setupTestRouter(t)
     userID := uuid.New()
-    db.Create(&models.DeliveryPartner{ID: uuid.New(), UserID: userID, VehicleType: "bike", LicenseNumber: "ABC"})
+    db.Create(&models.DeliveryPartner{BaseModel: models.BaseModel{ID: uuid.New()}, UserID: userID, VehicleType: "bike", LicenseNumber: "ABC"})
     router.Use(func(c *gin.Context) { c.Set("user", userID); c.Next() })
     payload := map[string]string{"status": "busy"}
     body, _ := json.Marshal(payload)
@@ -119,8 +119,8 @@ func TestUpdateAvailabilitySuccess(t *testing.T) {
 func TestListNearby(t *testing.T) {
     router, db := setupTestRouter(t)
     // create two partners, one available within radius
-    db.Create(&models.DeliveryPartner{ID: uuid.New(), UserID: uuid.New(), VehicleType: "bike", LicenseNumber: "A", CurrentLatitude: 12.0, CurrentLongitude: 77.0, AvailabilityStatus: models.DeliveryPartnerStatusAvailable})
-    db.Create(&models.DeliveryPartner{ID: uuid.New(), UserID: uuid.New(), VehicleType: "bike", LicenseNumber: "B", CurrentLatitude: 50.0, CurrentLongitude: 80.0, AvailabilityStatus: models.DeliveryPartnerStatusAvailable})
+    db.Create(&models.DeliveryPartner{BaseModel: models.BaseModel{ID: uuid.New()}, UserID: uuid.New(), VehicleType: "bike", LicenseNumber: "A", CurrentLatitude: 12.0, CurrentLongitude: 77.0, AvailabilityStatus: models.DeliveryPartnerStatusAvailable})
+    db.Create(&models.DeliveryPartner{BaseModel: models.BaseModel{ID: uuid.New()}, UserID: uuid.New(), VehicleType: "bike", LicenseNumber: "B", CurrentLatitude: 50.0, CurrentLongitude: 80.0, AvailabilityStatus: models.DeliveryPartnerStatusAvailable})
     req, _ := http.NewRequest(http.MethodGet, "/delivery-partners/nearby?lat=12.0&lng=77.0&radius=20", nil)
     w := httptest.NewRecorder()
     router.ServeHTTP(w, req)

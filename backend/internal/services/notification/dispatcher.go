@@ -49,17 +49,20 @@ var NotificationMatrix = map[models.NotificationType][]string{
 	models.NotifBookingRejected:  {RoleCustomer},
 	models.NotifBookingCancelled: {RoleCustomer, RoleBarber},
 	models.NotifQueueUpdate:      {RoleCustomer},
-	models.NotifBookingReminder:  {RoleCustomer},
+	models.NotifBookingReminder:  {RoleCustomer, RoleBarber},
 	models.NotifBookingLate:      {RoleCustomer, RoleBarber},
 	models.NotifBookingNoShow:    {RoleCustomer, RoleBarber},
 	models.NotifGraceExtended:    {RoleCustomer, RoleBarber},
-	models.NotifBarberStarted:    {RoleCustomer},
-	models.NotifBarberCompleted:  {RoleCustomer},
+	models.NotifCustomerUpNext:     {RoleCustomer, RoleBarber},
+	models.NotifCustomerCheckedIn:  {RoleBarber},
+	models.NotifBarberStarted:      {RoleCustomer},
+	models.NotifBarberCompleted:    {RoleCustomer},
 	models.NotifReviewReceived:   {RoleBarber},
 	models.NotifReviewModerated:  {RoleCustomer},
 	models.NotifReviewReply:      {RoleCustomer},
 	models.NotifPaymentSuccess:   {RoleCustomer, RoleBarber},
 	models.NotifPaymentFailed:    {RoleCustomer},
+	models.NotifRefundInitiated:  {RoleCustomer},
 	models.NotifRefundCompleted:  {RoleCustomer},
 	models.NotifOrderPlaced:         {RoleVendor},
 	models.NotifOrderAccepted:       {RoleCustomer},
@@ -239,8 +242,13 @@ func (d *notificationDispatcher) buildMessageFallback(event NotificationEvent) (
 		action = ActionOpenBooking
 		priority = models.PriorityHigh
 	case models.NotifBookingReminder:
-		title = "Appointment Reminder"
-		body = "Your appointment is in 15 minutes. Please check in!"
+		if event.Role == RoleBarber {
+			title = "Appointment Reminder"
+			body = "A customer's appointment is in 15 minutes. Get ready."
+		} else {
+			title = "Appointment Reminder"
+			body = "Your appointment is in 15 minutes. Please check in!"
+		}
 		action = ActionOpenQueue
 		priority = models.PriorityHigh
 	case models.NotifBookingLate:
@@ -271,6 +279,21 @@ func (d *notificationDispatcher) buildMessageFallback(event NotificationEvent) (
 			title = "Grace Extended"
 			body = "Your grace period has been extended. Please check in soon!"
 		}
+		action = ActionOpenQueue
+		priority = models.PriorityHigh
+	case models.NotifCustomerUpNext:
+		if event.Role == RoleBarber {
+			title = "Next Customer Ready"
+			body = "Next customer is ready. Start service?"
+		} else {
+			title = "You're Next!"
+			body = "You're next in queue. The barber will call you shortly."
+		}
+		action = ActionOpenQueue
+		priority = models.PriorityHigh
+	case models.NotifCustomerCheckedIn:
+		title = "Customer Checked In"
+		body = "A customer has checked in and is waiting."
 		action = ActionOpenQueue
 		priority = models.PriorityHigh
 	case models.NotifQueueUpdate:
@@ -305,6 +328,11 @@ func (d *notificationDispatcher) buildMessageFallback(event NotificationEvent) (
 	case models.NotifPaymentFailed:
 		title = "Payment Failed"
 		body = "Your payment could not be processed."
+		action = ActionOpenBooking
+		priority = models.PriorityHigh
+	case models.NotifRefundInitiated:
+		title = "Refund Initiated"
+		body = "Your refund has been initiated and is being processed."
 		action = ActionOpenBooking
 		priority = models.PriorityHigh
 	case models.NotifRefundCompleted:

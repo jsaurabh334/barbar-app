@@ -44,16 +44,32 @@ class BarberQueueBloc extends Bloc<BarberQueueEvent, BarberQueueState> {
   Future<void> _fetchQueue(String? staffId, Emitter<BarberQueueState> emit) async {
     try {
       final data = await _bookingRepository.getTodayQueue(staffId: staffId);
-      final allBookings = (data['bookings'] as List?)?.map((e) => BookingModel.fromJson(e as Map<String, dynamic>)).toList() ?? [];
+
+      List<BookingModel> parseList(dynamic raw) {
+        if (raw is List) {
+          return raw.map((e) => BookingModel.fromJson(e as Map<String, dynamic>)).toList();
+        }
+        return [];
+      }
+
+      List<BookingModel> serving = parseList(data['serving']);
+      List<BookingModel> next = parseList(data['next']);
+      List<BookingModel> waiting = parseList(data['waiting']);
+      List<BookingModel> late = parseList(data['late']);
+      List<BookingModel> upcoming = parseList(data['upcoming']);
+
+      if (data['bookings'] != null && data['bookings'] is List) {
+        final allBookings = parseList(data['bookings']);
+        serving = allBookings.where((b) => b.status == 'in_progress').toList();
+        next = allBookings.where((b) => b.status == 'next').toList();
+        waiting = allBookings.where((b) => b.status == 'checked_in' || b.status == 'waiting').toList();
+        late = allBookings.where((b) => b.isLate && (b.status == 'confirmed' || b.status == 'checked_in' || b.status == 'waiting')).toList();
+        upcoming = allBookings.where((b) => b.status == 'confirmed' && !b.isLate).toList();
+      }
+
       final staffList = (data['staff'] as List?)?.cast<Map<String, dynamic>>() ?? [];
       final shopName = (data['shop_name'] as String?) ?? '';
       final shopAddress = (data['shop_address'] as String?) ?? '';
-
-      final serving = allBookings.where((b) => b.status == 'in_progress').toList();
-      final next = allBookings.where((b) => b.status == 'next').toList();
-      final waiting = allBookings.where((b) => b.status == 'checked_in' || b.status == 'waiting').toList();
-      final late = allBookings.where((b) => b.isLate && (b.status == 'confirmed' || b.status == 'checked_in' || b.status == 'waiting')).toList();
-      final upcoming = allBookings.where((b) => b.status == 'confirmed' && !b.isLate).toList();
 
       _listenForUpdates(staffId);
       emit(TodayQueueLoaded(

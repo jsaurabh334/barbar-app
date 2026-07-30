@@ -13,8 +13,11 @@ class ProductModel {
   final String? shortDescription;
   final String? brandName;
   final String? brandId;
+  final String visibility;
   final double basePrice;
+  final double? professionalPrice;
   final double? discountPrice;
+  final double price;
   final int totalStock;
   final int availableStock;
   final int lowStockThreshold;
@@ -28,6 +31,7 @@ class ProductModel {
   final List<String>? tags;
   final bool hasVariants;
   final List<ProductVariantModel>? variants;
+  final int professionalMoq;
 
   String? get brand => brandName;
 
@@ -42,8 +46,11 @@ class ProductModel {
     this.shortDescription,
     this.brandName,
     this.brandId,
+    this.visibility = 'both',
     required this.basePrice,
+    this.professionalPrice,
     this.discountPrice,
+    this.price = 0,
     this.totalStock = 0,
     this.availableStock = 0,
     this.lowStockThreshold = 10,
@@ -57,10 +64,21 @@ class ProductModel {
     this.tags,
     this.hasVariants = false,
     this.variants,
+    this.professionalMoq = 1,
   });
 
-  double get displayPrice => discountPrice ?? basePrice;
+  double get displayPrice => price > 0 ? price : basePrice;
+  double getActivePrice(bool isBarber) {
+    if (isBarber && hasProfessionalPrice) {
+      return professionalPrice!;
+    }
+    if (hasDiscount) {
+      return discountPrice!;
+    }
+    return basePrice;
+  }
   bool get hasDiscount => discountPrice != null && discountPrice! < basePrice;
+  bool get hasProfessionalPrice => professionalPrice != null && professionalPrice! > 0;
   bool get isLowStock => availableStock > 0 && availableStock <= lowStockThreshold;
   bool get outOfStock => availableStock <= 0;
 
@@ -122,8 +140,11 @@ class ProductModel {
       shortDescription: json['short_description'] as String?,
       brandName: json['brand_name'] as String? ?? json['brand'] as String?,
       brandId: json['brand_id'] as String?,
+      visibility: json['visibility'] as String? ?? 'both',
       basePrice: (json['base_price'] as num).toDouble(),
+      professionalPrice: json['professional_price'] != null ? (json['professional_price'] as num).toDouble() : null,
       discountPrice: json['discount_price'] != null ? (json['discount_price'] as num).toDouble() : null,
+      price: json['price'] != null ? (json['price'] as num).toDouble() : (json['base_price'] as num).toDouble(),
       totalStock: (json['total_stock'] as num?)?.toInt() ?? 0,
       availableStock: (json['available_stock'] as num?)?.toInt() ?? (json['total_stock'] as num?)?.toInt() ?? 0,
       lowStockThreshold: (json['low_stock_threshold'] as num?)?.toInt() ?? 10,
@@ -137,6 +158,7 @@ class ProductModel {
       tags: tagsList,
       hasVariants: json['has_variants'] as bool? ?? false,
       variants: variantsList,
+      professionalMoq: (json['professional_moq'] as num?)?.toInt() ?? 1,
     );
   }
 
@@ -146,14 +168,18 @@ class ProductModel {
       'vendor_id': vendorId,
       'name': name,
       'description': description,
+      'visibility': visibility,
       'base_price': basePrice,
+      'professional_price': professionalPrice,
       'discount_price': discountPrice,
+      'price': price,
       'available_stock': availableStock,
       'is_approved': isApproved,
       'image_url': imageUrl,
       'brand_name': brandName,
       'brand_id': brandId,
       'has_variants': hasVariants,
+      'professional_moq': professionalMoq,
     };
   }
 
@@ -165,10 +191,12 @@ class ProductModel {
       'brand_name': brandName,
       'brand_id': brandId,
       'category_id': categoryId,
+      'visibility': visibility,
       'base_price': basePrice,
+      'professional_price': professionalPrice,
       'discount_price': discountPrice,
+      'professional_moq': professionalMoq,
       'total_stock': totalStock,
-      'available_stock': availableStock,
       'low_stock_threshold': lowStockThreshold,
       'has_variants': hasVariants,
       if (tags != null) 'tags': tags,

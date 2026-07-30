@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../notifications_screen.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../core/theme/app_theme.dart';
@@ -68,7 +69,7 @@ class _VendorMainScreenState extends State<VendorMainScreen> {
                       child: const Icon(LucideIcons.bell),
                     )
                   : const Icon(LucideIcons.bell),
-                onPressed: () {},
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
               );
             },
           ),

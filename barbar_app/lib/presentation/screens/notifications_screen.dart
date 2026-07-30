@@ -44,6 +44,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'booking_confirmed':
       case 'booking_reminder':
         return LucideIcons.calendarCheck;
+      case 'customer_up_next':
+        return LucideIcons.arrowRightCircle;
+      case 'customer_checked_in':
+        return LucideIcons.checkCircle;
       case 'booking_modified':
         return LucideIcons.calendar;
       case 'booking_cancelled':

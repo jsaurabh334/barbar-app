@@ -8,6 +8,7 @@ import (
 	"github.com/barbar-app/backend/internal/config"
 	"github.com/barbar-app/backend/internal/database"
 	"github.com/barbar-app/backend/internal/models"
+	"github.com/barbar-app/backend/internal/services/encryption"
 	"gorm.io/gorm"
 )
 
@@ -33,6 +34,9 @@ func main() {
 	log.Println("=========================")
 
 	cfg := config.Load()
+	if err := encryption.Init(); err != nil {
+		log.Fatalf("Encryption init failed: %v", err)
+	}
 	db := database.InitPostgres(&cfg.Database)
 	database.RunMigrations(db)
 

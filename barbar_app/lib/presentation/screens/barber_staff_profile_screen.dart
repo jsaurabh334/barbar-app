@@ -1,8 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/staff_model.dart';
+import '../../data/models/barber_model.dart';
+import '../../domain/repositories/barber_repository.dart';
 import '../bloc/barber_staff/barber_staff_bloc.dart';
 import '../bloc/barber_staff/barber_staff_event.dart';
 import '../bloc/barber_staff/barber_staff_state.dart';
@@ -34,6 +38,9 @@ class _BarberStaffProfileScreenState extends State<BarberStaffProfileScreen> {
   late TextEditingController _languagesCtrl;
   List<String> _selectedServiceIds = [];
   bool _isEditing = false;
+  String? _currentImageUrl;
+  File? _pendingImageFile;
+  bool _isUploadingImage = false;
 
   @override
   void initState() {
@@ -55,6 +62,8 @@ class _BarberStaffProfileScreenState extends State<BarberStaffProfileScreen> {
     _dayOffCtrl = TextEditingController(text: _mapDaysToText(staff.dayOff));
     _languagesCtrl = TextEditingController(text: staff.languages.join(', '));
     _selectedServiceIds = staff.services?.map((s) => s['service_id'].toString()).toList() ?? [];
+    _currentImageUrl = staff.image;
+    _pendingImageFile = null;
   }
 
   @override
@@ -84,10 +93,65 @@ class _BarberStaffProfileScreenState extends State<BarberStaffProfileScreen> {
     return text.split(',').map((e) => map[e.trim().toLowerCase()] ?? e.trim()).join(',');
   }
 
+  Future<void> _pickAndUploadImage() async {
+    final picker = ImagePicker();
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(LucideIcons.image, color: AppColors.primary),
+              title: const Text('Choose from Gallery'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.camera, color: AppColors.primary),
+              title: const Text('Take a Photo'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    final picked = await picker.pickImage(source: source, imageQuality: 80);
+    if (picked == null) return;
+
+    setState(() {
+      _pendingImageFile = File(picked.path);
+      _isUploadingImage = true;
+    });
+
+    try {
+      final repo = context.read<BarberRepository>();
+      final url = await repo.uploadStaffImage(File(picked.path));
+      setState(() {
+        _currentImageUrl = url;
+        _isUploadingImage = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Staff profile photo updated!'), backgroundColor: AppColors.success),
+        );
+      }
+    } catch (e) {
+      setState(() => _isUploadingImage = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload photo: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
   void _save() {
     context.read<BarberStaffBloc>().add(UpdateStaff(widget.staff.id, {
       'name': _nameCtrl.text.trim(),
       'phone': _phoneCtrl.text.trim(),
+      'image': _currentImageUrl ?? '',
       'bio': _bioCtrl.text.trim(),
       'experience_years': int.tryParse(_experienceCtrl.text.trim()) ?? 0,
       'languages': _languagesCtrl.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
@@ -111,6 +175,11 @@ class _BarberStaffProfileScreenState extends State<BarberStaffProfileScreen> {
           staff = state.staffMembers.firstWhere((s) => s.id == widget.staff.id, orElse: () => widget.staff);
         }
 
+        final activeImage = _currentImageUrl ?? staff.image;
+        final displayUrl = activeImage != null && activeImage.isNotEmpty
+            ? BarberModel.getFullImageUrl(activeImage)
+            : null;
+
         return Scaffold(
           backgroundColor: AppColors.background,
           appBar: AppBar(
@@ -118,14 +187,16 @@ class _BarberStaffProfileScreenState extends State<BarberStaffProfileScreen> {
             actions: [
               IconButton(
                 icon: Icon(_isEditing ? LucideIcons.check : LucideIcons.edit),
-                onPressed: () {
-                  if (_isEditing) {
-                    _save();
-                  } else {
-                    _initControllers(staff);
-                    setState(() => _isEditing = true);
-                  }
-                },
+                onPressed: _isUploadingImage
+                    ? null
+                    : () {
+                        if (_isEditing) {
+                          _save();
+                        } else {
+                          _initControllers(staff);
+                          setState(() => _isEditing = true);
+                        }
+                      },
               ),
             ],
           ),
@@ -133,14 +204,44 @@ class _BarberStaffProfileScreenState extends State<BarberStaffProfileScreen> {
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                CircleAvatar(
-                  radius: 48,
-                  backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                  backgroundImage: staff.image != null && staff.image!.isNotEmpty ? NetworkImage(staff.image!) : null,
-                  child: staff.image == null || staff.image!.isEmpty
-                      ? const Icon(LucideIcons.user, size: 40, color: AppColors.primary)
-                      : null,
+                GestureDetector(
+                  onTap: _isEditing ? _pickAndUploadImage : null,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CircleAvatar(
+                        radius: 48,
+                        backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                        backgroundImage: _pendingImageFile != null
+                            ? FileImage(_pendingImageFile!) as ImageProvider
+                            : (displayUrl != null ? NetworkImage(displayUrl) : null),
+                        child: (_pendingImageFile == null && displayUrl == null)
+                            ? const Icon(LucideIcons.user, size: 40, color: AppColors.primary)
+                            : null,
+                      ),
+                      if (_isUploadingImage)
+                        Container(
+                          width: 96,
+                          height: 96,
+                          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.5), shape: BoxShape.circle),
+                          child: const Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2)),
+                        )
+                      else if (_isEditing)
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                            child: const Icon(LucideIcons.camera, size: 16, color: Colors.black),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
+                const SizedBox(height: 8),
+                if (_isEditing)
+                  const Text('Tap photo to update staff image', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                 const SizedBox(height: 16),
                 if (!_isEditing) ...[
                   Row(

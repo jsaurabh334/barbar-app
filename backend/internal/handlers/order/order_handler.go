@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/barbar-app/backend/internal/auth"
@@ -15,6 +16,28 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+func getOrderUserRole(c *gin.Context) string {
+	claims, exists := c.Get("claims")
+	if !exists {
+		return string(models.RoleCustomer)
+	}
+	userClaims, ok := claims.(*auth.Claims)
+	if !ok {
+		return string(models.RoleCustomer)
+	}
+	return userClaims.Role
+}
+
+func getOrderUnitPrice(product models.Product, role string) float64 {
+	if role == string(models.RoleBarber) && product.ProfessionalPrice != nil && *product.ProfessionalPrice > 0 {
+		return *product.ProfessionalPrice
+	}
+	if product.DiscountPrice > 0 {
+		return product.DiscountPrice
+	}
+	return product.BasePrice
+}
 
 type OrderHandler struct {
 	db             *gorm.DB
@@ -60,6 +83,15 @@ type AddressInput struct {
 
 func (h *OrderHandler) PlaceOrder(c *gin.Context) {
 	customerID := c.MustGet("user").(uuid.UUID)
+	role := getOrderUserRole(c)
+
+	// Map role to buyer type
+	var buyerType models.BuyerType
+	if role == string(models.RoleBarber) {
+		buyerType = models.BuyerTypeBarber
+	} else {
+		buyerType = models.BuyerTypeCustomer
+	}
 
 	var req PlaceOrderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -84,15 +116,22 @@ func (h *OrderHandler) PlaceOrder(c *gin.Context) {
 			return
 		}
 
+		// Visibility check
+		if product.Visibility == models.VisibilityHidden {
+			utils.BadRequestResponse(c, fmt.Sprintf("Product %s is not available", product.Name))
+			return
+		}
+		if product.Visibility == models.VisibilityProfessional && role != string(models.RoleBarber) {
+			utils.BadRequestResponse(c, fmt.Sprintf("Product %s is not available for purchase", product.Name))
+			return
+		}
+
 		if product.AvailableStock < item.Quantity {
 			utils.BadRequestResponse(c, fmt.Sprintf("Insufficient stock for %s", product.Name))
 			return
 		}
 
-		unitPrice := product.BasePrice
-		if product.DiscountPrice > 0 {
-			unitPrice = product.DiscountPrice
-		}
+		unitPrice := getOrderUnitPrice(product, role)
 
 		if item.VariantID != nil {
 			var variant models.ProductVariant
@@ -221,6 +260,7 @@ func (h *OrderHandler) PlaceOrder(c *gin.Context) {
 		order := models.Order{
 			CustomerID:        customerID,
 			VendorID:          vi.vendor.ID,
+			BuyerType:         buyerType,
 			WarehouseID:       warehouseID,
 			OrderNumber:       generateOrderNumber(),
 			Status:            models.OrderStatusPending,
@@ -237,10 +277,7 @@ func (h *OrderHandler) PlaceOrder(c *gin.Context) {
 			var product models.Product
 			h.db.First(&product, item.ProductID)
 
-			unitPrice := product.BasePrice
-			if product.DiscountPrice > 0 {
-				unitPrice = product.DiscountPrice
-			}
+			unitPrice := getOrderUnitPrice(product, role)
 			variantName := ""
 			if item.VariantID != nil {
 				var variant models.ProductVariant
@@ -289,8 +326,8 @@ func (h *OrderHandler) PlaceOrder(c *gin.Context) {
 		}
 
 		shippingCharge := getShippingCharge(orderTotal)
-		taxAmount := orderTotal * 0.18
-		finalAmount := orderTotal + shippingCharge + taxAmount
+		taxAmount := (orderTotal * 0.18) / 1.18 // GST is inclusive in product price
+		finalAmount := orderTotal + shippingCharge
 		vendorDiscount := discountAmount * (orderTotal / totalAmount)
 		vendorWalletUsed := walletUsed * (orderTotal / totalAmount)
 
@@ -609,6 +646,20 @@ func (h *OrderHandler) SubmitReturnRequest(c *gin.Context) {
 		return
 	}
 
+	if order.DeliveredAt != nil {
+		var setting models.PlatformSetting
+		returnDays := 10
+		if err := h.db.Where("key = ?", "return_period_days").First(&setting).Error; err == nil {
+			if val, err := strconv.Atoi(setting.Value); err == nil {
+				returnDays = val
+			}
+		}
+		if time.Since(*order.DeliveredAt).Hours() > float64(returnDays*24) {
+			utils.BadRequestResponse(c, fmt.Sprintf("Return period has expired (%d days)", returnDays))
+			return
+		}
+	}
+
 	var refundType string
 	refundAmount := order.FinalAmount
 	if len(req.Items) > 0 {
@@ -643,11 +694,22 @@ func (h *OrderHandler) SubmitReturnRequest(c *gin.Context) {
 		return
 	}
 
-	order.Status = models.OrderStatusReturned
+	order.Status = models.OrderStatusReturnRequested
 	order.ReturnReason = req.Reason
 	now := time.Now()
 	order.ReturnRequestedAt = &now
 	h.db.Save(&order)
+
+	h.db.Create(&models.OrderStatusLog{
+		OrderID:    order.ID,
+		FromStatus: models.OrderStatusDelivered,
+		ToStatus:   models.OrderStatusReturnRequested,
+		ChangedBy:  customerID,
+		Role:       "customer",
+		Note:       req.Reason,
+	})
+
+	h.dispatchOrderEvent(c.Request.Context(), order, models.NotifReturnRequested)
 
 	utils.CreatedResponse(c, refund)
 }

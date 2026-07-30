@@ -24,4 +24,5 @@ abstract class BarberRepository {
   Future<Map<String, dynamic>> updateStaff(String staffId, Map<String, dynamic> data);
   Future<void> archiveStaff(String staffId);
   Future<List<String>> uploadShopImages(List<dynamic> files);
+  Future<String> uploadStaffImage(dynamic file);
 }

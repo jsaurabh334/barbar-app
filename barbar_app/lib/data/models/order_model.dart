@@ -14,6 +14,14 @@ class OrderModel {
   static const String delivered = 'delivered';
   static const String cancelled = 'cancelled';
   static const String returnRequested = 'return_requested';
+  static const String returnApproved = 'return_approved';
+  static const String returnRejected = 'return_rejected';
+  static const String returnPickupAssigned = 'return_pickup_assigned';
+  static const String returnPickedUp = 'return_picked_up';
+  static const String returnReceived = 'return_received';
+  static const String refundProcessing = 'refund_processing';
+  static const String returned = 'returned';
+  static const String refunded = 'refunded';
 
   final String id;
   final String orderNumber;
@@ -24,6 +32,7 @@ class OrderModel {
   final double discountAmount;
   final double finalAmount;
   final String paymentStatus;
+  final String? paymentMethod;
   final List<OrderItemModel>? items;
 
   // Customer info
@@ -61,6 +70,7 @@ class OrderModel {
     required this.discountAmount,
     required this.finalAmount,
     required this.paymentStatus,
+    this.paymentMethod,
     this.items,
     this.customerName,
     this.customerPhone,
@@ -97,6 +107,7 @@ class OrderModel {
       discountAmount: (json['discount_amount'] as num).toDouble(),
       finalAmount: (json['final_amount'] as num).toDouble(),
       paymentStatus: json['payment_status'] as String? ?? 'pending',
+      paymentMethod: json['payment_method'] as String?,
       items: json['items'] != null
           ? (json['items'] as List<dynamic>)
               .map((e) => OrderItemModel.fromJson(e as Map<String, dynamic>))

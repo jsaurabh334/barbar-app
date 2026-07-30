@@ -5,6 +5,7 @@ import 'package:barbar_app/data/models/user_model.dart';
 import 'package:barbar_app/data/models/vendor_model.dart';
 import 'package:barbar_app/data/models/delivery_partner_model.dart';
 import 'package:barbar_app/data/models/kyc_document_model.dart';
+import 'package:barbar_app/data/models/barber_document_model.dart';
 import 'package:barbar_app/data/models/admin_customer_details_model.dart';
 import 'package:barbar_app/domain/repositories/admin_repository.dart';
 
@@ -158,6 +159,21 @@ class AdminRepositoryImpl implements AdminRepository {
   Future<void> rejectKycDocument(String documentId, String reason) async {
     try {
       await remoteDataSource.rejectKycDocument(documentId, reason);
+    } catch (_) {}
+  }
+
+  @override
+  Future<List<BarberDocumentModel>> getBarberDocuments(String barberId) async {
+    try {
+      final data = await remoteDataSource.getBarberDocuments(barberId);
+      return data.map((json) => BarberDocumentModel.fromJson(json as Map<String, dynamic>)).toList();
+    } catch (e) { throw _handleError(e); }
+  }
+
+  @override
+  Future<void> verifyBarberDocument(String documentId, String status, {String? remarks}) async {
+    try {
+      await remoteDataSource.verifyBarberDocument(documentId, status, remarks: remarks);
     } catch (_) {}
   }
 

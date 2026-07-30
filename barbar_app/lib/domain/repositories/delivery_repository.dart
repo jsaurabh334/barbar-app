@@ -35,4 +35,6 @@ abstract class DeliveryRepository {
   Future<List<Map<String, dynamic>>> getWalletTransactions({int limit = 20, int offset = 0});
   Future<Map<String, dynamic>> requestWithdrawal(double amount);
   Future<List<Map<String, dynamic>>> getWithdrawalHistory();
+  Future<Map<String, dynamic>> getDeliveryDashboard();
+  Future<void> acceptReturnPickup(String orderId);
 }

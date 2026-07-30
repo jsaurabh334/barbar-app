@@ -87,12 +87,12 @@ class BookingModel {
     }
 
     return BookingModel(
-      id: json['id'] as String,
-      barberId: json['barber_id'] as String,
-      customerId: json['customer_id'] as String,
-      status: json['status'] as String,
-      scheduledStart: json['scheduled_start'] as String,
-      scheduledEnd: json['scheduled_end'] as String,
+      id: (json['id'] as String?) ?? '',
+      barberId: (json['barber_id'] as String?) ?? '',
+      customerId: (json['customer_id'] as String?) ?? '',
+      status: (json['status'] as String?) ?? 'pending',
+      scheduledStart: (json['scheduled_start'] as String?) ?? '',
+      scheduledEnd: (json['scheduled_end'] as String?) ?? '',
       queuePosition: (json['queue_position'] as num?)?.toInt() ?? 0,
       estimatedWaitMinutes: (json['estimated_wait_minutes'] as num?)?.toInt() ?? 0,
       finalPrice: (json['final_price'] as num?)?.toDouble() ?? 0.0,
@@ -115,7 +115,7 @@ class BookingModel {
       travelDistanceKm: (json['travel_distance_km'] as num?)?.toDouble() ?? 0,
       travelCharge: (json['travel_charge'] as num?)?.toDouble() ?? 0,
       customer: json['customer'] as Map<String, dynamic>?,
-      travelTimeMin: (json['travel_time_min'] as num?)?.toInt() ?? 0,
+      travelTimeMin: (json['travel_time_minutes'] as num?)?.toInt() ?? 0,
       customerNotes: json['customer_notes'] as String?,
       staffId: json['staff_id'] as String?,
       staff: json['staff'] as Map<String, dynamic>?,
@@ -191,6 +191,10 @@ class BookingModel {
     String? lateAt,
     String? graceExtendedUntil,
     String? imComingAt,
+    bool? canCallShop,
+    bool? canCallCustomer,
+    String? maskedShopPhone,
+    String? maskedCustomerPhone,
   }) {
     return BookingModel(
       id: id ?? this.id,
@@ -221,6 +225,10 @@ class BookingModel {
       lateAt: lateAt ?? this.lateAt,
       graceExtendedUntil: graceExtendedUntil ?? this.graceExtendedUntil,
       imComingAt: imComingAt ?? this.imComingAt,
+      canCallShop: canCallShop ?? this.canCallShop,
+      canCallCustomer: canCallCustomer ?? this.canCallCustomer,
+      maskedShopPhone: maskedShopPhone ?? this.maskedShopPhone,
+      maskedCustomerPhone: maskedCustomerPhone ?? this.maskedCustomerPhone,
     );
   }
 }

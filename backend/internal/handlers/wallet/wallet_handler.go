@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/barbar-app/backend/internal/auth"
@@ -20,22 +21,48 @@ func NewWalletHandler(db *gorm.DB) *WalletHandler {
 	return &WalletHandler{db: db}
 }
 
-func (h *WalletHandler) GetBalance(c *gin.Context) {
-	userID := c.MustGet("user").(uuid.UUID)
-	role := c.MustGet("claims").(*auth.Claims).Role
-
+func (h *WalletHandler) getOrCreateWallet(userID uuid.UUID, role string) (models.Wallet, error) {
 	var wallet models.Wallet
 	if role == string(models.RoleVendor) {
 		var vendor models.Vendor
-		h.db.Where("user_id = ?", userID).First(&vendor)
-		h.db.Where("vendor_id = ?", vendor.ID).First(&wallet)
+		if err := h.db.Where("user_id = ?", userID).First(&vendor).Error; err == nil {
+			// First try by vendor_id
+			h.db.Where("vendor_id = ?", vendor.ID).First(&wallet)
+			// Fallback to user_id and link vendor_id
+			if wallet.ID == uuid.Nil {
+				if err := h.db.Where("user_id = ?", userID).First(&wallet).Error; err == nil {
+					wallet.VendorID = &vendor.ID
+					h.db.Save(&wallet)
+				}
+			}
+		}
 	} else {
 		h.db.Where("user_id = ?", userID).First(&wallet)
 	}
 
 	if wallet.ID == uuid.Nil {
 		wallet = models.Wallet{UserID: &userID, Balance: 0}
-		h.db.Create(&wallet)
+		if role == string(models.RoleVendor) {
+			var vendor models.Vendor
+			if err := h.db.Where("user_id = ?", userID).First(&vendor).Error; err == nil {
+				wallet.VendorID = &vendor.ID
+			}
+		}
+		if err := h.db.Create(&wallet).Error; err != nil {
+			return wallet, err
+		}
+	}
+	return wallet, nil
+}
+
+func (h *WalletHandler) GetBalance(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+	role := c.MustGet("claims").(*auth.Claims).Role
+
+	wallet, err := h.getOrCreateWallet(userID, role)
+	if err != nil {
+		utils.InternalErrorResponse(c, "Failed to get or create wallet: "+err.Error())
+		return
 	}
 
 	utils.SuccessResponse(c, wallet)
@@ -47,13 +74,10 @@ func (h *WalletHandler) GetTransactions(c *gin.Context) {
 
 	page, pageSize := utils.GetPageParams(c)
 
-	var wallet models.Wallet
-	if role == string(models.RoleVendor) {
-		var vendor models.Vendor
-		h.db.Where("user_id = ?", userID).First(&vendor)
-		h.db.Where("vendor_id = ?", vendor.ID).First(&wallet)
-	} else {
-		h.db.Where("user_id = ?", userID).First(&wallet)
+	wallet, err := h.getOrCreateWallet(userID, role)
+	if err != nil {
+		utils.InternalErrorResponse(c, "Failed to get or create wallet: "+err.Error())
+		return
 	}
 
 	var transactions []models.WalletTransaction
@@ -91,8 +115,8 @@ func (h *WalletHandler) RequestWithdrawal(c *gin.Context) {
 		return
 	}
 
-	var wallet models.Wallet
-	if err := h.db.Where("vendor_id = ?", vendor.ID).First(&wallet).Error; err != nil {
+	wallet, err := h.getOrCreateWallet(userID, string(models.RoleVendor))
+	if err != nil {
 		utils.NotFoundResponse(c, "Wallet not found")
 		return
 	}
@@ -152,6 +176,14 @@ func (h *WalletHandler) RequestWithdrawal(c *gin.Context) {
 	h.db.Model(&wallet).Updates(map[string]interface{}{
 		"balance":        gorm.Expr("balance - ?", req.Amount),
 		"locked_balance": gorm.Expr("locked_balance + ?", req.Amount),
+	})
+
+	h.db.Create(&models.AuditLog{
+		UserID:     userID,
+		Action:     "withdrawal_requested",
+		EntityType: "withdrawal",
+		EntityID:   withdrawal.ID.String(),
+		NewValues:  models.JSONB(fmt.Sprintf(`{"amount":%f,"net_amount":%f,"fee":%f}`, req.Amount, netAmount, fee)),
 	})
 
 	utils.CreatedResponse(c, withdrawal)

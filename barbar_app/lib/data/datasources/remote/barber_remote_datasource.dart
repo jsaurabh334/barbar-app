@@ -75,6 +75,26 @@ class BarberRemoteDataSource {
     }
   }
 
+  Future<String> uploadStaffImage(File file) async {
+    final formData = FormData.fromMap({
+      'file': await MultipartFile.fromFile(file.path, filename: file.path.split('/').last),
+    });
+    try {
+      final response = await _apiClient.dio.post(
+        '/upload/image?dir=staff_images',
+        data: formData,
+      );
+      if ((response.statusCode == 200 || response.statusCode == 201) &&
+          (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        final data = response.data['data'] as Map<String, dynamic>;
+        return (data['url'] ?? data['file_url'] ?? data['path']) as String;
+      }
+      throw Exception(response.data['error'] ?? 'Failed to upload staff image');
+    } on DioException catch (e) {
+      throw Exception(e.response?.data?['error'] ?? e.message ?? 'Unknown error');
+    }
+  }
+
   Future<void> updateAvailability({required bool isAvailable, String? status}) async {
     final data = <String, dynamic>{'is_available': isAvailable};
     if (status != null) data['status'] = status;

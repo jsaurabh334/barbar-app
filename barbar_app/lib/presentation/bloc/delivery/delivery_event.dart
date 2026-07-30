@@ -160,3 +160,14 @@ class RequestDeliveryWithdrawal extends DeliveryEvent {
   @override
   List<Object?> get props => [amount];
 }
+
+class FetchDeliveryDashboard extends DeliveryEvent {}
+
+class AcceptReturnPickup extends DeliveryEvent {
+  final String orderId;
+
+  const AcceptReturnPickup(this.orderId);
+
+  @override
+  List<Object?> get props => [orderId];
+}

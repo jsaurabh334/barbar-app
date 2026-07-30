@@ -158,8 +158,8 @@ class _CustomersViewState extends State<_CustomersView> with SingleTickerProvide
                               CircleAvatar(
                                 backgroundColor: Colors.grey[800],
                                 radius: 24,
-                                backgroundImage: customer.avatar != null && customer.avatar!.isNotEmpty ? NetworkImage(customer.avatar!) : null,
-                                child: (customer.avatar == null || customer.avatar!.isEmpty) ? const Icon(LucideIcons.user, color: Colors.grey) : null,
+                                backgroundImage: customer.fullAvatarUrl != null && customer.fullAvatarUrl!.isNotEmpty ? NetworkImage(customer.fullAvatarUrl!) : null,
+                                child: (customer.fullAvatarUrl == null || customer.fullAvatarUrl!.isEmpty) ? const Icon(LucideIcons.user, color: Colors.grey) : null,
                               ),
                               const SizedBox(width: 16),
                               Expanded(

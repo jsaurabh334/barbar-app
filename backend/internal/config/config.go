@@ -126,6 +126,8 @@ type AppConfig struct {
 	Upload           UploadConfig
 	DeliveryBroadcastRadiusKm   int
 	DeliveryBroadcastTimeoutSec int
+	MaxConcurrentDeliveriesPerDriver int
+	EncryptionKey    string
 }
 
 func (c *Config) IsDevMode() bool {
@@ -135,6 +137,12 @@ func (c *Config) IsDevMode() bool {
 func (c *Config) Validate() error {
 	if c.JWT.Secret == "" {
 		return fmt.Errorf("JWT_SECRET environment variable is required")
+	}
+	if c.Razorpay.WebhookSecret == "" {
+		return fmt.Errorf("RAZORPAY_WEBHOOK_SECRET environment variable is required")
+	}
+	if c.Stripe.WebhookSecret == "" {
+		return fmt.Errorf("STRIPE_WEBHOOK_SECRET environment variable is required")
 	}
 	return nil
 }
@@ -223,6 +231,8 @@ func Load() *Config {
 			SupportPhone:    "+919999999999",
 			DeliveryBroadcastRadiusKm:   getEnvInt("DELIVERY_BROADCAST_RADIUS_KM", 5),
 			DeliveryBroadcastTimeoutSec: getEnvInt("DELIVERY_BROADCAST_TIMEOUT_SEC", 120),
+			MaxConcurrentDeliveriesPerDriver: getEnvInt("MAX_CONCURRENT_DELIVERIES_PER_DRIVER", 1),
+			EncryptionKey:              getEnv("ENCRYPTION_KEY", ""),
 			Upload: UploadConfig{
 				Dir:     getEnv("UPLOAD_DIR", "uploads"),
 				MaxSize: int64(getEnvInt("UPLOAD_MAX_SIZE_MB", 10)) * 1024 * 1024,

@@ -258,11 +258,11 @@ class _WalletScreenState extends State<WalletScreen> {
               onPressed: () {
                 final amt = double.tryParse(_amountController.text.trim());
                 if (amt == null || amt <= 0) return;
-                
+
                 context.read<WalletBloc>().add(
                   RequestWithdrawal(
                     amount: amt,
-                    bankAccountId: 'bank-acc-uuid-1',
+                    bankAccountId: '',
                   ),
                 );
                 Navigator.pop(context);

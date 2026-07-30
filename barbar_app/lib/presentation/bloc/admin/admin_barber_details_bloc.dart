@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 import 'package:barbar_app/domain/repositories/admin_repository.dart';
 import 'package:barbar_app/data/models/barber_model.dart';
 import 'package:barbar_app/data/models/kyc_document_model.dart';
+import 'package:barbar_app/data/models/barber_document_model.dart';
 
 // --- Events ---
 abstract class AdminBarberDetailsEvent extends Equatable {
@@ -55,6 +56,21 @@ class RejectKycDocumentEvent extends AdminBarberDetailsEvent {
   List<Object> get props => [documentId, reason];
 }
 
+class ApproveBarberDocumentEvent extends AdminBarberDetailsEvent {
+  final String documentId;
+  const ApproveBarberDocumentEvent(this.documentId);
+  @override
+  List<Object> get props => [documentId];
+}
+
+class RejectBarberDocumentEvent extends AdminBarberDetailsEvent {
+  final String documentId;
+  final String reason;
+  const RejectBarberDocumentEvent(this.documentId, this.reason);
+  @override
+  List<Object> get props => [documentId, reason];
+}
+
 // --- States ---
 abstract class AdminBarberDetailsState extends Equatable {
   const AdminBarberDetailsState();
@@ -69,10 +85,11 @@ class AdminBarberDetailsLoading extends AdminBarberDetailsState {}
 class AdminBarberDetailsLoaded extends AdminBarberDetailsState {
   final BarberModel barber;
   final List<KycDocumentModel> kycDocuments;
+  final List<BarberDocumentModel> barberDocuments;
 
-  const AdminBarberDetailsLoaded(this.barber, {this.kycDocuments = const []});
+  const AdminBarberDetailsLoaded(this.barber, {this.kycDocuments = const [], this.barberDocuments = const []});
   @override
-  List<Object?> get props => [barber, kycDocuments];
+  List<Object?> get props => [barber, kycDocuments, barberDocuments];
 }
 
 class AdminBarberDetailsError extends AdminBarberDetailsState {
@@ -101,6 +118,8 @@ class AdminBarberDetailsBloc extends Bloc<AdminBarberDetailsEvent, AdminBarberDe
     on<SuspendBarberDetailsEvent>(_onSuspendBarber);
     on<ApproveKycDocumentEvent>(_onApproveKyc);
     on<RejectKycDocumentEvent>(_onRejectKyc);
+    on<ApproveBarberDocumentEvent>(_onApproveBarberDoc);
+    on<RejectBarberDocumentEvent>(_onRejectBarberDoc);
   }
 
   Future<void> _onLoadBarberDetails(LoadBarberDetails event, Emitter<AdminBarberDetailsState> emit) async {
@@ -111,10 +130,13 @@ class AdminBarberDetailsBloc extends Bloc<AdminBarberDetailsEvent, AdminBarberDe
       if (barber.userId != null) {
         docs = await adminRepository.getKycDocuments(barber.userId!);
       } else {
-        // Fallback for mocked barbers without userId
         docs = await adminRepository.getKycDocuments('u1');
       }
-      emit(AdminBarberDetailsLoaded(barber, kycDocuments: docs));
+      List<BarberDocumentModel> barberDocs = [];
+      try {
+        barberDocs = await adminRepository.getBarberDocuments(event.barberId);
+      } catch (_) {}
+      emit(AdminBarberDetailsLoaded(barber, kycDocuments: docs, barberDocuments: barberDocs));
     } catch (e) {
       emit(AdminBarberDetailsError(e.toString()));
     }
@@ -184,7 +206,37 @@ class AdminBarberDetailsBloc extends Bloc<AdminBarberDetailsEvent, AdminBarberDe
         await adminRepository.rejectKycDocument(event.documentId, event.reason);
         final updatedDocs = currentState.kycDocuments.map((d) => d.id == event.documentId ? d.copyWith(status: 'rejected', rejectReason: event.reason) : d).toList();
         emit(AdminBarberDetailsActionSuccess('KYC Document Rejected', currentState.barber));
-        emit(AdminBarberDetailsLoaded(currentState.barber, kycDocuments: updatedDocs));
+        emit(AdminBarberDetailsLoaded(currentState.barber, kycDocuments: updatedDocs, barberDocuments: currentState.barberDocuments));
+      } catch (e) {
+        emit(AdminBarberDetailsError(e.toString()));
+        emit(currentState);
+      }
+    }
+  }
+
+  Future<void> _onApproveBarberDoc(ApproveBarberDocumentEvent event, Emitter<AdminBarberDetailsState> emit) async {
+    final currentState = state;
+    if (currentState is AdminBarberDetailsLoaded) {
+      try {
+        await adminRepository.verifyBarberDocument(event.documentId, 'approved');
+        final updatedDocs = currentState.barberDocuments.map((d) => d.id == event.documentId ? d.copyWith(status: 'approved') : d).toList();
+        emit(AdminBarberDetailsActionSuccess('Document Approved', currentState.barber));
+        emit(AdminBarberDetailsLoaded(currentState.barber, kycDocuments: currentState.kycDocuments, barberDocuments: updatedDocs));
+      } catch (e) {
+        emit(AdminBarberDetailsError(e.toString()));
+        emit(currentState);
+      }
+    }
+  }
+
+  Future<void> _onRejectBarberDoc(RejectBarberDocumentEvent event, Emitter<AdminBarberDetailsState> emit) async {
+    final currentState = state;
+    if (currentState is AdminBarberDetailsLoaded) {
+      try {
+        await adminRepository.verifyBarberDocument(event.documentId, 'rejected', remarks: event.reason);
+        final updatedDocs = currentState.barberDocuments.map((d) => d.id == event.documentId ? d.copyWith(status: 'rejected', remarks: event.reason) : d).toList();
+        emit(AdminBarberDetailsActionSuccess('Document Rejected', currentState.barber));
+        emit(AdminBarberDetailsLoaded(currentState.barber, kycDocuments: currentState.kycDocuments, barberDocuments: updatedDocs));
       } catch (e) {
         emit(AdminBarberDetailsError(e.toString()));
         emit(currentState);

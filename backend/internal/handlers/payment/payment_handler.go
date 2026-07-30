@@ -320,33 +320,47 @@ func (h *PaymentHandler) PaymentWebhook(c *gin.Context) {
 	case "razorpay":
 		signature := c.GetHeader("X-Razorpay-Signature")
 		webhookSecret := h.cfg.Razorpay.WebhookSecret
-		if webhookSecret == "" {
-			webhookSecret = h.cfg.Razorpay.KeySecret
+		if webhookSecret == "" || signature == "" {
+			logEntry.Status = "failed_verification"
+			json.Unmarshal(body, &logEntry.Response)
+			h.db.Create(&logEntry)
+			c.JSON(403, gin.H{"error": "Webhook secret not configured or missing signature"})
+			return
 		}
-		if signature != "" && webhookSecret != "" {
-			expected := hmacSHA256(string(body), webhookSecret)
-			if subtle.ConstantTimeCompare([]byte(signature), []byte(expected)) != 1 {
-				logEntry.Status = "failed_verification"
-				json.Unmarshal(body, &logEntry.Response)
-				h.db.Create(&logEntry)
-				c.JSON(403, gin.H{"error": "Invalid signature"})
-				return
-			}
+		expected := hmacSHA256(string(body), webhookSecret)
+		if subtle.ConstantTimeCompare([]byte(signature), []byte(expected)) != 1 {
+			logEntry.Status = "failed_verification"
+			json.Unmarshal(body, &logEntry.Response)
+			h.db.Create(&logEntry)
+			c.JSON(403, gin.H{"error": "Invalid signature"})
+			return
 		}
 		h.processRazorpayWebhook(payload)
 
 	case "stripe":
 		sigHeader := c.GetHeader("Stripe-Signature")
-		if sigHeader != "" && h.cfg.Stripe.WebhookSecret != "" {
-			if !verifyStripeSignature(sigHeader, string(body), h.cfg.Stripe.WebhookSecret) {
-				logEntry.Status = "failed_verification"
-				json.Unmarshal(body, &logEntry.Response)
-				h.db.Create(&logEntry)
-				c.JSON(403, gin.H{"error": "Invalid signature"})
-				return
-			}
+		if h.cfg.Stripe.WebhookSecret == "" || sigHeader == "" {
+			logEntry.Status = "failed_verification"
+			json.Unmarshal(body, &logEntry.Response)
+			h.db.Create(&logEntry)
+			c.JSON(403, gin.H{"error": "Webhook secret not configured or missing signature"})
+			return
+		}
+		if !verifyStripeSignature(sigHeader, string(body), h.cfg.Stripe.WebhookSecret) {
+			logEntry.Status = "failed_verification"
+			json.Unmarshal(body, &logEntry.Response)
+			h.db.Create(&logEntry)
+			c.JSON(403, gin.H{"error": "Invalid signature"})
+			return
 		}
 		h.processStripeWebhook(payload)
+
+	default:
+		logEntry.Status = "unsupported_gateway"
+		json.Unmarshal(body, &logEntry.Response)
+		h.db.Create(&logEntry)
+		c.JSON(400, gin.H{"error": "Unsupported gateway"})
+		return
 	}
 
 	logEntry.Status = "processed"
@@ -396,6 +410,13 @@ func (h *PaymentHandler) processRazorpayWebhook(payload map[string]interface{}) 
 
 		if payment.Status == models.PayStatusSuccess {
 			h.updatePaymentTarget(payment)
+			h.db.Create(&models.AuditLog{
+				UserID:     payment.UserID,
+				Action:     "payment_captured",
+				EntityType: "payment",
+				EntityID:   payment.ID.String(),
+				NewValues:  models.JSONB(fmt.Sprintf(`{"amount":%f,"gateway":"razorpay"}`, payment.Amount)),
+			})
 			if h.dispatcher != nil {
 				h.dispatcher.Dispatch(context.Background(), notification.NotificationEvent{
 					Type:       models.NotifPaymentSuccess,
@@ -427,6 +448,14 @@ func (h *PaymentHandler) processRazorpayWebhook(payload map[string]interface{}) 
 			payment.FailureReason = errDesc
 		}
 		h.db.Save(&payment)
+
+		h.db.Create(&models.AuditLog{
+			UserID:     payment.UserID,
+			Action:     "payment_failed",
+			EntityType: "payment",
+			EntityID:   payment.ID.String(),
+			NewValues:  models.JSONB(fmt.Sprintf(`{"reason":"%s"}`, payment.FailureReason)),
+		})
 
 		h.db.Model(&models.Booking{}).Where("id = ?", payment.OrderID).Update("payment_status", "failed")
 
@@ -460,6 +489,13 @@ func (h *PaymentHandler) processRazorpayWebhook(payload map[string]interface{}) 
 			h.db.Save(&payment)
 
 			h.updatePaymentTarget(payment)
+			h.db.Create(&models.AuditLog{
+				UserID:     payment.UserID,
+				Action:     "order_paid",
+				EntityType: "payment",
+				EntityID:   payment.ID.String(),
+				NewValues:  models.JSONB(fmt.Sprintf(`{"amount":%f,"gateway":"razorpay"}`, payment.Amount)),
+			})
 			if h.dispatcher != nil {
 				h.dispatcher.Dispatch(context.Background(), notification.NotificationEvent{
 					Type:       models.NotifPaymentSuccess,
@@ -508,6 +544,13 @@ func (h *PaymentHandler) processStripeWebhook(payload map[string]interface{}) {
 		h.db.Save(&payment)
 
 		h.updatePaymentTarget(payment)
+		h.db.Create(&models.AuditLog{
+			UserID:     payment.UserID,
+			Action:     "payment_succeeded",
+			EntityType: "payment",
+			EntityID:   payment.ID.String(),
+			NewValues:  models.JSONB(fmt.Sprintf(`{"amount":%f,"gateway":"stripe"}`, payment.Amount)),
+		})
 
 	case "payment_intent.payment_failed":
 		piID, _ := dataObj["id"].(string)
@@ -525,6 +568,14 @@ func (h *PaymentHandler) processStripeWebhook(payload map[string]interface{}) {
 			}
 		}
 		h.db.Save(&payment)
+
+		h.db.Create(&models.AuditLog{
+			UserID:     payment.UserID,
+			Action:     "payment_failed",
+			EntityType: "payment",
+			EntityID:   payment.ID.String(),
+			NewValues:  models.JSONB(fmt.Sprintf(`{"reason":"%s"}`, payment.FailureReason)),
+		})
 
 		// On failure, update both Order and Booking targets
 		h.db.Model(&models.Order{}).Where("id = ?", payment.OrderID).Update("payment_status", models.PaymentStatusFailed)
@@ -609,6 +660,15 @@ func (h *PaymentHandler) Refund(c *gin.Context) {
 	payment.RefundedAt = &now
 	payment.GatewaySignature = gatewayRefundID
 	h.db.Save(&payment)
+
+	userID := c.MustGet("user").(uuid.UUID)
+	h.db.Create(&models.AuditLog{
+		UserID:     userID,
+		Action:     "refund_processed",
+		EntityType: "payment",
+		EntityID:   payment.ID.String(),
+		NewValues:  models.JSONB(fmt.Sprintf(`{"amount":%f,"refund_id":"%s"}`, refundAmount, gatewayRefundID)),
+	})
 
 	h.db.Model(&models.Order{}).Where("id = ?", payment.OrderID).Update("payment_status", models.PaymentStatusRefunded)
 

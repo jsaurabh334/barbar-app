@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/app_theme.dart';
 import '../bloc/barber_earnings/barber_earnings_bloc.dart';
 import '../bloc/barber_earnings/barber_earnings_event.dart';
 import '../bloc/barber_earnings/barber_earnings_state.dart';
-import '../widgets/glass_card.dart';
 
 class BarberEarningsScreen extends StatefulWidget {
   const BarberEarningsScreen({super.key});
@@ -30,32 +30,69 @@ class _BarberEarningsScreenState extends State<BarberEarningsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('EARNINGS')),
-      body: BlocConsumer<BarberEarningsBloc, BarberEarningsState>(
-        listener: (context, state) {
-          if (state is BarberEarningsFailure) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.error), backgroundColor: AppColors.error),
+      backgroundColor: const Color(0xFF0F0F15),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF0F0F15),
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          'EARNINGS & REVENUE',
+          style: GoogleFonts.outfit(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: Colors.white,
+            letterSpacing: 1.0,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(LucideIcons.refreshCw, color: AppColors.primary, size: 20),
+            onPressed: _load,
+            tooltip: 'Refresh Earnings',
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: SafeArea(
+        child: BlocConsumer<BarberEarningsBloc, BarberEarningsState>(
+          listener: (context, state) {
+            if (state is BarberEarningsFailure) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(state.error, style: GoogleFonts.outfit(color: Colors.white)),
+                  backgroundColor: AppColors.error,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          },
+          builder: (context, state) {
+            if (state is BarberEarningsLoading) {
+              return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+            }
+
+            return RefreshIndicator(
+              color: AppColors.primary,
+              onRefresh: () async => _load(),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildPeriodSelector(),
+                    const SizedBox(height: 20),
+                    _buildTotalCard(state),
+                    const SizedBox(height: 20),
+                    _buildChartSection(state),
+                    const SizedBox(height: 20),
+                    _buildHistoryList(state),
+                  ],
+                ),
+              ),
             );
-          }
-        },
-        builder: (context, state) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildPeriodSelector(),
-                const SizedBox(height: 24),
-                _buildTotalCard(state),
-                const SizedBox(height: 24),
-                _buildChartPlaceholder(state),
-                const SizedBox(height: 24),
-                _buildHistoryList(state),
-              ],
-            ),
-          );
-        },
+          },
+        ),
       ),
     );
   }
@@ -75,16 +112,17 @@ class _BarberEarningsScreenState extends State<BarberEarningsScreen> {
               margin: const EdgeInsets.symmetric(horizontal: 4),
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.primary : AppColors.surface,
+                color: isSelected ? AppColors.primary : const Color(0xFF1E1E2E),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: isSelected ? AppColors.primary : AppColors.border),
+                border: Border.all(color: isSelected ? AppColors.primary : Colors.white12),
               ),
               child: Center(
                 child: Text(
                   labels[period]!,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: isSelected ? Colors.black : AppColors.textSecondary,
+                  style: GoogleFonts.outfit(
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    color: isSelected ? Colors.black : Colors.white70,
+                    fontSize: 13,
                   ),
                 ),
               ),
@@ -97,41 +135,114 @@ class _BarberEarningsScreenState extends State<BarberEarningsScreen> {
 
   Widget _buildTotalCard(BarberEarningsState state) {
     double total = 0;
+    int totalCount = 0;
     if (state is BarberEarningsLoaded) {
       total = state.total;
+      for (var e in state.earnings) {
+        totalCount += (e['count'] as num?)?.toInt() ?? 0;
+      }
     }
 
-    return GlassCard(
+    final periodLabel = _selectedPeriod == 'week'
+        ? 'This Week'
+        : _selectedPeriod == 'month'
+            ? 'This Month'
+            : 'This Year';
+
+    return Container(
       padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1E1E2E), Color(0xFF141420)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.4),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         children: [
-          const Text(
-            'TOTAL EARNINGS',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary, letterSpacing: 1.5),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(LucideIcons.wallet, size: 16, color: AppColors.primary),
+              const SizedBox(width: 6),
+              Text(
+                'TOTAL REVENUE',
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Text(
             '₹${total.toStringAsFixed(0)}',
-            style: const TextStyle(fontSize: 48, fontWeight: FontWeight.w900, color: AppColors.primary),
+            style: GoogleFonts.outfit(
+              fontSize: 44,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+            ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            _selectedPeriod == 'week' ? 'This Week' : _selectedPeriod == 'month' ? 'This Month' : 'This Year',
-            style: const TextStyle(color: AppColors.textSecondary),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+            ),
+            child: Text(
+              '$periodLabel • $totalCount Completed Services',
+              style: GoogleFonts.outfit(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildChartPlaceholder(BarberEarningsState state) {
+  Widget _buildChartSection(BarberEarningsState state) {
     List<Map<String, dynamic>> earnings = [];
     if (state is BarberEarningsLoaded) {
       earnings = state.earnings;
     }
 
     if (earnings.isEmpty) {
-      return const SizedBox.shrink();
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E1E2E),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white12),
+        ),
+        child: Column(
+          children: [
+            const Icon(LucideIcons.barChart2, size: 40, color: Colors.white24),
+            const SizedBox(height: 12),
+            Text(
+              'No Completed Revenue Yet',
+              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'When you complete appointment services (click "FINISH SERVICE"), your daily earnings breakdown and graphs will appear here.',
+              style: GoogleFonts.outfit(fontSize: 12, color: Colors.white54),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
     }
 
     final maxAmount = earnings.fold<double>(0, (max, e) {
@@ -139,15 +250,34 @@ class _BarberEarningsScreenState extends State<BarberEarningsScreen> {
       return amt > max ? amt : max;
     });
 
-    return GlassCard(
+    return Container(
       padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E2E),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white12),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('DAILY BREAKDOWN', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
-          const SizedBox(height: 16),
+          Row(
+            children: [
+              const Icon(LucideIcons.trendingUp, size: 16, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Text(
+                'DAILY EARNINGS BREAKDOWN',
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
           SizedBox(
-            height: 150,
+            height: 160,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: earnings.take(7).map((e) {
@@ -156,21 +286,31 @@ class _BarberEarningsScreenState extends State<BarberEarningsScreen> {
                 final date = (e['date'] as String?)?.substring(5) ?? '';
                 return Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Text('₹${amt.toInt()}', style: const TextStyle(fontSize: 8, color: AppColors.textSecondary)),
-                        const SizedBox(height: 4),
+                        Text(
+                          '₹${amt.toInt()}',
+                          style: GoogleFonts.outfit(fontSize: 10, color: Colors.white70, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 6),
                         Container(
-                          height: (fraction * 100).clamp(8.0, 100.0),
+                          height: (fraction * 100).clamp(12.0, 100.0),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.7),
-                            borderRadius: BorderRadius.circular(4),
+                            gradient: const LinearGradient(
+                              colors: [AppColors.primary, Color(0xFFFFA726)],
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                            ),
+                            borderRadius: BorderRadius.circular(6),
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(date, style: const TextStyle(fontSize: 8, color: AppColors.textMuted)),
+                        const SizedBox(height: 6),
+                        Text(
+                          date,
+                          style: GoogleFonts.outfit(fontSize: 10, color: Colors.white38),
+                        ),
                       ],
                     ),
                   ),
@@ -196,34 +336,65 @@ class _BarberEarningsScreenState extends State<BarberEarningsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('EARNINGS HISTORY', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
+        Row(
+          children: [
+            const Icon(LucideIcons.calendar, size: 16, color: AppColors.primary),
+            const SizedBox(width: 8),
+            Text(
+              'EARNINGS HISTORY LOG',
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+                letterSpacing: 0.8,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         ...earnings.map((e) {
           final date = (e['date'] as String?) ?? '';
           final amount = (e['amount'] as num?)?.toDouble() ?? 0;
           final count = (e['count'] as num?)?.toInt() ?? 0;
           return Container(
-            margin: const EdgeInsets.only(bottom: 8),
+            margin: const EdgeInsets.only(bottom: 10),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.cardBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
+              color: const Color(0xFF1E1E2E),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white12),
             ),
             child: Row(
               children: [
-                const Icon(LucideIcons.banknote, color: AppColors.primary, size: 20),
-                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(LucideIcons.banknote, color: AppColors.success, size: 20),
+                ),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(date, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      Text('$count bookings', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                      Text(
+                        date,
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 14),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$count completed appointments',
+                        style: GoogleFonts.outfit(fontSize: 12, color: Colors.white54),
+                      ),
                     ],
                   ),
                 ),
-                Text('₹${amount.toInt()}', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.success, fontSize: 16)),
+                Text(
+                  '₹${amount.toInt()}',
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: AppColors.success, fontSize: 16),
+                ),
               ],
             ),
           );

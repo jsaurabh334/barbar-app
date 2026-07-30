@@ -42,6 +42,11 @@ abstract class VendorRepository {
   Future<OrderModel> packOrder(String orderId);
   Future<OrderModel> readyForPickup(String orderId);
 
+  // Returns
+  Future<OrderModel> approveReturn(String orderId);
+  Future<OrderModel> rejectReturn(String orderId, {String? reason});
+  Future<OrderModel> receiveReturn(String orderId);
+
   // Delivery
   Future<Map<String, dynamic>> getOrderDeliveryInfo(String orderId);
 

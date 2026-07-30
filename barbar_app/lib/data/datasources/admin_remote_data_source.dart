@@ -347,6 +347,19 @@ class AdminRemoteDataSource {
     await apiClient.dio.put('/admin/kyc-documents/$documentId/reject', data: {'reason': reason});
   }
 
+  Future<List<dynamic>> getBarberDocuments(String barberId) async {
+    final response = await apiClient.dio.get('/admin/barber-documents', queryParameters: {'barber_id': barberId});
+    final dynamic data = response.data['data'];
+    return (data is List) ? data : (data is Map && data.containsKey('documents') ? data['documents'] : []);
+  }
+
+  Future<void> verifyBarberDocument(String documentId, String status, {String? remarks}) async {
+    await apiClient.dio.put('/admin/barber-documents/$documentId/verify', data: {
+      'status': status,
+      if (remarks != null && remarks.isNotEmpty) 'remarks': remarks,
+    });
+  }
+
   Future<Map<String, dynamic>> getAllReviews({int page = 1, int limit = 20, String? status}) async {
     final queryParams = <String, dynamic>{'page': page, 'limit': limit};
     if (status != null && status.isNotEmpty) queryParams['status'] = status;

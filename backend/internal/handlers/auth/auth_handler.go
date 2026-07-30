@@ -298,22 +298,14 @@ func (h *AuthHandler) SendOTP(c *gin.Context) {
 	var user models.User
 	result := h.db.Where("phone = ? OR email = ?", req.Phone, autoEmail).First(&user)
 	if result.Error != nil {
-		// Create temp user if not exists
-		user = models.User{
-			Phone:        req.Phone,
-			Email:        autoEmail,
-			Role:         models.RoleCustomer,
-			Status:       models.UserStatusActive,
-			OTP:          otpHash,
-			OTPExpiresAt: &expiresAt,
-		}
-		h.db.Create(&user)
-	} else {
-		h.db.Model(&user).Updates(map[string]interface{}{
-			"otp":            otpHash,
-			"otp_expires_at": &expiresAt,
-		})
+		utils.BadRequestResponse(c, "No account found with this phone number. Please register first.")
+		return
 	}
+
+	h.db.Model(&user).Updates(map[string]interface{}{
+		"otp":            otpHash,
+		"otp_expires_at": &expiresAt,
+	})
 
 	// Reset attempt counter on fresh OTP send
 	resetOTPAttempts(req.Phone)

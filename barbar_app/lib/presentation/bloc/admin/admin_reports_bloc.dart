@@ -11,7 +11,7 @@ class AdminReportsBloc extends Bloc<AdminReportsEvent, AdminReportsState> {
 
   AdminReportsBloc({required AdminRepository adminRepository})
       : _adminRepository = adminRepository,
-        super(AdminReportsInitial()) {
+        super(const AdminReportsState()) {
     on<LoadRevenueReport>(_onLoadRevenueReport);
     on<LoadBookingAnalytics>(_onLoadBookingAnalytics);
     on<LoadOrderAnalytics>(_onLoadOrderAnalytics);
@@ -23,81 +23,81 @@ class AdminReportsBloc extends Bloc<AdminReportsEvent, AdminReportsState> {
   }
 
   Future<void> _onLoadRevenueReport(LoadRevenueReport event, Emitter<AdminReportsState> emit) async {
-    emit(AdminReportsLoading());
+    emit(state.copyWith(isLoading: true));
     try {
       final data = await _adminRepository.getAdminRevenueAnalytics(period: event.period);
-      emit(AdminRevenueReportLoaded(RevenueAnalytics.fromJson(data)));
+      emit(state.copyWith(isLoading: false, revenueData: RevenueAnalytics.fromJson(data)));
     } catch (e) {
-      emit(AdminReportsError(e.toString()));
+      emit(state.copyWith(isLoading: false, errorMessage: e.toString()));
     }
   }
 
   Future<void> _onLoadBookingAnalytics(LoadBookingAnalytics event, Emitter<AdminReportsState> emit) async {
-    emit(AdminReportsLoading());
+    emit(state.copyWith(isLoading: true));
     try {
       final data = await _adminRepository.getAdminBookingAnalytics(period: event.period);
-      emit(AdminBookingAnalyticsLoaded(BookingAnalytics.fromJson(data)));
+      emit(state.copyWith(isLoading: false, bookingData: BookingAnalytics.fromJson(data)));
     } catch (e) {
-      emit(AdminReportsError(e.toString()));
+      emit(state.copyWith(isLoading: false, errorMessage: e.toString()));
     }
   }
 
   Future<void> _onLoadOrderAnalytics(LoadOrderAnalytics event, Emitter<AdminReportsState> emit) async {
-    emit(AdminReportsLoading());
+    emit(state.copyWith(isLoading: true));
     try {
       final data = await _adminRepository.getAdminOrderAnalytics(period: event.period);
-      emit(AdminOrderAnalyticsLoaded(OrderAnalytics.fromJson(data)));
+      emit(state.copyWith(isLoading: false, orderData: OrderAnalytics.fromJson(data)));
     } catch (e) {
-      emit(AdminReportsError(e.toString()));
+      emit(state.copyWith(isLoading: false, errorMessage: e.toString()));
     }
   }
 
   Future<void> _onLoadCustomerAnalytics(LoadCustomerAnalytics event, Emitter<AdminReportsState> emit) async {
-    emit(AdminReportsLoading());
+    emit(state.copyWith(isLoading: true));
     try {
       final data = await _adminRepository.getAdminCustomerAnalytics(period: event.period);
-      emit(AdminCustomerAnalyticsLoaded(CustomerAnalytics.fromJson(data)));
+      emit(state.copyWith(isLoading: false, customerData: CustomerAnalytics.fromJson(data)));
     } catch (e) {
-      emit(AdminReportsError(e.toString()));
+      emit(state.copyWith(isLoading: false, errorMessage: e.toString()));
     }
   }
 
   Future<void> _onLoadDeliveryAnalytics(LoadDeliveryAnalytics event, Emitter<AdminReportsState> emit) async {
-    emit(AdminReportsLoading());
+    emit(state.copyWith(isLoading: true));
     try {
       final data = await _adminRepository.getAdminDeliveryAnalytics();
-      emit(AdminDeliveryAnalyticsLoaded(DeliveryAnalytics.fromJson(data)));
+      emit(state.copyWith(isLoading: false, deliveryData: DeliveryAnalytics.fromJson(data)));
     } catch (e) {
-      emit(AdminReportsError(e.toString()));
+      emit(state.copyWith(isLoading: false, errorMessage: e.toString()));
     }
   }
 
   Future<void> _onLoadBarberAnalytics(LoadBarberAnalytics event, Emitter<AdminReportsState> emit) async {
-    emit(AdminReportsLoading());
+    emit(state.copyWith(isLoading: true));
     try {
       final data = await _adminRepository.getAdminBarberAnalytics();
-      emit(AdminBarberAnalyticsLoaded(BarberAnalytics.fromJson(data)));
+      emit(state.copyWith(isLoading: false, barberData: BarberAnalytics.fromJson(data)));
     } catch (e) {
-      emit(AdminReportsError(e.toString()));
+      emit(state.copyWith(isLoading: false, errorMessage: e.toString()));
     }
   }
 
   Future<void> _onLoadCommissionAnalytics(LoadCommissionAnalytics event, Emitter<AdminReportsState> emit) async {
-    emit(AdminReportsLoading());
+    emit(state.copyWith(isLoading: true));
     try {
       final data = await _adminRepository.getAdminCommissionTransactions(page: event.page, limit: 50);
-      emit(AdminCommissionAnalyticsLoaded(data));
+      emit(state.copyWith(isLoading: false, commissionData: data));
     } catch (e) {
-      emit(AdminReportsError(e.toString()));
+      emit(state.copyWith(isLoading: false, errorMessage: e.toString()));
     }
   }
 
   Future<void> _onExportReport(ExportReport event, Emitter<AdminReportsState> emit) async {
-    emit(AdminReportsExporting());
+    emit(state.copyWith(isExporting: true));
     try {
-      emit(AdminReportsExportSuccess());
+      emit(state.copyWith(isExporting: false, isExportSuccess: true));
     } catch (e) {
-      emit(AdminReportsError(e.toString()));
+      emit(state.copyWith(isExporting: false, errorMessage: e.toString()));
     }
   }
 }

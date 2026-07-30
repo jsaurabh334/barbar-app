@@ -273,71 +273,80 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 		barberRoutes := v1.Group("/barber")
 		barberRoutes.Use(authMW.Authenticate())
 		{
+			// Registration accessible by any authenticated user
 			barberRoutes.POST("/register", barberH.Register)
-			barberRoutes.GET("/dashboard", barberH.GetDashboard)
-			barberRoutes.GET("/profile", barberH.GetProfile)
-			barberRoutes.PUT("/profile", barberH.UpdateProfile)
-			barberRoutes.PUT("/availability", barberH.UpdateAvailability)
-			barberRoutes.GET("/earnings", barberH.GetEarnings)
-			barberRoutes.GET("/bookings", bookingH.ListBarberBookings)
-			barberRoutes.PUT("/bookings/:id/status", bookingH.UpdateStatus)
-			barberRoutes.PUT("/bookings/:id/services", bookingH.ModifyServices)
-			barberRoutes.GET("/queue", bookingH.GetQueue)
-			barberRoutes.GET("/queue/today", bookingH.GetTodayQueue)
-			barberRoutes.GET("/queue/:booking_id", bookingH.GetMyQueuePosition)
-			barberRoutes.PUT("/queue/reorder", bookingH.ReorderQueue)
-			barberRoutes.PUT("/queue/:id/skip", bookingH.QueueSkip)
-			barberRoutes.PUT("/queue/:id/start", bookingH.QueueStartService)
-			barberRoutes.PUT("/queue/:id/complete", bookingH.QueueCompleteService)
-			barberRoutes.PUT("/queue/:id/no-show", bookingH.QueueNoShow)
+		}
+		barberAuth := barberRoutes.Group("")
+		barberAuth.Use(authMW.RequireRole(string(models.RoleBarber)))
+		{
+			barberAuth.GET("/dashboard", barberH.GetDashboard)
+			barberAuth.GET("/profile", barberH.GetProfile)
+			barberAuth.PUT("/profile", barberH.UpdateProfile)
+			barberAuth.PUT("/availability", barberH.UpdateAvailability)
+			barberAuth.GET("/earnings", barberH.GetEarnings)
+			barberAuth.GET("/bookings", bookingH.ListBarberBookings)
+			barberAuth.PUT("/bookings/:id/status", bookingH.UpdateStatus)
+			barberAuth.PUT("/bookings/:id/services", bookingH.ModifyServices)
+			barberAuth.GET("/queue", bookingH.GetQueue)
+			barberAuth.GET("/queue/today", bookingH.GetTodayQueue)
+			barberAuth.GET("/queue/:booking_id", bookingH.GetMyQueuePosition)
+			barberAuth.PUT("/queue/reorder", bookingH.ReorderQueue)
+			barberAuth.PUT("/queue/:id/skip", bookingH.QueueSkip)
+			barberAuth.PUT("/queue/:id/start", bookingH.QueueStartService)
+			barberAuth.PUT("/queue/:id/complete", bookingH.QueueCompleteService)
+			barberAuth.PUT("/queue/:id/no-show", bookingH.QueueNoShow)
 
-			barberRoutes.POST("/reviews/:id/reply", reviewH.CreateReply)
+			barberAuth.POST("/reviews/:id/reply", reviewH.CreateReply)
 
 			// Home service management
-			barberRoutes.GET("/home-service-requests", bookingH.ListHomeServiceRequests)
-			barberRoutes.POST("/home-service-requests/:id/accept", bookingH.AcceptHomeService)
-			barberRoutes.POST("/home-service-requests/:id/reject", bookingH.RejectHomeService)
+			barberAuth.GET("/home-service-requests", bookingH.ListHomeServiceRequests)
+			barberAuth.POST("/home-service-requests/:id/accept", bookingH.AcceptHomeService)
+			barberAuth.POST("/home-service-requests/:id/reject", bookingH.RejectHomeService)
 
 			// Services management
-			barberRoutes.GET("/services", barberH.ListServices)
-			barberRoutes.POST("/services", barberH.AddService)
-			barberRoutes.PUT("/services/:service_id", barberH.UpdateService)
-			barberRoutes.DELETE("/services/:service_id", barberH.DeleteService)
+			barberAuth.GET("/services", barberH.ListServices)
+			barberAuth.POST("/services", barberH.AddService)
+			barberAuth.PUT("/services/:service_id", barberH.UpdateService)
+			barberAuth.DELETE("/services/:service_id", barberH.DeleteService)
 
 			// Staff management
-			barberRoutes.POST("/staff", staffH.AddStaff)
-			barberRoutes.GET("/staff", staffH.GetStaff)
-			barberRoutes.GET("/staff/:id", staffH.GetStaffByID)
-			barberRoutes.PUT("/staff/:id", staffH.UpdateStaff)
-			barberRoutes.DELETE("/staff/:id", staffH.ArchiveStaff)
-			barberRoutes.POST("/staff/:id/services", staffH.AssignServices)
-			barberRoutes.GET("/staff/:id/services", staffH.GetStaffServices)
+			barberAuth.POST("/staff", staffH.AddStaff)
+			barberAuth.GET("/staff", staffH.GetStaff)
+			barberAuth.GET("/staff/:id", staffH.GetStaffByID)
+			barberAuth.PUT("/staff/:id", staffH.UpdateStaff)
+			barberAuth.DELETE("/staff/:id", staffH.ArchiveStaff)
+			barberAuth.POST("/staff/:id/services", staffH.AssignServices)
+			barberAuth.GET("/staff/:id/services", staffH.GetStaffServices)
 
 			// Holidays
-			barberRoutes.POST("/holidays", barberH.AddHoliday)
-			barberRoutes.GET("/holidays", barberH.ListHolidays)
+			barberAuth.POST("/holidays", barberH.AddHoliday)
+			barberAuth.GET("/holidays", barberH.ListHolidays)
 
 			// Weekly schedule
-			barberRoutes.POST("/availability/weekly", barberH.SetWeeklySchedule)
-			barberRoutes.GET("/availability/weekly", barberH.GetWeeklySchedule)
+			barberAuth.POST("/availability/weekly", barberH.SetWeeklySchedule)
+			barberAuth.GET("/availability/weekly", barberH.GetWeeklySchedule)
 
 			// Documents
-			barberRoutes.POST("/documents", barberH.UploadDocument)
-			barberRoutes.GET("/documents", barberH.ListDocuments)
-			barberRoutes.DELETE("/documents/:id", barberH.DeleteDocument)
+			barberAuth.POST("/documents", barberH.UploadDocument)
+			barberAuth.GET("/documents", barberH.ListDocuments)
+			barberAuth.DELETE("/documents/:id", barberH.DeleteDocument)
 		}
 	// ==================== Delivery Partner routes ====================
 	dpRoutes := v1.Group("/delivery-partners")
 	// Public endpoint
 	dpRoutes.GET("/nearby", deliveryPartnerH.ListNearby)
-	// Protected routes
+	// Protected routes (any authenticated user can register)
 	dpRoutesAuth := dpRoutes.Group("")
 	dpRoutesAuth.Use(authMW.Authenticate())
 	{
 		dpRoutesAuth.POST("/register", deliveryPartnerH.Register)
-		dpRoutesAuth.GET("/profile", deliveryPartnerH.GetProfile)
-		dpRoutesAuth.PUT("/location", deliveryPartnerH.UpdateLocation)
-		dpRoutesAuth.PUT("/availability", deliveryPartnerH.UpdateAvailability)
+	}
+	dpRoutesDelivery := dpRoutesAuth.Group("")
+	dpRoutesDelivery.Use(authMW.RequireRole(string(models.RoleDelivery)))
+	{
+		dpRoutesDelivery.GET("/profile", deliveryPartnerH.GetProfile)
+		dpRoutesDelivery.PUT("/location", deliveryPartnerH.UpdateLocation)
+		dpRoutesDelivery.PUT("/availability", deliveryPartnerH.UpdateAvailability)
 	}
 
 		// ==================== Vendor routes ====================
@@ -345,52 +354,61 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 		vendorRoutes.Use(authMW.Authenticate())
 		{
 			vendorRoutes.POST("/register", vendorH.Register)
-			vendorRoutes.GET("/profile", vendorH.GetProfile)
-			vendorRoutes.PUT("/profile", vendorH.UpdateProfile)
-			vendorRoutes.GET("/dashboard", vendorH.GetDashboard)
-			vendorRoutes.GET("/orders", orderH.ListVendorOrders)
-			vendorRoutes.PUT("/orders/:id/status", orderH.UpdateStatus)
-			vendorRoutes.PUT("/orders/:id/accept", vendorOrderH.AcceptOrder)
-			vendorRoutes.PUT("/orders/:id/reject", vendorOrderH.RejectOrder)
-			vendorRoutes.PUT("/orders/:id/pack", vendorOrderH.PackOrder)
-			vendorRoutes.PUT("/orders/:id/ready-for-pickup", vendorOrderH.ReadyForPickup)
-			vendorRoutes.GET("/orders/:id/delivery", vendorOrderH.GetVendorOrderDelivery)
-			vendorRoutes.GET("/products", productH.ListByVendor)
-			vendorRoutes.GET("/sales-report", vendorH.GetSalesReport)
+		}
+		vendorAuth := vendorRoutes.Group("")
+		vendorAuth.Use(authMW.RequireRole(string(models.RoleVendor)))
+		{
+			vendorAuth.GET("/profile", vendorH.GetProfile)
+			vendorAuth.PUT("/profile", vendorH.UpdateProfile)
+			vendorAuth.GET("/dashboard", vendorH.GetDashboard)
+			vendorAuth.GET("/orders", orderH.ListVendorOrders)
+			vendorAuth.PUT("/orders/:id/status", orderH.UpdateStatus)
+			vendorAuth.PUT("/orders/:id/accept", vendorOrderH.AcceptOrder)
+			vendorAuth.PUT("/orders/:id/reject", vendorOrderH.RejectOrder)
+			vendorAuth.PUT("/orders/:id/pack", vendorOrderH.PackOrder)
+			vendorAuth.PUT("/orders/:id/ready-for-pickup", vendorOrderH.ReadyForPickup)
+			vendorAuth.GET("/orders/:id/delivery", vendorOrderH.GetVendorOrderDelivery)
+			vendorAuth.PUT("/orders/:id/approve-return", vendorOrderH.ApproveReturn)
+			vendorAuth.PUT("/orders/:id/reject-return", vendorOrderH.RejectReturn)
+			vendorAuth.PUT("/orders/:id/receive-return", vendorOrderH.ReceiveReturn)
+			vendorAuth.GET("/orders/:id/pickup-otp", vendorOrderH.GetPickupOTP)
+			vendorAuth.GET("/products", productH.ListByVendor)
+			vendorAuth.GET("/sales-report", vendorH.GetSalesReport)
 
 			// Bank accounts
-			vendorRoutes.POST("/bank-accounts", vendorH.AddBankAccount)
-			vendorRoutes.GET("/bank-accounts", vendorH.ListBankAccounts)
-			vendorRoutes.PUT("/bank-accounts/:account_id", vendorH.UpdateBankAccount)
+			vendorAuth.POST("/bank-accounts", vendorH.AddBankAccount)
+			vendorAuth.GET("/bank-accounts", vendorH.ListBankAccounts)
+			vendorAuth.PUT("/bank-accounts/:account_id", vendorH.UpdateBankAccount)
 
 			// Documents
-			vendorRoutes.POST("/documents", vendorH.UploadDocument)
-			vendorRoutes.GET("/documents", vendorH.ListDocuments)
-			vendorRoutes.DELETE("/documents/:id", vendorH.DeleteDocument)
+			vendorAuth.POST("/documents", vendorH.UploadDocument)
+			vendorAuth.GET("/documents", vendorH.ListDocuments)
+			vendorAuth.DELETE("/documents/:id", vendorH.DeleteDocument)
 
 			// Warehouses (Pickup/Return Locations)
-			vendorRoutes.POST("/warehouses", vendorH.CreateWarehouse)
-			vendorRoutes.GET("/warehouses", vendorH.ListWarehouses)
-			vendorRoutes.GET("/warehouses/:id", vendorH.GetWarehouse)
-			vendorRoutes.PUT("/warehouses/:id", vendorH.UpdateWarehouse)
-			vendorRoutes.DELETE("/warehouses/:id", vendorH.DeleteWarehouse)
-			vendorRoutes.PUT("/warehouses/:id/default", vendorH.SetDefaultWarehouse)
+			vendorAuth.POST("/warehouses", vendorH.CreateWarehouse)
+			vendorAuth.GET("/warehouses", vendorH.ListWarehouses)
+			vendorAuth.GET("/warehouses/:id", vendorH.GetWarehouse)
+			vendorAuth.PUT("/warehouses/:id", vendorH.UpdateWarehouse)
+			vendorAuth.DELETE("/warehouses/:id", vendorH.DeleteWarehouse)
+			vendorAuth.PUT("/warehouses/:id/default", vendorH.SetDefaultWarehouse)
 
 			// Brands
-			vendorRoutes.POST("/brands", vendorH.CreateBrand)
-			vendorRoutes.GET("/brands", vendorH.ListBrands)
-			vendorRoutes.GET("/brands/:id", vendorH.GetBrand)
-			vendorRoutes.PUT("/brands/:id", vendorH.UpdateBrand)
-			vendorRoutes.DELETE("/brands/:id", vendorH.DeleteBrand)
+			vendorAuth.POST("/brands", vendorH.CreateBrand)
+			vendorAuth.GET("/brands", vendorH.ListBrands)
+			vendorAuth.GET("/brands/:id", vendorH.GetBrand)
+			vendorAuth.PUT("/brands/:id", vendorH.UpdateBrand)
+			vendorAuth.DELETE("/brands/:id", vendorH.DeleteBrand)
 
 			// Purchase History
-			vendorRoutes.POST("/purchases", vendorH.CreatePurchase)
-			vendorRoutes.GET("/purchases", vendorH.ListPurchases)
+			vendorAuth.POST("/purchases", vendorH.CreatePurchase)
+			vendorAuth.GET("/purchases", vendorH.ListPurchases)
 		}
 
 		// ==================== Delivery routes ====================
 		deliveryRoutes := v1.Group("/delivery")
 		deliveryRoutes.Use(authMW.Authenticate())
+		deliveryRoutes.Use(authMW.RequireRole(string(models.RoleDelivery)))
 		{
 			deliveryRoutes.PUT("/orders/:id/assign", deliveryOrderH.AssignDelivery)
 			deliveryRoutes.PUT("/orders/:id/accept", deliveryOrderH.AcceptAssignment)
@@ -407,6 +425,9 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			deliveryRoutes.POST("/presence/heartbeat", presenceH.Heartbeat)
 			deliveryRoutes.GET("/presence/me", presenceH.GetMyPresence)
 			deliveryRoutes.POST("/location", locationH.UpdateLocation)
+			deliveryRoutes.GET("/dashboard", deliveryOrderH.GetDeliveryDashboard)
+			deliveryRoutes.PUT("/orders/:id/assign-return-pickup", deliveryOrderH.AssignReturnPickup)
+			deliveryRoutes.PUT("/orders/:id/accept-return-pickup", deliveryOrderH.AcceptReturnPickup)
 			deliveryRoutes.GET("/earnings", earningH.ListEarnings)
 			deliveryRoutes.GET("/earnings/summary", earningH.GetEarningSummary)
 			deliveryRoutes.GET("/bank", bankH.GetBankAccount)
@@ -423,23 +444,27 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 		productRoutes := v1.Group("/products")
 		productRoutes.Use(authMW.Authenticate())
 		{
-			productRoutes.POST("", productH.Create)
-			productRoutes.PUT("/:id", productH.Update)
-			productRoutes.DELETE("/:id", productH.Delete)
 			productRoutes.POST("/:id/reviews", productH.AddReview)
+		}
+		productVendor := productRoutes.Group("")
+		productVendor.Use(authMW.RequireRole(string(models.RoleVendor)))
+		{
+			productVendor.POST("", productH.Create)
+			productVendor.PUT("/:id", productH.Update)
+			productVendor.DELETE("/:id", productH.Delete)
 
 			// Product image management
-			productRoutes.POST("/:id/images", middleware.MaxBodySize(32<<20), productH.UploadProductImages)
-			productRoutes.GET("/:id/images", productH.ListProductImages)
-			productRoutes.PUT("/:id/images/reorder", productH.ReorderProductImages)
-			productRoutes.PUT("/:id/images/:imageId/primary", productH.SetPrimaryProductImage)
-			productRoutes.DELETE("/images/:imageId", productH.DeleteProductImage)
+			productVendor.POST("/:id/images", middleware.MaxBodySize(32<<20), productH.UploadProductImages)
+			productVendor.GET("/:id/images", productH.ListProductImages)
+			productVendor.PUT("/:id/images/reorder", productH.ReorderProductImages)
+			productVendor.PUT("/:id/images/:imageId/primary", productH.SetPrimaryProductImage)
+			productVendor.DELETE("/images/:imageId", productH.DeleteProductImage)
 
 			// Product Variants
-			productRoutes.GET("/:id/variants", productH.ListVariants)
-			productRoutes.POST("/:id/variants", productH.CreateVariant)
-			productRoutes.PUT("/:id/variants/:variantId", productH.UpdateVariant)
-			productRoutes.DELETE("/:id/variants/:variantId", productH.DeleteVariant)
+			productVendor.GET("/:id/variants", productH.ListVariants)
+			productVendor.POST("/:id/variants", productH.CreateVariant)
+			productVendor.PUT("/:id/variants/:variantId", productH.UpdateVariant)
+			productVendor.DELETE("/:id/variants/:variantId", productH.DeleteVariant)
 		}
 
 		// ==================== Order routes ====================

@@ -124,8 +124,20 @@ class BarberBookingDetailScreen extends StatelessWidget {
                   ],
                   if (booking.isHomeService && booking.homeServiceAddress != null) ...[
                     const Divider(height: 20, color: AppColors.border),
-                    _infoRow(LucideIcons.mapPin, 'Address',
-                      '${booking.homeServiceAddress!['street'] ?? ""}, ${booking.homeServiceAddress!['city'] ?? ""}'),
+                    _infoRow(LucideIcons.mapPin, 'Address', () {
+                      final addr = booking.homeServiceAddress!;
+                      final line1 = addr['line_1'] ?? addr['street'] ?? '';
+                      final city = addr['city'] ?? '';
+                      final state = addr['state'] ?? '';
+                      final pincode = addr['pincode'] ?? addr['zip'] ?? '';
+                      final parts = [
+                        if (line1.toString().isNotEmpty) line1,
+                        if (city.toString().isNotEmpty) city,
+                        if (state.toString().isNotEmpty) state,
+                        if (pincode.toString().isNotEmpty) pincode,
+                      ];
+                      return parts.join(', ');
+                    }()),
                   ],
                 ],
               ),

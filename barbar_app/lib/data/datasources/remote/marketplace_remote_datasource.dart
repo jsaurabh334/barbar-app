@@ -65,4 +65,79 @@ class MarketplaceRemoteDataSource {
     }
     throw Exception(response.data['error'] ?? 'Failed to fetch driver location');
   }
+
+  Future<void> cancelOrder(String orderId, {String? reason}) async {
+    final response = await _apiClient.dio.put(
+      '/orders/$orderId/cancel',
+      data: {'reason': reason ?? ''},
+    );
+    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
+      throw Exception(response.data['error'] ?? 'Failed to cancel order');
+    }
+  }
+
+  Future<void> submitReturnRequest(String orderId, {required String reason, List<String>? images}) async {
+    final response = await _apiClient.dio.post(
+      '/orders/$orderId/return',
+      data: {
+        'reason': reason,
+      },
+    );
+    if ((response.statusCode != 200 && response.statusCode != 201) || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
+      throw Exception(response.data['error'] ?? 'Failed to submit return request');
+    }
+  }
+
+  Future<void> reportIssue(String orderId, {required String issueType, required String description}) async {
+    final response = await _apiClient.dio.post(
+      '/orders/$orderId/report',
+      data: {
+        'issue_type': issueType,
+        'description': description,
+      },
+    );
+    if (response.statusCode != 200 || response.data['status'] != 'success') {
+      throw Exception(response.data['error'] ?? 'Failed to report issue');
+    }
+  }
+
+  Future<Map<String, dynamic>> initiatePayment({
+    required String orderId,
+    required String gateway,
+  }) async {
+    final response = await _apiClient.dio.post(
+      '/payments/initiate',
+      data: {
+        'order_id': orderId,
+        'gateway': gateway,
+      },
+    );
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Payment initiation failed');
+  }
+
+  Future<Map<String, dynamic>> verifyPayment({
+    required String paymentId,
+    required String gateway,
+    required String razorpayOrderId,
+    required String razorpayPaymentId,
+    required String razorpaySignature,
+  }) async {
+    final response = await _apiClient.dio.post(
+      '/payments/verify',
+      data: {
+        'payment_id': paymentId,
+        'gateway': gateway,
+        'razorpay_order_id': razorpayOrderId,
+        'razorpay_payment_id': razorpayPaymentId,
+        'razorpay_signature': razorpaySignature,
+      },
+    );
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Payment verification failed');
+  }
 }

@@ -14,5 +14,5 @@ class FakeAuthLocalDataSource extends AuthLocalDataSource {
   Future<void> saveAccessToken(String token) async => _token = token;
 
   @override
-  Future<void> deleteTokens() async => _token = null;
+  Future<void> clearSession() async => _token = null;
 }

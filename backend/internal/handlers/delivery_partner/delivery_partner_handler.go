@@ -64,17 +64,14 @@ func (h *DeliveryPartnerHandler) Register(c *gin.Context) {
     }
 
 	partner := models.DeliveryPartner{
-		ID:               uuid.New(),
 		UserID:           userID,
 		VehicleType:      req.VehicleType,
 		VehicleNumber:    req.VehicleNumber,
 		LicenseNumber:    req.LicenseNumber,
-        CurrentLatitude:  req.Latitude,
-        Status: models.DeliveryPartnerStatusApproved,
-        AvailabilityStatus: models.DeliveryPartnerStatusAvailable,
-        CreatedAt:        time.Now(),
-        UpdatedAt:        time.Now(),
-    }
+		CurrentLatitude:  req.Latitude,
+		Status: models.DeliveryPartnerStatusApproved,
+		AvailabilityStatus: models.DeliveryPartnerStatusAvailable,
+	}
 
     // Wrap partner creation + role update in a transaction
     tx := h.db.Begin()
@@ -188,30 +185,55 @@ func (h *DeliveryPartnerHandler) UpdateAvailability(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "Internal Error"
 // @Router /delivery-partners/nearby [get]
 func (h *DeliveryPartnerHandler) ListNearby(c *gin.Context) {
-    lat, _ := strconv.ParseFloat(c.Query("lat"), 64)
-    lng, _ := strconv.ParseFloat(c.Query("lng"), 64)
-    radius, _ := strconv.ParseFloat(c.Query("radius"), 64)
-    if radius == 0 {
-        radius = 10
-    }
+	lat, _ := strconv.ParseFloat(c.Query("lat"), 64)
+	lng, _ := strconv.ParseFloat(c.Query("lng"), 64)
+	radius, _ := strconv.ParseFloat(c.Query("radius"), 64)
+	if radius == 0 {
+		radius = 10
+	}
 
-    var allPartners []models.DeliveryPartner
-    h.db.Where("availability_status = ?", models.DeliveryPartnerStatusAvailable).Find(&allPartners)
+	var nearbyPartners []models.DeliveryPartner
+	radiusMeters := radius * 1000
 
-    var nearbyPartners []models.DeliveryPartner
-    for _, p := range allPartners {
-        d := haversine(lat, lng, p.CurrentLatitude, p.CurrentLongitude)
-        if d <= radius {
-            nearbyPartners = append(nearbyPartners, p)
-        }
-    }
-    utils.SuccessResponse(c, nearbyPartners)
+	// Apply bounding box pre-filter for performance
+	latDelta := radius / 111.0
+	lngDelta := radius / (111.0 * 0.898)
+
+	// Try earthdistance query, fall back to bounding box + haversine
+	var earthExtAvailable bool
+	h.db.Raw("SELECT count(*) > 0 FROM pg_extension WHERE extname = 'earthdistance'").Scan(&earthExtAvailable)
+
+	if earthExtAvailable {
+		h.db.Raw(`
+			SELECT * FROM delivery_partners
+			WHERE availability_status = ?
+			AND earth_box(ll_to_earth(?, ?), ?) @> ll_to_earth(current_latitude, current_longitude)
+			AND earth_distance(ll_to_earth(?, ?), ll_to_earth(current_latitude, current_longitude)) <= ?
+			ORDER BY earth_distance(ll_to_earth(?, ?), ll_to_earth(current_latitude, current_longitude))
+		`, models.DeliveryPartnerStatusAvailable, lat, lng, int(radiusMeters), lat, lng, radiusMeters, lat, lng).Scan(&nearbyPartners)
+	} else {
+		h.db.Where("availability_status = ?", models.DeliveryPartnerStatusAvailable).
+			Where("current_latitude BETWEEN ? AND ?", lat-latDelta, lat+latDelta).
+			Where("current_longitude BETWEEN ? AND ?", lng-lngDelta, lng+lngDelta).
+			Find(&nearbyPartners)
+		// Apply haversine filter on reduced set
+		var filtered []models.DeliveryPartner
+		for _, p := range nearbyPartners {
+			d := haversine(lat, lng, p.CurrentLatitude, p.CurrentLongitude)
+			if d <= radius {
+				filtered = append(filtered, p)
+			}
+		}
+		nearbyPartners = filtered
+	}
+
+	utils.SuccessResponse(c, nearbyPartners)
 }
 
 func haversine(lat1, lon1, lat2, lon2 float64) float64 {
-    const R = 6371
-    dLat := (lat2 - lat1) * (math.Pi / 180)
-    dLon := (lon2 - lon1) * (math.Pi / 180)
-    a := math.Sin(dLat/2)*math.Sin(dLat/2) + math.Cos(lat1*(math.Pi/180))*math.Cos(lat2*(math.Pi/180))*math.Sin(dLon/2)*math.Sin(dLon/2)
-    return R * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	const R = 6371
+	dLat := (lat2 - lat1) * (math.Pi / 180)
+	dLon := (lon2 - lon1) * (math.Pi / 180)
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) + math.Cos(lat1*(math.Pi/180))*math.Cos(lat2*(math.Pi/180))*math.Sin(dLon/2)*math.Sin(dLon/2)
+	return R * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 }

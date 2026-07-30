@@ -12,6 +12,9 @@ import '../bloc/auth/auth_state.dart';
 import '../widgets/glass_card.dart';
 import 'wallet_screen.dart';
 import 'address_screen.dart';
+import '../../domain/repositories/admin_repository.dart';
+import '../bloc/admin/admin_reports_bloc.dart';
+import 'admin/admin_reports_dashboard.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -749,8 +752,16 @@ class _ProfileBodyState extends State<_ProfileBody> with SingleTickerProviderSta
               label: 'Analytics',
               color: AppColors.info,
               onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('View Dashboard for overall platform analytics')),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => BlocProvider(
+                      create: (context) => AdminReportsBloc(
+                        adminRepository: context.read<AdminRepository>(),
+                      ),
+                      child: const AdminReportsDashboard(),
+                    ),
+                  ),
                 );
               },
             ),

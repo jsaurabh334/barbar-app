@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math"
 
+	"github.com/barbar-app/backend/internal/auth"
 	"github.com/barbar-app/backend/internal/models"
 	"github.com/barbar-app/backend/internal/utils"
 	"github.com/gin-gonic/gin"
@@ -20,22 +21,26 @@ func NewProductHandler(db *gorm.DB) *ProductHandler {
 }
 
 type CreateProductRequest struct {
-	CategoryID       uuid.UUID                `json:"category_id" binding:"required"`
-	SubCategoryID    *uuid.UUID               `json:"sub_category_id"`
-	BrandID          *uuid.UUID               `json:"brand_id"`
-	Name             string                   `json:"name" binding:"required,min=2,max=255"`
-	Description      string                   `json:"description"`
-	ShortDescription string                   `json:"short_description"`
-	BrandName        string                   `json:"brand_name"`
-	BasePrice        float64                  `json:"base_price" binding:"required,gt=0"`
-	DiscountPrice    float64                  `json:"discount_price"`
-	TaxPercent       float64                  `json:"tax_percent"`
-	TotalStock       int                      `json:"total_stock" binding:"required,gte=0"`
-	LowStockThreshold int                     `json:"low_stock_threshold"`
-	HasVariants      bool                     `json:"has_variants"`
-	Images           []ProductImageInput      `json:"images"`
-	Variants         []ProductVariantInput    `json:"variants,omitempty"`
-	Tags             []string                 `json:"tags"`
+	CategoryID        uuid.UUID                `json:"category_id" binding:"required"`
+	SubCategoryID     *uuid.UUID               `json:"sub_category_id"`
+	BrandID           *uuid.UUID               `json:"brand_id"`
+	Name              string                   `json:"name" binding:"required,min=2,max=255"`
+	Description       string                   `json:"description"`
+	ShortDescription  string                   `json:"short_description"`
+	BrandName         string                   `json:"brand_name"`
+	Visibility        string                   `json:"visibility"`
+	BasePrice         float64                  `json:"base_price" binding:"required,gt=0"`
+	ProfessionalPrice *float64                 `json:"professional_price"`
+	DiscountPrice     float64                  `json:"discount_price"`
+	MinOrderQty       int                      `json:"min_order_qty"`
+	ProfessionalMOQ   int                      `json:"professional_moq"`
+	TaxPercent        float64                  `json:"tax_percent"`
+	TotalStock        int                      `json:"total_stock" binding:"required,gte=0"`
+	LowStockThreshold int                      `json:"low_stock_threshold"`
+	HasVariants       bool                     `json:"has_variants"`
+	Images            []ProductImageInput      `json:"images"`
+	Variants          []ProductVariantInput    `json:"variants,omitempty"`
+	Tags              []string                 `json:"tags"`
 }
 
 type ProductImageInput struct {
@@ -69,6 +74,21 @@ func (h *ProductHandler) Create(c *gin.Context) {
 		return
 	}
 
+	visibility := models.ProductVisibility(req.Visibility)
+	if visibility == "" {
+		visibility = models.VisibilityBoth
+	}
+	if visibility != models.VisibilityRetail && visibility != models.VisibilityProfessional &&
+		visibility != models.VisibilityBoth && visibility != models.VisibilityHidden {
+		utils.BadRequestResponse(c, "Invalid visibility value. Must be retail, professional, both, or hidden.")
+		return
+	}
+
+	if req.ProfessionalPrice != nil && *req.ProfessionalPrice <= 0 {
+		utils.BadRequestResponse(c, "Professional price must be greater than 0")
+		return
+	}
+
 	discountPercent := 0.0
 	if req.DiscountPrice > 0 && req.DiscountPrice < req.BasePrice {
 		discountPercent = ((req.BasePrice - req.DiscountPrice) / req.BasePrice) * 100
@@ -80,6 +100,11 @@ func (h *ProductHandler) Create(c *gin.Context) {
 		for _, v := range req.Variants {
 			availableStock += v.Stock
 		}
+	}
+
+	professionalMOQ := req.ProfessionalMOQ
+	if professionalMOQ < 1 {
+		professionalMOQ = 1
 	}
 
 	tx := h.db.Begin()
@@ -94,10 +119,14 @@ func (h *ProductHandler) Create(c *gin.Context) {
 		Description:       req.Description,
 		ShortDescription:  req.ShortDescription,
 		BrandName:         req.BrandName,
+		Visibility:        visibility,
 		BasePrice:         req.BasePrice,
+		ProfessionalPrice: req.ProfessionalPrice,
 		DiscountPrice:     req.DiscountPrice,
 		DiscountPercent:   math.Round(discountPercent*100) / 100,
 		TaxPercent:        req.TaxPercent,
+		MinOrderQty:       req.MinOrderQty,
+		ProfessionalMOQ:   professionalMOQ,
 		TotalStock:        req.TotalStock,
 		AvailableStock:    availableStock,
 		ReservedStock:     0,
@@ -297,11 +326,11 @@ func (h *ProductHandler) Update(c *gin.Context) {
 	}
 
 	allowed := []string{"name", "description", "short_description", "brand_id", "brand_name",
-		"category_id", "sub_category_id", "base_price", "discount_price",
-		"tax_percent", "total_stock", "low_stock_threshold",
+		"category_id", "sub_category_id", "visibility", "base_price", "professional_price",
+		"discount_price", "tax_percent", "total_stock", "low_stock_threshold",
 		"has_variants", "is_active", "tags", "attributes",
 		"weight", "length", "width", "height", "unit",
-		"min_order_qty", "max_order_qty", "condition"}
+		"min_order_qty", "professional_moq", "max_order_qty", "condition"}
 
 	filtered := make(map[string]interface{})
 	for _, key := range allowed {
@@ -319,6 +348,20 @@ func (h *ProductHandler) Update(c *gin.Context) {
 	if err := h.db.Model(&product).Updates(filtered).Error; err != nil {
 		utils.InternalErrorResponse(c, "Failed to update product")
 		return
+	}
+
+	h.db.Preload("Images").Preload("Variants").First(&product, product.ID)
+
+	// Recompute discount percent if base_price or discount_price changed
+	if baseVal, hasBase := filtered["base_price"]; hasBase {
+		if discVal, hasDisc := filtered["discount_price"]; hasDisc {
+			base := baseVal.(float64)
+			disc := discVal.(float64)
+			if disc > 0 && disc < base {
+				newDiscPct := ((base - disc) / base) * 100
+				h.db.Model(&product).Update("discount_percent", math.Round(newDiscPct*100)/100)
+			}
+		}
 	}
 
 	h.db.Preload("Images").Preload("Variants").First(&product, product.ID)
@@ -433,11 +476,60 @@ func (h *ProductHandler) AddReview(c *gin.Context) {
 	utils.CreatedResponse(c, review)
 }
 
+// ==================== Helper: Role & Pricing ====================
+
+func getUserRole(c *gin.Context) string {
+	claims, exists := c.Get("claims")
+	if !exists {
+		return string(models.RoleCustomer)
+	}
+	userClaims, ok := claims.(*auth.Claims)
+	if !ok {
+		return string(models.RoleCustomer)
+	}
+	return userClaims.Role
+}
+
+func computeProductPrice(p *models.Product, role string) float64 {
+	if role == string(models.RoleBarber) && p.ProfessionalPrice != nil && *p.ProfessionalPrice > 0 {
+		return *p.ProfessionalPrice
+	}
+	return p.BasePrice
+}
+
+type productResponse struct {
+	models.Product
+	Price float64 `json:"price"`
+}
+
+func toProductResponse(p models.Product, role string) productResponse {
+	return productResponse{
+		Product: p,
+		Price:   computeProductPrice(&p, role),
+	}
+}
+
 // ==================== Public endpoints ====================
 
 func (h *ProductHandler) List(c *gin.Context) {
+	role := getUserRole(c)
+
 	var products []models.Product
 	query := h.db.Where("is_active = ? AND is_approved = ?", true, true)
+
+	// Visibility filter based on role
+	if role == string(models.RoleBarber) {
+		query = query.Where("visibility IN ?", []string{
+			string(models.VisibilityBoth),
+			string(models.VisibilityProfessional),
+			string(models.VisibilityRetail),
+		})
+	} else {
+		query = query.Where("visibility IN ?", []string{
+			string(models.VisibilityBoth),
+			string(models.VisibilityRetail),
+		})
+	}
 
 	if vendorID := c.Query("vendor_id"); vendorID != "" {
 		query = query.Where("vendor_id = ?", vendorID)
@@ -463,17 +555,46 @@ func (h *ProductHandler) List(c *gin.Context) {
 	query = query.Order(sortBy + " " + sortOrder)
 
 	query.Preload("Images").Preload("Variants").Find(&products)
-	utils.SuccessResponse(c, products)
+
+	resp := make([]productResponse, len(products))
+	for i, p := range products {
+		resp[i] = toProductResponse(p, role)
+	}
+	utils.SuccessResponse(c, resp)
 }
 
 func (h *ProductHandler) ListFeatured(c *gin.Context) {
+	role := getUserRole(c)
+
 	var products []models.Product
-	h.db.Where("is_active = ? AND is_approved = ? AND is_featured = ?", true, true, true).
-		Preload("Images").Preload("Variants").Order("created_at DESC").Limit(20).Find(&products)
-	utils.SuccessResponse(c, products)
+	query := h.db.Where("is_active = ? AND is_approved = ? AND is_featured = ?", true, true, true)
+
+	if role == string(models.RoleBarber) {
+		query = query.Where("visibility IN ?", []string{
+			string(models.VisibilityBoth),
+			string(models.VisibilityProfessional),
+			string(models.VisibilityRetail),
+		})
+	} else {
+		query = query.Where("visibility IN ?", []string{
+			string(models.VisibilityBoth),
+			string(models.VisibilityRetail),
+		})
+	}
+
+	query = query.Preload("Images").Preload("Variants").Order("created_at DESC").Limit(20)
+	query.Find(&products)
+
+	resp := make([]productResponse, len(products))
+	for i, p := range products {
+		resp[i] = toProductResponse(p, role)
+	}
+	utils.SuccessResponse(c, resp)
 }
 
 func (h *ProductHandler) Get(c *gin.Context) {
+	role := getUserRole(c)
+
 	productID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		utils.BadRequestResponse(c, "Invalid product ID")
@@ -487,7 +608,17 @@ func (h *ProductHandler) Get(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, product)
+	// Check visibility access
+	if product.Visibility == models.VisibilityHidden {
+		utils.NotFoundResponse(c, "Product not found")
+		return
+	}
+	if product.Visibility == models.VisibilityProfessional && role != string(models.RoleBarber) {
+		utils.NotFoundResponse(c, "Product not found")
+		return
+	}
+
+	utils.SuccessResponse(c, toProductResponse(product, role))
 }
 
 func (h *ProductHandler) ListReviews(c *gin.Context) {

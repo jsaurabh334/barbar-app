@@ -72,10 +72,13 @@ class _AdminReportsDashboardState extends State<AdminReportsDashboard> {
 
   Widget _buildRevenueSection() {
     return BlocBuilder<AdminReportsBloc, AdminReportsState>(
-      buildWhen: (prev, cur) => cur is AdminRevenueReportLoaded || cur is AdminReportsLoading || cur is AdminReportsError,
+      buildWhen: (prev, cur) => cur.revenueData != prev.revenueData || cur.isLoading != prev.isLoading || cur.errorMessage != prev.errorMessage,
       builder: (context, state) {
-        if (state is AdminRevenueReportLoaded) return _buildRevenueContent(state.data);
-        if (state is AdminReportsError) return _buildErrorSection('Revenue');
+        if (state.revenueData != null) return _buildRevenueContent(state.revenueData!);
+        if (state.errorMessage != null && state.revenueData == null) return _buildErrorSection('Revenue');
+        if (state.isLoading && state.revenueData == null) {
+          return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
+        }
         return const SizedBox.shrink();
       },
     );
@@ -120,9 +123,12 @@ class _AdminReportsDashboardState extends State<AdminReportsDashboard> {
 
   Widget _buildBookingSection() {
     return BlocBuilder<AdminReportsBloc, AdminReportsState>(
-      buildWhen: (prev, cur) => cur is AdminBookingAnalyticsLoaded || cur is AdminReportsLoading,
+      buildWhen: (prev, cur) => cur.bookingData != prev.bookingData || cur.isLoading != prev.isLoading,
       builder: (context, state) {
-        if (state is AdminBookingAnalyticsLoaded) return _buildBookingContent(state.data);
+        if (state.bookingData != null) return _buildBookingContent(state.bookingData!);
+        if (state.isLoading && state.bookingData == null) {
+          return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
+        }
         return const SizedBox.shrink();
       },
     );
@@ -164,9 +170,12 @@ class _AdminReportsDashboardState extends State<AdminReportsDashboard> {
 
   Widget _buildOrderSection() {
     return BlocBuilder<AdminReportsBloc, AdminReportsState>(
-      buildWhen: (prev, cur) => cur is AdminOrderAnalyticsLoaded || cur is AdminReportsLoading,
+      buildWhen: (prev, cur) => cur.orderData != prev.orderData || cur.isLoading != prev.isLoading,
       builder: (context, state) {
-        if (state is AdminOrderAnalyticsLoaded) return _buildOrderContent(state.data);
+        if (state.orderData != null) return _buildOrderContent(state.orderData!);
+        if (state.isLoading && state.orderData == null) {
+          return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
+        }
         return const SizedBox.shrink();
       },
     );
@@ -200,9 +209,12 @@ class _AdminReportsDashboardState extends State<AdminReportsDashboard> {
 
   Widget _buildCustomerSection() {
     return BlocBuilder<AdminReportsBloc, AdminReportsState>(
-      buildWhen: (prev, cur) => cur is AdminCustomerAnalyticsLoaded || cur is AdminReportsLoading,
+      buildWhen: (prev, cur) => cur.customerData != prev.customerData || cur.isLoading != prev.isLoading,
       builder: (context, state) {
-        if (state is AdminCustomerAnalyticsLoaded) return _buildCustomerContent(state.data);
+        if (state.customerData != null) return _buildCustomerContent(state.customerData!);
+        if (state.isLoading && state.customerData == null) {
+          return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
+        }
         return const SizedBox.shrink();
       },
     );
@@ -236,9 +248,12 @@ class _AdminReportsDashboardState extends State<AdminReportsDashboard> {
 
   Widget _buildBarberSection() {
     return BlocBuilder<AdminReportsBloc, AdminReportsState>(
-      buildWhen: (prev, cur) => cur is AdminBarberAnalyticsLoaded || cur is AdminReportsLoading,
+      buildWhen: (prev, cur) => cur.barberData != prev.barberData || cur.isLoading != prev.isLoading,
       builder: (context, state) {
-        if (state is AdminBarberAnalyticsLoaded) return _buildBarberContent(state.data);
+        if (state.barberData != null) return _buildBarberContent(state.barberData!);
+        if (state.isLoading && state.barberData == null) {
+          return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
+        }
         return const SizedBox.shrink();
       },
     );
@@ -303,9 +318,12 @@ class _AdminReportsDashboardState extends State<AdminReportsDashboard> {
 
   Widget _buildDeliverySection() {
     return BlocBuilder<AdminReportsBloc, AdminReportsState>(
-      buildWhen: (prev, cur) => cur is AdminDeliveryAnalyticsLoaded || cur is AdminReportsLoading,
+      buildWhen: (prev, cur) => cur.deliveryData != prev.deliveryData || cur.isLoading != prev.isLoading,
       builder: (context, state) {
-        if (state is AdminDeliveryAnalyticsLoaded) return _buildDeliveryContent(state.data);
+        if (state.deliveryData != null) return _buildDeliveryContent(state.deliveryData!);
+        if (state.isLoading && state.deliveryData == null) {
+          return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
+        }
         return const SizedBox.shrink();
       },
     );

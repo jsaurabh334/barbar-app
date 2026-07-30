@@ -124,6 +124,51 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
     );
   }
 
+  void _showBarberDocRejectDialog(BuildContext context, String documentId) {
+    final reasonController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Reject Document', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: reasonController,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            labelText: 'Rejection Reason',
+            labelStyle: const TextStyle(color: Colors.white70),
+            hintText: 'e.g. Image blurry, name mismatch',
+            hintStyle: const TextStyle(color: Colors.white30),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.white24)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary)),
+          ),
+          maxLines: 2,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (reasonController.text.trim().isEmpty) return;
+              Navigator.pop(ctx);
+              context.read<AdminBarberDetailsBloc>().add(
+                    RejectBarberDocumentEvent(documentId, reasonController.text.trim()),
+                  );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Reject', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showImageViewer(BuildContext context, String url, String title) {
     double _rotation = 0;
     showDialog(
@@ -642,6 +687,107 @@ class _BarberDetailsViewState extends State<_BarberDetailsView> {
                             }).toList(),
                           )
                         : Text("No KYC documents uploaded.", style: GoogleFonts.outfit(color: Colors.white54)),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // --- Barber Uploaded Documents ---
+                  _buildSectionCard(
+                    title: "Barber Documents",
+                    icon: LucideIcons.fileCheck,
+                    child: (state.barberDocuments.isNotEmpty)
+                        ? Column(
+                            children: state.barberDocuments.map((doc) {
+                              final docApproved = doc.status == 'approved';
+                              final docRejected = doc.status == 'rejected';
+                              final docColor = docApproved
+                                  ? Colors.greenAccent
+                                  : (docRejected ? Colors.redAccent : Colors.orangeAccent);
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF141420),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: Colors.white12),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(LucideIcons.fileText, color: AppColors.primary, size: 20),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            doc.docType.replaceAll('_', ' ').toUpperCase(),
+                                            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: docColor.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: docColor.withOpacity(0.4)),
+                                          ),
+                                          child: Text(
+                                            doc.status.toUpperCase(),
+                                            style: GoogleFonts.outfit(color: docColor, fontWeight: FontWeight.bold, fontSize: 10),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(LucideIcons.eye, color: Colors.white70, size: 20),
+                                          onPressed: () => _showImageViewer(context, doc.docUrl, doc.docType),
+                                          tooltip: 'View Image',
+                                        ),
+                                      ],
+                                    ),
+                                    if (doc.status == 'pending') ...[
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: OutlinedButton(
+                                              onPressed: () => _showBarberDocRejectDialog(context, doc.id),
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: Colors.redAccent,
+                                                side: const BorderSide(color: Colors.redAccent),
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                              ),
+                                              child: const Text('REJECT'),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: ElevatedButton(
+                                              onPressed: () {
+                                                context.read<AdminBarberDetailsBloc>().add(ApproveBarberDocumentEvent(doc.id));
+                                              },
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.green,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                              ),
+                                              child: const Text('APPROVE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                    if (doc.remarks != null && doc.remarks!.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: Text(
+                                          'Remarks: ${doc.remarks}',
+                                          style: GoogleFonts.outfit(color: Colors.redAccent, fontSize: 12),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          )
+                        : Text("No barber documents uploaded.", style: GoogleFonts.outfit(color: Colors.white54)),
                   ),
                   const SizedBox(height: 24),
 

@@ -39,6 +39,11 @@ class BookingRepositoryImpl implements BookingRepository {
   }
 
   @override
+  Future<BookingModel> getBookingById(String bookingId) async {
+    return await _remoteDataSource.getBookingById(bookingId);
+  }
+
+  @override
   Future<void> cancelBooking(String bookingId, {String? reason}) async {
     await _remoteDataSource.cancelBooking(bookingId, reason: reason);
   }

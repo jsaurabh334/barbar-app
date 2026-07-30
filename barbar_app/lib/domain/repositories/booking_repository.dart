@@ -12,6 +12,7 @@ abstract class BookingRepository {
     String? homeServiceAddressId,
   });
   Future<Map<String, dynamic>> getQueuePosition(String bookingId);
+  Future<BookingModel> getBookingById(String bookingId);
   Future<void> cancelBooking(String bookingId, {String? reason});
   Future<void> updateBookingStatus(String bookingId, String status);
   Future<List<BookingModel>> getBarberBookings();

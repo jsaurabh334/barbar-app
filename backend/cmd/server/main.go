@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -15,12 +16,14 @@ import (
 	"github.com/barbar-app/backend/internal/database"
 	"github.com/barbar-app/backend/internal/firebase"
 	"github.com/barbar-app/backend/internal/routes"
+	"github.com/barbar-app/backend/internal/services/encryption"
 	deliverySvc "github.com/barbar-app/backend/internal/services/delivery"
 	notifService "github.com/barbar-app/backend/internal/services/notification"
 	orderService "github.com/barbar-app/backend/internal/services/order"
 	queueService "github.com/barbar-app/backend/internal/services/queue"
 	"github.com/barbar-app/backend/internal/utils"
 	"github.com/barbar-app/backend/internal/websocket"
+	"github.com/google/uuid"
 )
 
 func main() {
@@ -32,6 +35,11 @@ func main() {
 	cfg := config.Load()
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("Config validation failed: %v", err)
+	}
+
+	// Initialize encryption
+	if err := encryption.Init(); err != nil {
+		log.Fatalf("Encryption init failed: %v", err)
 	}
 
 	// Initialize Firebase Admin SDK
@@ -68,6 +76,49 @@ func main() {
 	dispatcher := notifService.NewDispatcher(db, hub, tmplSvc)
 	presenceSvc := deliverySvc.NewPresenceService(db, hub)
 	orderSvc := orderService.NewOrderService(db, dispatcher, hub, presenceSvc)
+
+	// Set WebSocket room authorization
+	hub.AuthorizeRoom = func(userID uuid.UUID, role, room string) bool {
+		if strings.HasPrefix(room, "barber:") {
+			barberID := strings.TrimPrefix(room, "barber:")
+			if role == "admin" || role == "super_admin" {
+				return true
+			}
+			if role == "customer" {
+				return true
+			}
+			return userID.String() == barberID
+		}
+		if strings.HasPrefix(room, "order:") {
+			orderIDStr := strings.TrimPrefix(room, "order:")
+			orderID, err := uuid.Parse(orderIDStr)
+			if err != nil {
+				return false
+			}
+			order, err := orderSvc.GetOrderByID(context.Background(), orderID)
+			if err != nil || order == nil {
+				return false
+			}
+			if role == "admin" || role == "super_admin" {
+				return true
+			}
+			if userID == order.CustomerID {
+				return true
+			}
+			if userID == order.VendorID {
+				return true
+			}
+			if order.DeliveryPartnerID != nil && userID == *order.DeliveryPartnerID {
+				return true
+			}
+			return false
+		}
+		if strings.HasPrefix(room, "user:") {
+			roomUserID := strings.TrimPrefix(room, "user:")
+			return userID.String() == roomUserID
+		}
+		return true
+	}
 
 	// Start order assignment expiry worker
 	orderSvc.StartAssignmentWorker(context.Background())

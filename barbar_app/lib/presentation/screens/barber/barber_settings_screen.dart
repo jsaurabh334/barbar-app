@@ -57,7 +57,7 @@ class _BarberSettingsScreenState extends State<BarberSettingsScreen> {
       _soundAlerts = prefs.getBool('barber_sound_alerts') ?? true;
 
       final res = await widget.barberRepository.getProfile();
-      final data = (res['data'] as Map<String, dynamic>?) ?? res;
+      final data = (res['barber'] as Map<String, dynamic>?) ?? (res['data'] as Map<String, dynamic>?) ?? res;
 
       setState(() {
         _isAvailable = (data['is_available'] as bool?) ?? (data['isAvailable'] as bool?) ?? true;

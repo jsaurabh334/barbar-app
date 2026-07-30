@@ -1,12 +1,15 @@
+import 'dart:convert';
 import 'package:barbar_app/presentation/bloc/admin/admin_bookings_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:barbar_app/core/theme/app_theme.dart';
+import 'package:barbar_app/domain/repositories/admin_repository.dart';
 
 class AdminBookingDetailScreen extends StatefulWidget {
   final Map<String, dynamic> bookingData;
+  final bool showActions;
 
-  const AdminBookingDetailScreen({super.key, required this.bookingData});
+  const AdminBookingDetailScreen({super.key, required this.bookingData, this.showActions = true});
 
   @override
   State<AdminBookingDetailScreen> createState() => _AdminBookingDetailScreenState();
@@ -59,6 +62,39 @@ class _AdminBookingDetailScreenState extends State<AdminBookingDetailScreen> {
     } catch (_) {
       return iso;
     }
+  }
+
+  String _formatAddress(dynamic addressVal) {
+    if (addressVal == null) return '';
+    if (addressVal is Map<String, dynamic>) {
+      return _formatAddressMap(addressVal);
+    }
+    if (addressVal is String && addressVal.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(addressVal);
+        if (decoded is Map<String, dynamic>) {
+          return _formatAddressMap(decoded);
+        }
+        return addressVal;
+      } catch (_) {
+        return addressVal;
+      }
+    }
+    return addressVal.toString();
+  }
+
+  String _formatAddressMap(Map<String, dynamic> addr) {
+    final line1 = addr['line_1'] as String? ?? addr['street'] as String? ?? '';
+    final city = addr['city'] as String? ?? '';
+    final state = addr['state'] as String? ?? '';
+    final pincode = addr['pincode'] as String? ?? addr['zip'] as String? ?? '';
+    final parts = [
+      if (line1.isNotEmpty) line1,
+      if (city.isNotEmpty) city,
+      if (state.isNotEmpty) state,
+      if (pincode.isNotEmpty) pincode,
+    ];
+    return parts.join(', ');
   }
 
   Future<void> _showCancelDialog() async {
@@ -182,7 +218,7 @@ class _AdminBookingDetailScreenState extends State<AdminBookingDetailScreen> {
     final paymentMethod = _booking['payment_method'] as String? ?? '';
     final cancellationReason = _booking['cancellation_reason'] as String?;
     final isHomeService = _booking['is_home_service'] as bool? ?? false;
-    final homeAddress = _booking['home_service_address'] as String? ?? '';
+    final homeAddress = _formatAddress(_booking['home_service_address']);
     final services = (_booking['services'] as List<dynamic>?) ?? [];
 
     return BlocListener<AdminBookingsBloc, AdminBookingsState>(

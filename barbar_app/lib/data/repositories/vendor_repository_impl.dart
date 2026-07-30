@@ -160,6 +160,24 @@ class VendorRepositoryImpl implements VendorRepository {
   }
 
   @override
+  Future<OrderModel> approveReturn(String orderId) async {
+    final json = await _remoteDataSource.approveReturn(orderId);
+    return OrderModel.fromJson(json);
+  }
+
+  @override
+  Future<OrderModel> rejectReturn(String orderId, {String? reason}) async {
+    final json = await _remoteDataSource.rejectReturn(orderId, reason: reason);
+    return OrderModel.fromJson(json);
+  }
+
+  @override
+  Future<OrderModel> receiveReturn(String orderId) async {
+    final json = await _remoteDataSource.receiveReturn(orderId);
+    return OrderModel.fromJson(json);
+  }
+
+  @override
   Future<Map<String, dynamic>> getOrderDeliveryInfo(String orderId) async {
     return await _remoteDataSource.getOrderDeliveryInfo(orderId);
   }

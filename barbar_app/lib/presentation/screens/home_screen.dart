@@ -58,7 +58,6 @@ class _HomeScreenState extends State<HomeScreen> {
     context.read<DirectoryBloc>().add(const FetchCategories());
     context.read<BookingBloc>().add(FetchAllBookings());
 
-    widget.webSocketClient.connect();
     widget.webSocketClient.connectionStatus.listen((connected) {
       if (mounted) {
         setState(() {
@@ -74,24 +73,32 @@ class _HomeScreenState extends State<HomeScreen> {
         final payload = event['payload'] as Map<String, dynamic>?;
         if (payload != null) {
           context.read<NotificationBloc>().add(NewWebSocketNotification(payload));
+          final notifType = payload['type'] as String? ?? '';
+          // Handle queue_update inside notification envelope
+          if (notifType == 'queue_update') {
+            final data = payload['data'] as Map<String, dynamic>?;
+            if (data != null) {
+              _handleQueueUpdatePayload(data, notify: false);
+            }
+          }
+          // Refresh active booking card when service status changes
+          if (notifType == 'barber_started' ||
+              notifType == 'barber_completed' ||
+              notifType == 'booking_status_updated' ||
+              notifType == 'payment_success') {
+            context.read<BookingBloc>().add(FetchAllBookings());
+          }
         }
         return;
       }
       if (_activeBooking == null) return;
       if (type == 'queue_update') {
         final payload = event['payload'] as Map<String, dynamic>;
-        final position = payload['current_position'] as int;
-        final waitMin = (payload['estimated_wait_min'] as num).toDouble();
-
-        context.read<DirectoryBloc>().add(
-          UpdateBarberQueue(
-            barberId: _activeBooking!.barberId,
-            currentQueueLength: position + 2,
-            averageWaitTime: waitMin,
-          ),
-        );
+        _handleQueueUpdatePayload(payload, notify: true);
       }
     });
+
+    widget.webSocketClient.connect();
   }
 
   Future<void> _determinePosition() async {
@@ -136,6 +143,22 @@ class _HomeScreenState extends State<HomeScreen> {
     _searchController.dispose();
     widget.webSocketClient.disconnect();
     super.dispose();
+  }
+
+  void _handleQueueUpdatePayload(Map<String, dynamic> payload, {bool notify = false}) {
+    final position = (payload['current_position'] as num?)?.toInt() ?? 0;
+    final waitMin = (payload['estimated_wait_min'] as num?)?.toDouble() ?? 0;
+
+    context.read<DirectoryBloc>().add(
+      UpdateBarberQueue(
+        barberId: _activeBooking?.barberId ?? '',
+        currentQueueLength: position + 2,
+        averageWaitTime: waitMin,
+      ),
+    );
+    if (notify) {
+      context.read<BookingBloc>().add(FetchAllBookings());
+    }
   }
 
   void _fetchBarbers({String? categoryId}) {
@@ -257,6 +280,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onRefresh: () async {
           _fetchBarbers();
           context.read<DirectoryBloc>().add(const FetchCategories());
+          context.read<BookingBloc>().add(FetchAllBookings());
         },
         color: AppColors.primary,
         backgroundColor: AppColors.surface,

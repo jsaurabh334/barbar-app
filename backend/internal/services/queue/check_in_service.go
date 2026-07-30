@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/barbar-app/backend/internal/models"
+	"github.com/barbar-app/backend/internal/services/notification"
 	"github.com/google/uuid"
 )
 
@@ -33,13 +35,46 @@ func (s *CheckInService) VerifyQR(bookingID uuid.UUID, token string) bool {
 }
 
 func (s *CheckInService) CheckIn(bookingID uuid.UUID, method string) error {
-	return s.svc.MutateQueue(bookingID, func(b *models.Booking) error {
+	var barberID uuid.UUID
+	var customerID uuid.UUID
+
+	err := s.svc.MutateQueue(bookingID, func(b *models.Booking) error {
 		now := time.Now()
+		barberID = b.BarberID
+		customerID = b.CustomerID
 		b.Status = models.BookingStatusCheckedIn
 		b.CheckInAt = &now
 
 		return nil
 	}, "system", method)
+	if err != nil {
+		return err
+	}
+
+	// Notify barber that customer checked in
+	if s.svc.dispatcher != nil {
+		customerName := ""
+		var user models.User
+		if err := s.svc.db.First(&user, customerID).Error; err == nil {
+			customerName = user.FullName
+		}
+
+		var barber models.Barber
+		if err := s.svc.db.First(&barber, barberID).Error; err == nil {
+			s.svc.dispatcher.Dispatch(context.Background(), notification.NotificationEvent{
+				Type:       models.NotifCustomerCheckedIn,
+				ReceiverID: barber.UserID,
+				Role:       notification.RoleBarber,
+				Data: map[string]any{
+					"entity_id":     bookingID.String(),
+					"customer_id":   customerID.String(),
+					"customer_name": customerName,
+				},
+			})
+		}
+	}
+
+	return nil
 }
 
 func (s *CheckInService) ImComing(bookingID uuid.UUID) error {

@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import '../../core/network/websocket_client.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/booking_model.dart';
+import '../bloc/booking/booking_bloc.dart';
+import '../bloc/booking/booking_event.dart';
+import 'customer_dashboard_shell.dart';
 
 class BookingConfirmationScreen extends StatelessWidget {
   final BookingModel booking;
@@ -142,7 +147,18 @@ class BookingConfirmationScreen extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                   onPressed: () {
-                    Navigator.popUntil(context, (route) => route.isFirst);
+                    context.read<BookingBloc>().add(FetchAllBookings());
+                    final wsClient = context.read<WebSocketClient>();
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CustomerDashboardShell(
+                          webSocketClient: wsClient,
+                          initialTab: 2,
+                        ),
+                      ),
+                      (route) => false,
+                    );
                   },
                   child: Text(
                     isPending ? 'View Booking Status' : 'Track Queue',
@@ -158,7 +174,18 @@ class BookingConfirmationScreen extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                   onPressed: () {
-                    Navigator.pop(context);
+                    context.read<BookingBloc>().add(FetchAllBookings());
+                    final wsClient = context.read<WebSocketClient>();
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CustomerDashboardShell(
+                          webSocketClient: wsClient,
+                          initialTab: 2,
+                        ),
+                      ),
+                      (route) => false,
+                    );
                   },
                   child: const Text('My Bookings'),
                 ),

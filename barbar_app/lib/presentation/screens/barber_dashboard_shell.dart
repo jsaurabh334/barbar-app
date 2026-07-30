@@ -11,6 +11,7 @@ import 'barber_dashboard_screen.dart';
 import 'barber_queue_screen.dart';
 import 'barber_clients_screen.dart';
 import 'barber_more_screen.dart';
+import 'shop_screen.dart';
 
 class BarberDashboardShell extends StatefulWidget {
   final WebSocketClient webSocketClient;
@@ -49,6 +50,7 @@ class _BarberDashboardShellState extends State<BarberDashboardShell> {
             barberRepository: widget.barberRepository,
           ),
           const BarberQueueScreen(),
+          const ShopScreen(),
           const BarberClientsScreen(),
           BarberMoreScreen(barberRepository: widget.barberRepository),
         ],
@@ -63,13 +65,14 @@ class _BarberDashboardShellState extends State<BarberDashboardShell> {
           setState(() {
             _selectedTab = index;
           });
-          if (index == 0 || index == 1 || index == 2) {
+          if (index == 0 || index == 1 || index == 2 || index == 3) {
             context.read<BookingBloc>().add(FetchBarberBookings());
           }
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(LucideIcons.layoutDashboard), label: 'Dashboard'),
           BottomNavigationBarItem(icon: Icon(LucideIcons.listOrdered), label: 'Queue'),
+          BottomNavigationBarItem(icon: Icon(LucideIcons.shoppingBag), label: 'Shop'),
           BottomNavigationBarItem(icon: Icon(LucideIcons.users), label: 'Clients'),
           BottomNavigationBarItem(icon: Icon(LucideIcons.menu), label: 'More'),
         ],

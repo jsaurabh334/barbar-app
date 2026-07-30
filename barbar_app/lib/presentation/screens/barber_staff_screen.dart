@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/app_theme.dart';
+import '../../domain/repositories/barber_repository.dart';
 import '../bloc/barber_staff/barber_staff_bloc.dart';
 import '../bloc/barber_staff/barber_staff_event.dart';
 import '../bloc/barber_staff/barber_staff_state.dart';
@@ -42,12 +45,41 @@ class _BarberStaffScreenState extends State<BarberStaffScreen> {
     final workingDaysCtrl = TextEditingController(text: staff != null && staff.workingDays != null ? _mapDaysToText(staff.workingDays) : 'Mon,Tue,Wed,Thu,Fri,Sat');
     final dayOffCtrl = TextEditingController(text: staff != null && staff.dayOff != null ? _mapDaysToText(staff.dayOff) : 'Sun');
     String selectedRole = staff?.role ?? 'staff';
+    String? currentImageUrl = staff?.image;
+    File? pendingImageFile;
+    bool isUploadingImage = false;
 
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            Future<void> pickImage(ImageSource source) async {
+              final picker = ImagePicker();
+              try {
+                final picked = await picker.pickImage(source: source, imageQuality: 80);
+                if (picked != null) {
+                  setDialogState(() {
+                    pendingImageFile = File(picked.path);
+                    isUploadingImage = true;
+                  });
+                  final repo = context.read<BarberRepository>();
+                  final uploadedUrl = await repo.uploadStaffImage(File(picked.path));
+                  setDialogState(() {
+                    currentImageUrl = uploadedUrl;
+                    isUploadingImage = false;
+                  });
+                }
+              } catch (e) {
+                setDialogState(() => isUploadingImage = false);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to upload image: $e'), backgroundColor: AppColors.error),
+                  );
+                }
+              }
+            }
+
             return AlertDialog(
               backgroundColor: AppColors.surface,
               title: Text(staff == null ? 'Add Staff Member' : 'Edit Staff Member'),
@@ -55,6 +87,78 @@ class _BarberStaffScreenState extends State<BarberStaffScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Profile image picker avatar
+                    GestureDetector(
+                      onTap: () {
+                        showModalBottomSheet(
+                          context: context,
+                          backgroundColor: AppColors.surface,
+                          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+                          builder: (_) => SafeArea(
+                            child: Wrap(
+                              children: [
+                                ListTile(
+                                  leading: const Icon(LucideIcons.image, color: AppColors.primary),
+                                  title: const Text('Gallery'),
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    pickImage(ImageSource.gallery);
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(LucideIcons.camera, color: AppColors.primary),
+                                  title: const Text('Camera'),
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    pickImage(ImageSource.camera);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CircleAvatar(
+                            radius: 40,
+                            backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                            backgroundImage: pendingImageFile != null
+                                ? FileImage(pendingImageFile!) as ImageProvider
+                                : (currentImageUrl != null && currentImageUrl!.isNotEmpty
+                                    ? NetworkImage(StaffModel(id: '', barberId: '', name: '', role: '', isActive: true, rating: 0, reviewCount: 0, image: currentImageUrl).fullImageUrl!)
+                                    : null),
+                            child: (pendingImageFile == null && (currentImageUrl == null || currentImageUrl!.isEmpty))
+                                ? const Icon(LucideIcons.user, size: 36, color: AppColors.primary)
+                                : null,
+                          ),
+                          if (isUploadingImage)
+                            Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.5), shape: BoxShape.circle),
+                              child: const Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2)),
+                            )
+                          else
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                                child: const Icon(LucideIcons.camera, size: 14, color: Colors.black),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      currentImageUrl != null && currentImageUrl!.isNotEmpty ? 'Tap to change photo' : 'Tap to add staff photo',
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 16),
                     TextField(
                       controller: nameCtrl,
                       decoration: const InputDecoration(labelText: 'Name', prefixIcon: Icon(LucideIcons.user)),
@@ -111,29 +215,23 @@ class _BarberStaffScreenState extends State<BarberStaffScreen> {
               actions: [
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
                 ElevatedButton(
-                  onPressed: () {
+                  onPressed: isUploadingImage ? null : () {
                     if (nameCtrl.text.trim().isEmpty) return;
+                    final Map<String, dynamic> payload = {
+                      'name': nameCtrl.text.trim(),
+                      'phone': phoneCtrl.text.trim(),
+                      'role': selectedRole,
+                      'image': currentImageUrl ?? '',
+                      'start_time': startTimeCtrl.text.trim(),
+                      'end_time': endTimeCtrl.text.trim(),
+                      'working_days': _mapTextToDays(workingDaysCtrl.text.trim()),
+                      'day_off': _mapTextToDays(dayOffCtrl.text.trim()),
+                    };
                     if (staff == null) {
-                      context.read<BarberStaffBloc>().add(AddStaff({
-                        'name': nameCtrl.text.trim(),
-                        'phone': phoneCtrl.text.trim(),
-                        'role': selectedRole,
-                        'is_active': true,
-                        'start_time': startTimeCtrl.text.trim(),
-                        'end_time': endTimeCtrl.text.trim(),
-                        'working_days': _mapTextToDays(workingDaysCtrl.text.trim()),
-                        'day_off': _mapTextToDays(dayOffCtrl.text.trim()),
-                      }));
+                      payload['is_active'] = true;
+                      context.read<BarberStaffBloc>().add(AddStaff(payload));
                     } else {
-                      context.read<BarberStaffBloc>().add(UpdateStaff(staff.id, {
-                        'name': nameCtrl.text.trim(),
-                        'phone': phoneCtrl.text.trim(),
-                        'role': selectedRole,
-                        'start_time': startTimeCtrl.text.trim(),
-                        'end_time': endTimeCtrl.text.trim(),
-                        'working_days': _mapTextToDays(workingDaysCtrl.text.trim()),
-                        'day_off': _mapTextToDays(dayOffCtrl.text.trim()),
-                      }));
+                      context.read<BarberStaffBloc>().add(UpdateStaff(staff.id, payload));
                     }
                     Navigator.pop(context);
                   },
@@ -175,9 +273,9 @@ class _BarberStaffScreenState extends State<BarberStaffScreen> {
             children: [
               CircleAvatar(
                 radius: 24,
-                backgroundColor: AppColors.primary.withOpacity(0.2),
-                backgroundImage: staff.image != null && staff.image!.isNotEmpty ? NetworkImage(staff.image!) : null,
-                child: staff.image == null || staff.image!.isEmpty ? const Icon(LucideIcons.user, color: AppColors.primary) : null,
+                backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                backgroundImage: staff.fullImageUrl != null ? NetworkImage(staff.fullImageUrl!) : null,
+                child: staff.fullImageUrl == null ? const Icon(LucideIcons.user, color: AppColors.primary) : null,
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -191,7 +289,7 @@ class _BarberStaffScreenState extends State<BarberStaffScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: staff.role == 'manager' ? AppColors.warning.withOpacity(0.2) : AppColors.info.withOpacity(0.2),
+                            color: staff.role == 'manager' ? AppColors.warning.withValues(alpha: 0.2) : AppColors.info.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
@@ -203,7 +301,7 @@ class _BarberStaffScreenState extends State<BarberStaffScreen> {
                           const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: AppColors.error.withOpacity(0.2), borderRadius: BorderRadius.circular(4)),
+                            decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)),
                             child: const Text('ARCHIVED', style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.bold)),
                           ),
                         ],

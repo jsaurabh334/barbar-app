@@ -65,7 +65,7 @@ class _BarberHomeServiceScreenState extends State<BarberHomeServiceScreen> with 
   }
 
   Widget _buildRequestCard(BookingModel booking, {bool showActions = false}) {
-    final scheduledStart = DateTime.parse(booking.scheduledStart);
+    final scheduledStart = DateTime.tryParse(booking.scheduledStart) ?? DateTime.now();
     return GlassCard(
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.only(bottom: 16),

@@ -7,9 +7,9 @@ import (
 
 type CartItem struct {
 	BaseModel
-	UserID    uuid.UUID  `gorm:"type:uuid;index;not null" json:"user_id"`
-	ProductID uuid.UUID  `gorm:"type:uuid;index;not null" json:"product_id"`
-	VariantID *uuid.UUID `gorm:"type:uuid" json:"variant_id,omitempty"`
+	UserID    uuid.UUID  `gorm:"type:uuid;index;uniqueIndex:idx_user_product_variant;not null" json:"user_id"`
+	ProductID uuid.UUID  `gorm:"type:uuid;index;uniqueIndex:idx_user_product_variant;not null" json:"product_id"`
+	VariantID *uuid.UUID `gorm:"type:uuid;index;uniqueIndex:idx_user_product_variant" json:"variant_id,omitempty"`
 	Quantity  int        `gorm:"default:1" json:"quantity"`
 	VendorID  uuid.UUID  `gorm:"type:uuid;index" json:"vendor_id"`
 

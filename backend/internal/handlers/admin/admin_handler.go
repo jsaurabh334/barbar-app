@@ -72,7 +72,7 @@ func (h *AdminHandler) GetDashboard(c *gin.Context) {
 	h.db.Model(&models.User{}).Where("last_active_at >= ?", time.Now().Add(-24*time.Hour)).Count(&stats.ActiveUsers)
 	h.db.Model(&models.Barber{}).Select("COALESCE(SUM(current_queue_length), 0)").Scan(&stats.LiveQueue)
 	h.db.Model(&models.Dispute{}).Where("status = ?", models.DisputeOpen).Count(&stats.PendingReports)
-	h.db.Model(&models.User{}).Where("kyc_status = ?", "pending").Count(&stats.PendingKyc)
+	h.db.Model(&models.KYCDocument{}).Where("status = ?", "pending").Count(&stats.PendingKyc)
 
 	utils.SuccessResponse(c, stats)
 }
@@ -544,13 +544,17 @@ func (h *AdminHandler) UpdateDeliveryPartnerStatus(c *gin.Context) {
 	// Send notification (outside transaction)
 	if h.dispatcher != nil {
 		var notifType models.NotificationType
-		switch req.Status {
-		case string(models.DeliveryPartnerStatusApproved):
-			notifType = models.NotifDeliveryApproved
-		case string(models.DeliveryPartnerStatusRejected):
-			notifType = models.NotifDeliveryRejected
-		case string(models.DeliveryPartnerStatusSuspended):
-			notifType = models.NotifDeliverySuspended
+		if req.Status == string(models.DeliveryPartnerStatusApproved) && partner.Status == string(models.DeliveryPartnerStatusSuspended) {
+			notifType = models.NotifDeliveryReactivated
+		} else {
+			switch req.Status {
+			case string(models.DeliveryPartnerStatusApproved):
+				notifType = models.NotifDeliveryApproved
+			case string(models.DeliveryPartnerStatusRejected):
+				notifType = models.NotifDeliveryRejected
+			case string(models.DeliveryPartnerStatusSuspended):
+				notifType = models.NotifDeliverySuspended
+			}
 		}
 		if notifType != "" {
 			h.dispatcher.Dispatch(c.Request.Context(), notification.NotificationEvent{
@@ -831,10 +835,46 @@ func (h *AdminHandler) ProcessRefund(c *gin.Context) {
 		if c.IsAborted() {
 			return
 		}
+		// Claw back vendor earnings
+		var order models.Order
+		if err := h.db.First(&order, refund.OrderID).Error; err == nil && order.VendorEarnings > 0 {
+			var vendorWallet models.Wallet
+			if err := h.db.Where("vendor_id = ?", order.VendorID).First(&vendorWallet).Error; err == nil {
+				clawbackAmount := order.VendorEarnings
+				if clawbackAmount > req.Amount {
+					clawbackAmount = req.Amount
+				}
+				if vendorWallet.Balance >= clawbackAmount {
+					h.db.Model(&vendorWallet).Updates(map[string]interface{}{
+						"balance":       gorm.Expr("balance - ?", clawbackAmount),
+						"total_debited": gorm.Expr("total_debited + ?", clawbackAmount),
+					})
+					h.db.Create(&models.WalletTransaction{
+						WalletID:       vendorWallet.ID,
+						TxnType:        models.TxnTypeDebit,
+						Amount:         clawbackAmount,
+						RunningBalance: vendorWallet.Balance - clawbackAmount,
+						ReferenceType:  models.TxnRefRefund,
+						ReferenceID:    refund.ID.String(),
+						Description:    fmt.Sprintf("Refund clawback for order %s", order.OrderNumber),
+						Status:         "completed",
+					})
+				}
+			}
+		}
 	}
 
 	h.db.Model(&refund).Updates(updates)
 	h.db.Model(&models.Order{}).Where("id = ?", refund.OrderID).Update("status", models.OrderStatusRefunded)
+
+	h.db.Create(&models.AuditLog{
+		UserID:     adminID,
+		Action:     fmt.Sprintf("refund_%s", req.Status),
+		EntityType: "refund",
+		EntityID:   refund.ID.String(),
+		OldValues:  models.JSONB(fmt.Sprintf(`{"status":"%s"}`, refund.Status)),
+		NewValues:  models.JSONB(fmt.Sprintf(`{"status":"%s","amount":%f,"notes":"%s"}`, req.Status, req.Amount, req.Notes)),
+	})
 
 	utils.SuccessResponse(c, gin.H{"message": "Refund " + req.Status})
 }
@@ -1271,11 +1311,11 @@ func (h *AdminHandler) AdminListWallets(c *gin.Context) {
 	if ownerType := c.Query("type"); ownerType != "" {
 		switch ownerType {
 		case "customer":
-			query = query.Where("user_id IS NOT NULL AND vendor_id IS NULL")
+			query = query.Joins("INNER JOIN users ON users.id = wallets.user_id").Where("wallets.user_id IS NOT NULL AND wallets.vendor_id IS NULL AND users.role = 'customer'")
 		case "vendor":
 			query = query.Where("vendor_id IS NOT NULL")
 		case "delivery":
-			query = query.Where("user_id IS NOT NULL")
+			query = query.Joins("INNER JOIN users ON users.id = wallets.user_id").Where("users.role = 'delivery'")
 		}
 	}
 	if active := c.Query("is_active"); active != "" {
@@ -1283,6 +1323,10 @@ func (h *AdminHandler) AdminListWallets(c *gin.Context) {
 	}
 
 	query.Count(&total)
+
+	if ownerType := c.Query("type"); ownerType == "customer" || ownerType == "delivery" {
+		query = query.Select("wallets.*")
+	}
 	query.Offset((page - 1) * pageSize).Limit(pageSize).Order("created_at DESC").Find(&wallets)
 
 	records := make([]WalletRecord, len(wallets))

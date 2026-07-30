@@ -51,6 +51,18 @@ class BookingRemoteDataSource {
     }
   }
 
+  Future<BookingModel> getBookingById(String bookingId) async {
+    try {
+      final response = await _apiClient.dio.get('/bookings/$bookingId');
+      if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        return BookingModel.fromJson(response.data['data'] as Map<String, dynamic>);
+      }
+      throw Exception(response.data['error'] ?? 'Failed to fetch booking details');
+    } on DioException catch (e) {
+      throw Exception(_parseDioError(e, 'Failed to fetch booking details'));
+    }
+  }
+
   Future<Map<String, dynamic>> getQueuePosition(String bookingId) async {
     final response = await _apiClient.dio.get('/barber/queue/$bookingId');
     if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
@@ -201,28 +213,40 @@ class BookingRemoteDataSource {
   }
 
   Future<List<BookingModel>> getHomeServiceRequests() async {
-    final response = await _apiClient.dio.get('/barber/home-service-requests');
-    if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
-      final data = (response.data['data'] as List<dynamic>?) ?? [];
-      return data.map((e) => BookingModel.fromJson(e as Map<String, dynamic>)).toList();
+    try {
+      final response = await _apiClient.dio.get('/barber/home-service-requests');
+      if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        final data = (response.data['data'] as List<dynamic>?) ?? [];
+        return data.map((e) => BookingModel.fromJson(e as Map<String, dynamic>)).toList();
+      }
+      throw Exception(response.data['error'] ?? 'Failed to fetch home service requests');
+    } on DioException catch (e) {
+      throw Exception(_parseDioError(e, 'Failed to fetch home service requests'));
     }
-    throw Exception(response.data['error'] ?? 'Failed to fetch home service requests');
   }
 
   Future<void> acceptHomeService(String bookingId) async {
-    final response = await _apiClient.dio.post('/barber/home-service-requests/$bookingId/accept');
-    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
-      throw Exception(response.data['error'] ?? 'Failed to accept request');
+    try {
+      final response = await _apiClient.dio.post('/barber/home-service-requests/$bookingId/accept');
+      if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
+        throw Exception(response.data['error'] ?? 'Failed to accept request');
+      }
+    } on DioException catch (e) {
+      throw Exception(_parseDioError(e, 'Failed to accept home service request'));
     }
   }
 
   Future<void> rejectHomeService(String bookingId, String reason) async {
-    final response = await _apiClient.dio.post(
-      '/barber/home-service-requests/$bookingId/reject',
-      data: {'reason': reason},
-    );
-    if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
-      throw Exception(response.data['error'] ?? 'Failed to reject request');
+    try {
+      final response = await _apiClient.dio.post(
+        '/barber/home-service-requests/$bookingId/reject',
+        data: {'reason': reason},
+      );
+      if (response.statusCode != 200 || (response.data['status'] != 'success' && response.data['status'] != 'created')) {
+        throw Exception(response.data['error'] ?? 'Failed to reject request');
+      }
+    } on DioException catch (e) {
+      throw Exception(_parseDioError(e, 'Failed to reject home service request'));
     }
   }
 

@@ -4,6 +4,8 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/product_model.dart';
+import '../bloc/auth/auth_bloc.dart';
+import '../bloc/auth/auth_state.dart';
 import '../bloc/marketplace/marketplace_bloc.dart';
 import '../bloc/marketplace/marketplace_event.dart';
 import '../bloc/marketplace/marketplace_state.dart';
@@ -24,6 +26,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final images = widget.product.images ?? (widget.product.imageUrl != null ? [widget.product.imageUrl!] : <String>[]);
+    final authState = context.read<AuthBloc>().state;
+    final isBarber = authState is AuthAuthenticated && authState.user.role == 'barber';
 
     return Scaffold(
       appBar: AppBar(
@@ -123,6 +127,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               ),
                             ),
                           ),
+                        if (isBarber && widget.product.hasProfessionalPrice)
+                          Positioned(
+                            top: 12,
+                            left: 12,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text('PRO',
+                                  style: TextStyle(fontSize: 12, color: Colors.black, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -176,7 +194,46 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          if (widget.product.discountPrice != null) ...[
+                          if (isBarber && widget.product.hasProfessionalPrice) ...[
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text('Retail Price',
+                                          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                                      const SizedBox(width: 8),
+                                      Text('₹${widget.product.basePrice.toInt()}',
+                                          style: const TextStyle(decoration: TextDecoration.lineThrough, color: AppColors.textMuted, fontSize: 16)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Text('Professional',
+                                          style: const TextStyle(fontSize: 13, color: AppColors.success, fontWeight: FontWeight.bold)),
+                                      const SizedBox(width: 8),
+                                      Text('₹${widget.product.professionalPrice!.toInt()}',
+                                          style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 28)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.success.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      'Save ₹${(widget.product.basePrice - widget.product.professionalPrice!).toInt()}',
+                                      style: const TextStyle(color: AppColors.success, fontSize: 13, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ] else if (widget.product.discountPrice != null) ...[
                             Text('₹${widget.product.discountPrice!.toInt()}',
                                 style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 28)),
                             const SizedBox(width: 8),
@@ -199,7 +256,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             Text('₹${widget.product.basePrice.toInt()}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 28)),
                         ],
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
+
+                      // Professional MOQ
+                      if (isBarber && widget.product.hasProfessionalPrice && widget.product.professionalMoq > 1)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Row(
+                            children: [
+                              const Icon(LucideIcons.package, size: 16, color: AppColors.textSecondary),
+                              const SizedBox(width: 6),
+                              Text('MOQ: ${widget.product.professionalMoq} units',
+                                  style: const TextStyle(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 8),
 
                       // Availability & Tags
                       Row(
@@ -297,7 +369,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       // Delivery & Services
                       const Text('Delivery & Services', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 16),
-                      _buildServiceItem(LucideIcons.truck, 'Free Delivery', 'Usually delivered in 3-5 days'),
+                      _buildServiceItem(LucideIcons.truck, 'Standard Delivery (₹50)', 'Usually delivered in 3-5 days'),
                       const SizedBox(height: 12),
                       _buildServiceItem(LucideIcons.shieldCheck, 'Authentic Product', '100% genuine product guarantee'),
                       const SizedBox(height: 12),
@@ -350,19 +422,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               icon: const Icon(LucideIcons.minus),
                             ),
                             Text('$qty', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                            IconButton(
-                              onPressed: () => context.read<MarketplaceBloc>().add(AddToCart(widget.product)),
-                              icon: const Icon(LucideIcons.plus, color: AppColors.primary),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            context.read<MarketplaceBloc>().add(AddToCart(widget.product));
-                          },
+                              IconButton(
+                               onPressed: () => context.read<MarketplaceBloc>().add(AddToCart(widget.product)),
+                               icon: const Icon(LucideIcons.plus, color: AppColors.primary),
+                             ),
+                           ],
+                         ),
+                       )
+                     else
+                       Expanded(
+                         child: OutlinedButton.icon(
+                           onPressed: () {
+                             if (isBarber && widget.product.hasProfessionalPrice && widget.product.professionalMoq > 1) {
+                               context.read<MarketplaceBloc>().add(AddToCart(widget.product, quantity: widget.product.professionalMoq));
+                             } else {
+                               context.read<MarketplaceBloc>().add(AddToCart(widget.product));
+                             }
+                           },
                           icon: const Icon(LucideIcons.shoppingCart, size: 18),
                           label: const Text('ADD TO CART', style: TextStyle(fontWeight: FontWeight.bold)),
                           style: OutlinedButton.styleFrom(
@@ -377,7 +453,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       child: ElevatedButton.icon(
                         onPressed: () {
                           if (qty == 0) {
-                            context.read<MarketplaceBloc>().add(AddToCart(widget.product));
+                            if (isBarber && widget.product.hasProfessionalPrice && widget.product.professionalMoq > 1) {
+                              context.read<MarketplaceBloc>().add(AddToCart(widget.product, quantity: widget.product.professionalMoq));
+                            } else {
+                              context.read<MarketplaceBloc>().add(AddToCart(widget.product));
+                            }
                           }
                           Navigator.pop(context, true); // true indicates open cart
                         },

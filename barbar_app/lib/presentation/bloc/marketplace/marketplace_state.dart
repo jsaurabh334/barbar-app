@@ -49,3 +49,15 @@ class MarketplaceFailure extends MarketplaceState {
   @override
   List<Object?> get props => [error];
 }
+
+class PaymentInitiated extends MarketplaceState {
+  final Map<String, dynamic> paymentData;
+  const PaymentInitiated(this.paymentData);
+
+  @override
+  List<Object?> get props => [paymentData];
+}
+
+class PaymentVerificationSuccess extends MarketplaceState {
+  const PaymentVerificationSuccess();
+}

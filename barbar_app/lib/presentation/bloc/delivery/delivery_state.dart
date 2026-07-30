@@ -88,6 +88,15 @@ class DeliverySuccess extends DeliveryState {
   List<Object?> get props => [message];
 }
 
+class DeliveryDashboardLoaded extends DeliveryState {
+  final Map<String, dynamic> stats;
+
+  const DeliveryDashboardLoaded(this.stats);
+
+  @override
+  List<Object?> get props => [stats];
+}
+
 class DeliveryWalletLoaded extends DeliveryState {
   final Map<String, dynamic> summary;
   final List<Map<String, dynamic>> transactions;

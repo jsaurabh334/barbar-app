@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../core/theme/app_theme.dart';
@@ -43,10 +43,10 @@ class _DeliveryVerificationScreenState extends State<DeliveryVerificationScreen>
         ? (context.watch<AuthBloc>().state as AuthAuthenticated).user
         : null;
 
-    final vehicleType = (_partnerData?['vehicle_type'] as String?)?.toUpperCase() ?? 'BIKE';
-    final vehicleNumber = (_partnerData?['vehicle_number'] as String?) ?? 'CG 07 AB 4321';
-    final licenseNumber = (_partnerData?['license_number'] as String?) ?? 'DL-1420110012345';
-    final status = (_partnerData?['status'] as String?) ?? 'approved';
+    final vehicleType = (_partnerData?['vehicle_type'] as String?)?.toUpperCase() ?? '—';
+    final vehicleNumber = (_partnerData?['vehicle_number'] as String?) ?? '—';
+    final licenseNumber = (_partnerData?['license_number'] as String?) ?? '—';
+    final status = (_partnerData?['status'] as String?) ?? '—';
 
     return Scaffold(
       appBar: AppBar(
@@ -96,8 +96,8 @@ class _DeliveryVerificationScreenState extends State<DeliveryVerificationScreen>
                   const SizedBox(height: 24),
                   const Text('VERIFIED CREDENTIALS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1.5, color: AppColors.textSecondary)),
                   const SizedBox(height: 12),
-                  _buildTile('Full Name', user?.fullName ?? 'sanu', LucideIcons.user),
-                  _buildTile('Phone Number', user?.phone ?? '+91 6260521548', LucideIcons.phone),
+                  _buildTile('Full Name', user?.fullName ?? '—', LucideIcons.user),
+                  _buildTile('Phone Number', user?.phone ?? '—', LucideIcons.phone),
                   _buildTile('Vehicle Type', vehicleType, LucideIcons.bike),
                   _buildTile('Registration Number', vehicleNumber, LucideIcons.shieldCheck),
                   _buildTile('Driving License No.', licenseNumber, LucideIcons.fileText),
@@ -133,3 +133,4 @@ class _DeliveryVerificationScreenState extends State<DeliveryVerificationScreen>
     );
   }
 }
+

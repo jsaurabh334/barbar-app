@@ -26,11 +26,25 @@ class CheckInBloc extends Bloc<CheckInEvent, CheckInState> {
     return super.close();
   }
 
+  Future<BookingModel> _fetchBookingWithPermission(String bookingId) async {
+    final booking = await _bookingRepository.getBookingById(bookingId);
+    try {
+      final callData = await _bookingRepository.getCallPermission(bookingId);
+      return booking.copyWith(
+        canCallShop: callData['can_call_shop'] as bool? ?? false,
+        canCallCustomer: callData['can_call_customer'] as bool? ?? false,
+        maskedShopPhone: callData['shop_phone'] as String?,
+        maskedCustomerPhone: callData['customer_phone'] as String?,
+      );
+    } catch (_) {
+      return booking;
+    }
+  }
+
   Future<void> _onLoadCheckInData(LoadCheckInData event, Emitter<CheckInState> emit) async {
     emit(CheckInLoading());
     try {
-      final data = await _bookingRepository.getCallPermission(event.bookingId);
-      final booking = BookingModel.fromJson(data);
+      final booking = await _fetchBookingWithPermission(event.bookingId);
       _listenForUpdates(booking.id);
       emit(CheckInDataLoaded(booking));
     } catch (e) {
@@ -42,8 +56,8 @@ class CheckInBloc extends Bloc<CheckInEvent, CheckInState> {
     emit(CheckInLoading());
     try {
       await _bookingRepository.checkIn(event.bookingId, 'qr', token: event.token);
-      final data = await _bookingRepository.getCallPermission(event.bookingId);
-      emit(CheckedInSuccess(BookingModel.fromJson(data)));
+      final booking = await _fetchBookingWithPermission(event.bookingId);
+      emit(CheckedInSuccess(booking));
     } catch (e) {
       emit(CheckInFailure(e.toString().replaceAll('Exception: ', '')));
     }
@@ -53,8 +67,8 @@ class CheckInBloc extends Bloc<CheckInEvent, CheckInState> {
     emit(CheckInLoading());
     try {
       await _bookingRepository.checkIn(event.bookingId, 'manual', lat: event.lat, lng: event.lng);
-      final data = await _bookingRepository.getCallPermission(event.bookingId);
-      emit(CheckedInSuccess(BookingModel.fromJson(data)));
+      final booking = await _fetchBookingWithPermission(event.bookingId);
+      emit(CheckedInSuccess(booking));
     } catch (e) {
       emit(CheckInFailure(e.toString().replaceAll('Exception: ', '')));
     }
@@ -64,8 +78,8 @@ class CheckInBloc extends Bloc<CheckInEvent, CheckInState> {
     emit(CheckInLoading());
     try {
       await _bookingRepository.imComing(event.bookingId);
-      final data = await _bookingRepository.getCallPermission(event.bookingId);
-      emit(ImComingSuccess(BookingModel.fromJson(data)));
+      final booking = await _fetchBookingWithPermission(event.bookingId);
+      emit(ImComingSuccess(booking));
     } catch (e) {
       emit(CheckInFailure(e.toString().replaceAll('Exception: ', '')));
     }
@@ -74,12 +88,11 @@ class CheckInBloc extends Bloc<CheckInEvent, CheckInState> {
   Future<void> _onGetCallPermission(GetCallPermission event, Emitter<CheckInState> emit) async {
     try {
       final data = await _bookingRepository.getCallPermission(event.bookingId);
-      final booking = BookingModel.fromJson(data);
       emit(CallPermissionLoaded(
-        canCallShop: booking.canCallShop,
-        canCallCustomer: booking.canCallCustomer,
-        maskedShopPhone: booking.maskedShopPhone,
-        maskedCustomerPhone: booking.maskedCustomerPhone,
+        canCallShop: data['can_call_shop'] as bool? ?? false,
+        canCallCustomer: data['can_call_customer'] as bool? ?? false,
+        maskedShopPhone: data['shop_phone'] as String?,
+        maskedCustomerPhone: data['customer_phone'] as String?,
       ));
     } catch (e) {
       emit(CheckInFailure(e.toString().replaceAll('Exception: ', '')));

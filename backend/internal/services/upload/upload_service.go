@@ -62,10 +62,21 @@ func NewUploadService(opts ...UploadOption) *UploadService {
 	return s
 }
 
+// sanitizePathPart removes path traversal sequences and restricts to safe characters only
+func sanitizePathPart(part string) string {
+	cleaned := filepath.Clean(part)
+	cleaned = strings.ReplaceAll(cleaned, "..", "")
+	cleaned = strings.ReplaceAll(cleaned, "~", "")
+	cleaned = filepath.Clean(cleaned)
+	return cleaned
+}
+
 func (s *UploadService) UploadFile(file *multipart.FileHeader, subDir string) (*UploadResult, error) {
 	if file.Size > s.MaxSize {
 		return nil, fmt.Errorf("file size %d exceeds maximum %d", file.Size, s.MaxSize)
 	}
+
+	subDir = sanitizePathPart(subDir)
 
 	src, err := file.Open()
 	if err != nil {
@@ -95,12 +106,28 @@ func (s *UploadService) UploadFile(file *multipart.FileHeader, subDir string) (*
 	}
 
 	uploadDir := filepath.Join(s.BasePath, subDir)
+	uploadDir = filepath.Clean(uploadDir)
+
+	// Ensure the resolved path is within BasePath
+	absBase, _ := filepath.Abs(s.BasePath)
+	absDir, _ := filepath.Abs(uploadDir)
+	if !strings.HasPrefix(absDir, absBase) {
+		return nil, fmt.Errorf("invalid directory: path traversal detected")
+	}
+
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create upload directory: %w", err)
 	}
 
 	fileName := fmt.Sprintf("%s_%s%s", time.Now().Format("20060102150405"), uuid.New().String()[:8], ext)
 	filePath := filepath.Join(uploadDir, fileName)
+	filePath = filepath.Clean(filePath)
+
+	// Verify final path is still within BasePath
+	absPath, _ := filepath.Abs(filePath)
+	if !strings.HasPrefix(absPath, absBase) {
+		return nil, fmt.Errorf("invalid file path: path traversal detected")
+	}
 
 	dst, err := os.Create(filePath)
 	if err != nil {
@@ -136,5 +163,20 @@ func (s *UploadService) UploadMultiple(files []*multipart.FileHeader, subDir str
 }
 
 func (s *UploadService) DeleteFile(path string) error {
-	return os.Remove(path)
+	cleanPath := filepath.Clean(path)
+	if strings.Contains(cleanPath, "..") {
+		return fmt.Errorf("invalid path: path traversal detected")
+	}
+
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return fmt.Errorf("invalid path: %w", err)
+	}
+
+	absBase, _ := filepath.Abs(s.BasePath)
+	if !strings.HasPrefix(absPath, absBase) {
+		return fmt.Errorf("invalid path: path traversal detected")
+	}
+
+	return os.Remove(absPath)
 }

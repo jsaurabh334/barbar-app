@@ -12,10 +12,13 @@ import '../../widgets/tracking/driver_card_widget.dart';
 import '../../widgets/tracking/timeline_widget.dart';
 import '../../widgets/tracking/tracking_map_widget.dart';
 
+import '../../../data/models/order_model.dart';
+
 class CustomerOrderTrackingScreen extends StatefulWidget {
   final String orderId;
+  final OrderModel? order;
 
-  const CustomerOrderTrackingScreen({super.key, required this.orderId});
+  const CustomerOrderTrackingScreen({super.key, required this.orderId, this.order});
 
   @override
   State<CustomerOrderTrackingScreen> createState() => _CustomerOrderTrackingScreenState();
@@ -247,12 +250,90 @@ class _CustomerOrderTrackingScreenState extends State<CustomerOrderTrackingScree
             DriverCardWidget(driver: response.driver!),
           ],
           const SizedBox(height: 12),
+          _buildOrderDetailsCard(),
+          const SizedBox(height: 12),
           TimelineWidget(
             entries: response.timeline,
             currentStatus: response.status,
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildOrderDetailsCard() {
+    final order = widget.order;
+    if (order == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(LucideIcons.shoppingBag, color: AppColors.primary, size: 18),
+              SizedBox(width: 8),
+              Text('Order Items', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (order.items != null)
+            ...order.items!.map((item) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Text('${item.quantity}x', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(item.productName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                      ),
+                      Text('₹${(item.price * item.quantity).toInt()}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                )),
+          const Divider(color: AppColors.border, height: 24),
+          _priceRow('Subtotal', '₹${order.itemsTotal.toInt()}'),
+          const SizedBox(height: 6),
+          _priceRow('Delivery Fee', '₹${order.shippingCharge.toInt()}'),
+          const Divider(color: AppColors.border, height: 24),
+          _priceRow('Total Bill', '₹${order.finalAmount.toInt()}', isBold: true, color: AppColors.primary, fontSize: 16),
+          const Divider(color: AppColors.border, height: 24),
+          Row(
+            children: [
+              const Icon(LucideIcons.creditCard, size: 14, color: AppColors.textSecondary),
+              const SizedBox(width: 6),
+              Text('Payment: ${(order.paymentMethod ?? "N/A").toUpperCase()}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              const Spacer(),
+              Text(
+                order.paymentStatus.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: order.paymentStatus == 'paid' || order.paymentStatus == 'completed'
+                      ? AppColors.success
+                      : AppColors.warning,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _priceRow(String label, String value, {bool isBold = false, Color? color, double fontSize = 13}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(color: isBold ? Colors.white : AppColors.textSecondary, fontSize: fontSize, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+        Text(value, style: TextStyle(color: color ?? Colors.white, fontWeight: isBold ? FontWeight.bold : FontWeight.w600, fontSize: fontSize)),
+      ],
     );
   }
 

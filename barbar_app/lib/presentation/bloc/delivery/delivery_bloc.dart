@@ -30,6 +30,8 @@ class DeliveryBloc extends Bloc<DeliveryEvent, DeliveryState> {
     on<DeliverOrder>(_onDeliverOrder);
     on<FetchDeliveryWallet>(_onFetchDeliveryWallet);
     on<RequestDeliveryWithdrawal>(_onRequestDeliveryWithdrawal);
+    on<FetchDeliveryDashboard>(_onFetchDeliveryDashboard);
+    on<AcceptReturnPickup>(_onAcceptReturnPickup);
   }
 
   Future<void> _onLoadProfile(LoadDeliveryProfile event, Emitter<DeliveryState> emit) async {
@@ -277,6 +279,26 @@ class DeliveryBloc extends Bloc<DeliveryEvent, DeliveryState> {
         transactions: txns,
         withdrawals: withdrawals,
       ));
+    } catch (e) {
+      emit(DeliveryFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onFetchDeliveryDashboard(FetchDeliveryDashboard event, Emitter<DeliveryState> emit) async {
+    try {
+      final stats = await _deliveryRepository.getDeliveryDashboard();
+      emit(DeliveryDashboardLoaded(stats));
+    } catch (e) {
+      emit(DeliveryFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onAcceptReturnPickup(AcceptReturnPickup event, Emitter<DeliveryState> emit) async {
+    try {
+      await _deliveryRepository.acceptReturnPickup(event.orderId);
+      emit(const DeliverySuccess('Return pickup accepted'));
+      final orders = await _deliveryRepository.getAssignedOrders();
+      emit(DeliveryOrdersLoaded(orders));
     } catch (e) {
       emit(DeliveryFailure(e.toString().replaceAll('Exception: ', '')));
     }

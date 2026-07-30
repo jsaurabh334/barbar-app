@@ -13,6 +13,24 @@ import (
 	"gorm.io/gorm"
 )
 
+// queueActiveStatuses lists booking statuses that are actively in the queue flow.
+var queueActiveStatuses = []models.BookingStatus{
+	models.BookingStatusCheckedIn,
+	models.BookingStatusWaiting,
+	models.BookingStatusNext,
+	models.BookingStatusInProgress,
+}
+
+// queueEligibleCondition returns a SQL WHERE fragment for queue-eligible bookings.
+// A booking is queue-eligible if:
+//   - it's actively in the queue (checked_in / waiting / next / in_progress), OR
+//   - it's confirmed with a queue position already assigned (queue_assigned_at IS NOT NULL)
+//
+// Usage: db.Where("barber_id = ? AND "+queueEligibleCondition()+" AND ...", barberID, queueActiveStatuses, models.BookingStatusConfirmed, ...)
+func queueEligibleCondition() string {
+	return "((status IN ?) OR (status = ? AND queue_assigned_at IS NOT NULL))"
+}
+
 type QueueService struct {
 	db         *gorm.DB
 	hub        *websocket.Hub
@@ -29,12 +47,29 @@ func todayStartEnd() (time.Time, time.Time) {
 	return start, start.Add(24 * time.Hour)
 }
 
+func (s *QueueService) SyncQueueLength(barberID uuid.UUID) int {
+	todayStart, todayEnd := todayStartEnd()
+	var activeCount int64
+	s.db.Model(&models.Booking{}).Where(
+		"barber_id = ? AND scheduled_start >= ? AND scheduled_start < ? AND status IN ?",
+		barberID, todayStart, todayEnd,
+		[]models.BookingStatus{
+			models.BookingStatusCheckedIn,
+			models.BookingStatusWaiting,
+			models.BookingStatusNext,
+			models.BookingStatusInProgress,
+		},
+	).Count(&activeCount)
+
+	s.db.Model(&models.Barber{}).Where("id = ?", barberID).Update("current_queue_length", activeCount)
+	return int(activeCount)
+}
+
 func (s *QueueService) RecalculatePositions(barberID uuid.UUID) {
 	todayStart, todayEnd := todayStartEnd()
 	var bookings []models.Booking
-	s.db.Where("barber_id = ? AND status IN ? AND scheduled_start >= ? AND scheduled_start < ?",
-		barberID,
-		[]models.BookingStatus{models.BookingStatusCheckedIn, models.BookingStatusWaiting, models.BookingStatusNext, models.BookingStatusInProgress},
+	s.db.Where("barber_id = ? AND "+queueEligibleCondition()+" AND scheduled_start >= ? AND scheduled_start < ?",
+		barberID, queueActiveStatuses, models.BookingStatusConfirmed,
 		todayStart, todayEnd,
 	).Order("staff_id ASC, queue_position ASC, scheduled_start ASC, created_at ASC").Find(&bookings)
 
@@ -55,6 +90,7 @@ func (s *QueueService) RecalculatePositions(barberID uuid.UUID) {
 			}
 		}
 	}
+	s.SyncQueueLength(barberID)
 }
 func (s *QueueService) RecalculateWaitTimes(barberID uuid.UUID) {
 	todayStart, todayEnd := todayStartEnd()
@@ -64,9 +100,8 @@ func (s *QueueService) RecalculateWaitTimes(barberID uuid.UUID) {
 	}
 
 	var bookings []models.Booking
-	s.db.Where("barber_id = ? AND status IN ? AND scheduled_start >= ? AND scheduled_start < ?",
-		barberID,
-		[]models.BookingStatus{models.BookingStatusInProgress, models.BookingStatusNext, models.BookingStatusWaiting, models.BookingStatusCheckedIn},
+	s.db.Where("barber_id = ? AND "+queueEligibleCondition()+" AND scheduled_start >= ? AND scheduled_start < ?",
+		barberID, queueActiveStatuses, models.BookingStatusConfirmed,
 		todayStart, todayEnd,
 	).Order("staff_id ASC, queue_position ASC, scheduled_start ASC, created_at ASC").Find(&bookings)
 
@@ -136,9 +171,8 @@ func (s *QueueService) GetQueueStatus(barberID uuid.UUID) *QueueStatus {
 	}
 
 	var bookings []models.Booking
-	s.db.Where("barber_id = ? AND status IN ? AND scheduled_start >= ? AND scheduled_start < ?",
-		barberID,
-		[]models.BookingStatus{models.BookingStatusCheckedIn, models.BookingStatusWaiting, models.BookingStatusNext, models.BookingStatusInProgress},
+	s.db.Where("barber_id = ? AND "+queueEligibleCondition()+" AND scheduled_start >= ? AND scheduled_start < ?",
+		barberID, queueActiveStatuses, models.BookingStatusConfirmed,
 		todayStart, todayEnd,
 	).Preload("Customer").Order("staff_id ASC, queue_position ASC, scheduled_start ASC").Find(&bookings)
 
@@ -397,12 +431,7 @@ func (s *QueueService) withLockedBooking(bookingID uuid.UUID, fn func(*models.Bo
 }
 
 func queueStatuses() []models.BookingStatus {
-	return []models.BookingStatus{
-		models.BookingStatusCheckedIn,
-		models.BookingStatusWaiting,
-		models.BookingStatusNext,
-		models.BookingStatusInProgress,
-	}
+	return queueActiveStatuses
 }
 
 func (s *QueueService) AssignQueuePosition(bookingID uuid.UUID) error {
@@ -536,6 +565,41 @@ func (s *QueueService) PromoteNext(barberID uuid.UUID, staffID *uuid.UUID) {
 	if nextBooking.ID != uuid.Nil {
 		s.db.Model(&nextBooking).Update("status", models.BookingStatusNext)
 		s.CreateAuditLog(barberID, staffID, nextBooking.ID, models.QueueActionPromoted, 0, nextBooking.QueuePosition, uuid.Nil, "scheduler", "Promoted to next")
+		s.RecalculateWaitTimes(barberID)
+		s.BroadcastQueueUpdate(barberID)
+
+		// Notify customer
+		s.dispatcher.Dispatch(context.Background(), notification.NotificationEvent{
+			Type:       models.NotifCustomerUpNext,
+			ReceiverID: nextBooking.CustomerID,
+			Role:       notification.RoleCustomer,
+			Data: map[string]any{
+				"entity_id":   nextBooking.ID.String(),
+				"barber_id":   barberID.String(),
+				"queue_position": nextBooking.QueuePosition,
+			},
+		})
+
+		// Notify barber
+		var barber models.Barber
+		if err := s.db.Preload("User").First(&barber, barberID).Error; err == nil {
+			customerName := ""
+			var user models.User
+			if err := s.db.First(&user, nextBooking.CustomerID).Error; err == nil {
+				customerName = user.FullName
+			}
+			s.dispatcher.Dispatch(context.Background(), notification.NotificationEvent{
+				Type:       models.NotifCustomerUpNext,
+				ReceiverID: barber.UserID,
+				Role:       notification.RoleBarber,
+				Data: map[string]any{
+					"entity_id":      nextBooking.ID.String(),
+					"customer_id":    nextBooking.CustomerID.String(),
+					"customer_name":  customerName,
+					"queue_position": nextBooking.QueuePosition,
+				},
+			})
+		}
 	}
 }
 
@@ -711,7 +775,7 @@ func (s *QueueService) CompleteService(bookingID uuid.UUID) error {
 		ChangedByRole: "barber",
 		Reason:        "Service completed",
 	})
-	s.db.Model(&models.Barber{}).Where("id = ?", barberID).Update("current_queue_length", gorm.Expr("GREATEST(current_queue_length - 1, 0)"))
+	s.SyncQueueLength(barberID)
 
 	// Promote next
 	var nextBooking models.Booking
@@ -795,6 +859,7 @@ func (s *QueueService) RemindUpcoming(bookingID uuid.UUID) error {
 		return err
 	}
 
+	// Notify customer
 	s.dispatcher.Dispatch(context.Background(), notification.NotificationEvent{
 		Type:       models.NotifBookingReminder,
 		ReceiverID: booking.CustomerID,
@@ -805,6 +870,21 @@ func (s *QueueService) RemindUpcoming(bookingID uuid.UUID) error {
 			"scheduled_start": booking.ScheduledStart.Format(time.RFC3339),
 		},
 	})
+
+	// Notify barber
+	var barber models.Barber
+	if err := s.db.First(&barber, booking.BarberID).Error; err == nil {
+		s.dispatcher.Dispatch(context.Background(), notification.NotificationEvent{
+			Type:       models.NotifBookingReminder,
+			ReceiverID: barber.UserID,
+			Role:       notification.RoleBarber,
+			Data: map[string]any{
+				"entity_id":       bookingID.String(),
+				"customer_id":     booking.CustomerID.String(),
+				"scheduled_start": booking.ScheduledStart.Format(time.RFC3339),
+			},
+		})
+	}
 
 	return nil
 }

@@ -21,7 +21,7 @@ class BookingHistoryScreen extends StatefulWidget {
 class _BookingHistoryScreenState extends State<BookingHistoryScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  static const _activeStatuses = ['confirmed', 'checked_in', 'waiting', 'next', 'in_progress'];
+  static const _activeStatuses = ['pending', 'home_service_pending', 'confirmed', 'checked_in', 'waiting', 'next', 'in_progress', 'rescheduled'];
   static const _historyStatuses = ['completed', 'cancelled', 'no_show'];
 
   @override
@@ -279,6 +279,10 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
               const SizedBox(height: 12),
               Row(
                 children: [
+                  if (booking.status == 'pending' || booking.status == 'home_service_pending')
+                    Expanded(
+                      child: _miniButton('AWAITING APPROVAL', AppColors.warning, () => _openCheckIn(booking)),
+                    ),
                   if (booking.status == 'confirmed' && hasQueue)
                     Expanded(
                       child: _miniButton('CHECK IN', AppColors.success, () => _openCheckIn(booking)),
@@ -465,6 +469,8 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
 
   IconData _statusIcon(String status) {
     switch (status) {
+      case 'pending':
+      case 'home_service_pending': return LucideIcons.clock;
       case 'confirmed': return LucideIcons.checkCircle;
       case 'checked_in': return LucideIcons.logIn;
       case 'waiting': return LucideIcons.clock;
@@ -478,6 +484,8 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
 
   Color _statusColor(String status) {
     switch (status) {
+      case 'pending':
+      case 'home_service_pending': return AppColors.warning;
       case 'confirmed': return AppColors.success;
       case 'checked_in': return AppColors.info;
       case 'waiting': return AppColors.warning;
@@ -491,6 +499,8 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
 
   String _statusLabel(String status) {
     switch (status) {
+      case 'pending': return 'Requested';
+      case 'home_service_pending': return 'Home Pending';
       case 'confirmed': return 'Confirmed';
       case 'checked_in': return 'Checked In';
       case 'waiting': return 'Waiting';

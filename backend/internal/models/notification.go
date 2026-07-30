@@ -35,6 +35,12 @@ const (
 	NotifOrderCancelled        NotificationType = "order_cancelled"
 	NotifPaymentSuccess        NotificationType = "payment_success"
 	NotifPaymentFailed         NotificationType = "payment_failed"
+	NotifReturnRequested       NotificationType = "return_requested"
+	NotifReturnApproved        NotificationType = "return_approved"
+	NotifReturnRejected        NotificationType = "return_rejected"
+	NotifReturnPickupAssigned  NotificationType = "return_pickup_assigned"
+	NotifReturnPickedUp        NotificationType = "return_picked_up"
+	NotifReturnReceived        NotificationType = "return_received"
 	NotifRefundInitiated       NotificationType = "refund_initiated"
 	NotifRefundCompleted       NotificationType = "refund_completed"
 	NotifWithdrawalApproved    NotificationType = "withdrawal_approved"
@@ -60,6 +66,8 @@ const (
 	NotifDeliveryRejected     NotificationType = "delivery_rejected"
 	NotifDeliverySuspended    NotificationType = "delivery_suspended"
 	NotifDeliveryReactivated  NotificationType = "delivery_reactivated"
+	NotifCustomerUpNext      NotificationType = "customer_up_next"
+	NotifCustomerCheckedIn   NotificationType = "customer_checked_in"
 )
 
 type DeliveryStatus string
@@ -94,7 +102,7 @@ const (
 
 type Notification struct {
 	BaseModel
-	UserID         uuid.UUID            `gorm:"type:uuid;index;not null" json:"user_id"`
+	UserID         uuid.UUID            `gorm:"type:uuid;index:idx_notifications_user_read,priority:1;not null" json:"user_id"`
 	Role           string               `gorm:"size:50" json:"role"` // customer, barber, etc
 	Title          string               `gorm:"size:255;not null" json:"title"`
 	Body           string               `gorm:"type:text" json:"body,omitempty"`
@@ -107,7 +115,7 @@ type Notification struct {
 	Link           string               `gorm:"size:500" json:"link,omitempty"`
 	Action         string               `gorm:"size:100" json:"action,omitempty"`
 	EntityID       string               `gorm:"size:100" json:"entity_id,omitempty"`
-	IsRead         bool                 `gorm:"default:false;index" json:"is_read"`
+	IsRead         bool                 `gorm:"default:false;index:idx_notifications_user_read,priority:2" json:"is_read"`
 	ReadAt         *time.Time           `json:"read_at,omitempty"`
 	SentAt         *time.Time           `json:"sent_at,omitempty"`
 	ExpiresAt      *time.Time           `json:"expires_at,omitempty"`
@@ -139,7 +147,7 @@ type DeviceToken struct {
 	BaseModel
 	UserID     uuid.UUID  `gorm:"type:uuid;index" json:"user_id"`
 	Role       string     `gorm:"size:50;index" json:"role"`
-	Token      string     `gorm:"size:500;index" json:"token"`
+	Token      string     `gorm:"size:500;uniqueIndex" json:"token"`
 	Platform   string     `gorm:"size:50" json:"platform"`
 	DeviceName string     `gorm:"size:255" json:"device_name"`
 	AppVersion string     `gorm:"size:50" json:"app_version"`
@@ -149,8 +157,8 @@ type DeviceToken struct {
 
 type NotificationPreference struct {
 	BaseModel
-	UserID         uuid.UUID `gorm:"type:uuid;index" json:"user_id"`
-	Role           string    `gorm:"size:50;index" json:"role"`
+	UserID         uuid.UUID `gorm:"type:uuid;uniqueIndex:idx_user_role;not null" json:"user_id"`
+	Role           string    `gorm:"size:50;uniqueIndex:idx_user_role;not null" json:"role"`
 	BookingUpdates bool      `gorm:"default:true" json:"booking_updates"`
 	QueueUpdates   bool      `gorm:"default:true" json:"queue_updates"`
 	Offers         bool      `gorm:"default:true" json:"offers"`

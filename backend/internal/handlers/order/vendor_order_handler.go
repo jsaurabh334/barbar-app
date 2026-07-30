@@ -144,6 +144,133 @@ func (h *VendorOrderHandler) ReadyForPickup(c *gin.Context) {
 	utils.SuccessResponse(c, updated)
 }
 
+func (h *VendorOrderHandler) ApproveReturn(c *gin.Context) {
+	vendor, ok := h.vendorFromUser(c)
+	if !ok {
+		return
+	}
+	order, ok := h.loadOrder(c)
+	if !ok {
+		return
+	}
+	if order.VendorID != vendor.ID {
+		utils.ForbiddenResponse(c, "This order does not belong to your vendor account")
+		return
+	}
+	if order.Status != models.OrderStatusReturnRequested {
+		utils.BadRequestResponse(c, "Return is not requested for this order")
+		return
+	}
+
+	updated, err := h.service.TransitionOrder(c.Request.Context(), order.ID, vendor.UserID, "vendor", models.OrderStatusReturnApproved, "")
+	if err != nil {
+		utils.BadRequestResponse(c, err.Error())
+		return
+	}
+	utils.SuccessResponse(c, updated)
+}
+
+func (h *VendorOrderHandler) RejectReturn(c *gin.Context) {
+	vendor, ok := h.vendorFromUser(c)
+	if !ok {
+		return
+	}
+	order, ok := h.loadOrder(c)
+	if !ok {
+		return
+	}
+	if order.VendorID != vendor.ID {
+		utils.ForbiddenResponse(c, "This order does not belong to your vendor account")
+		return
+	}
+	if order.Status != models.OrderStatusReturnRequested {
+		utils.BadRequestResponse(c, "Return is not requested for this order")
+		return
+	}
+
+	var req struct {
+		Reason string `json:"reason" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "Reason is required")
+		return
+	}
+
+	updated, err := h.service.TransitionOrder(c.Request.Context(), order.ID, vendor.UserID, "vendor", models.OrderStatusReturnRejected, req.Reason)
+	if err != nil {
+		utils.BadRequestResponse(c, err.Error())
+		return
+	}
+
+	h.db.Model(&models.RefundRequest{}).Where("order_id = ?", order.ID).Update("status", "rejected")
+
+	utils.SuccessResponse(c, updated)
+}
+
+func (h *VendorOrderHandler) ReceiveReturn(c *gin.Context) {
+	vendor, ok := h.vendorFromUser(c)
+	if !ok {
+		return
+	}
+	order, ok := h.loadOrder(c)
+	if !ok {
+		return
+	}
+	if order.VendorID != vendor.ID {
+		utils.ForbiddenResponse(c, "This order does not belong to your vendor account")
+		return
+	}
+	if order.Status != models.OrderStatusReturnPickedUp {
+		utils.BadRequestResponse(c, "Return items have not been picked up yet")
+		return
+	}
+
+	var req struct {
+		Condition string `json:"condition"`
+		Notes     string `json:"notes"`
+	}
+	c.ShouldBindJSON(&req)
+
+	updated, err := h.service.TransitionOrder(c.Request.Context(), order.ID, vendor.UserID, "vendor", models.OrderStatusReturnReceived, "Items received - condition: "+req.Condition)
+	if err != nil {
+		utils.BadRequestResponse(c, err.Error())
+		return
+	}
+	utils.SuccessResponse(c, updated)
+}
+
+func (h *VendorOrderHandler) GetPickupOTP(c *gin.Context) {
+	vendor, ok := h.vendorFromUser(c)
+	if !ok {
+		return
+	}
+	order, ok := h.loadOrder(c)
+	if !ok {
+		return
+	}
+	if order.VendorID != vendor.ID {
+		utils.ForbiddenResponse(c, "This order does not belong to your vendor account")
+		return
+	}
+
+	if order.Status != models.OrderStatusDriverAccepted && order.Status != models.OrderStatusDriverAssigned {
+		utils.BadRequestResponse(c, "No active pickup for this order")
+		return
+	}
+
+	var otp models.DeliveryOTP
+	if err := h.db.Where("order_id = ? AND type = ? AND verified_at IS NULL", order.ID, "pickup").First(&otp).Error; err != nil {
+		utils.NotFoundResponse(c, "No active pickup OTP found")
+		return
+	}
+
+	utils.SuccessResponse(c, gin.H{
+		"order_id":  order.ID.String(),
+		"otp_type":  "pickup",
+		"status":    "active",
+	})
+}
+
 func (h *VendorOrderHandler) GetVendorOrderDelivery(c *gin.Context) {
 	vendor, ok := h.vendorFromUser(c)
 	if !ok {

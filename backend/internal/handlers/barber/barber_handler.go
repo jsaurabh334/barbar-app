@@ -227,6 +227,27 @@ func (h *BarberHandler) isProfileFullyComplete(barber models.Barber) bool {
 	return true
 }
 
+func (h *BarberHandler) syncBarberQueueLength(barber *models.Barber) {
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	todayEnd := todayStart.Add(24 * time.Hour)
+
+	var activeCount int64
+	h.db.Model(&models.Booking{}).Where(
+		"barber_id = ? AND scheduled_start >= ? AND scheduled_start < ? AND status IN ?",
+		barber.ID, todayStart, todayEnd,
+		[]models.BookingStatus{
+			models.BookingStatusCheckedIn,
+			models.BookingStatusWaiting,
+			models.BookingStatusNext,
+			models.BookingStatusInProgress,
+		},
+	).Count(&activeCount)
+
+	barber.CurrentQueueLength = int(activeCount)
+	h.db.Model(&models.Barber{}).Where("id = ?", barber.ID).Update("current_queue_length", activeCount)
+}
+
 func (h *BarberHandler) GetProfile(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -237,6 +258,7 @@ func (h *BarberHandler) GetProfile(c *gin.Context) {
 			utils.NotFoundResponse(c, "Barber profile not found")
 			return
 		}
+		h.syncBarberQueueLength(&barber)
 		utils.SuccessResponse(c, gin.H{
 			"barber":            barber,
 			"profile_completed": h.isProfileFullyComplete(barber),
@@ -250,6 +272,7 @@ func (h *BarberHandler) GetProfile(c *gin.Context) {
 		return
 	}
 
+	h.syncBarberQueueLength(&barber)
 	utils.SuccessResponse(c, gin.H{
 		"barber":            barber,
 		"profile_completed": h.isProfileFullyComplete(barber),
@@ -281,7 +304,8 @@ func (h *BarberHandler) UpdateProfile(c *gin.Context) {
 		"latitude", "longitude", "start_time", "end_time", "break_start_time", "break_end_time",
 		"slot_duration", "max_queue_size", "experience_years", "shop_image", "shop_images", "tags", "phone", "alternate_phone", "email", "amenities",
 		"languages",
-		"is_home_service_available", "service_radius_km", "travel_charge_per_km", "base_travel_charge"}
+		"is_home_service_available", "service_radius_km", "travel_charge_per_km", "base_travel_charge",
+		"gst_number"}
 	filtered := make(map[string]interface{})
 	for _, key := range allowed {
 		if val, ok := updates[key]; ok {
@@ -703,6 +727,10 @@ func (h *BarberHandler) ListNearby(c *gin.Context) {
 
 	dataQuery.Offset((page - 1) * pageSize).Limit(pageSize).Order("is_featured DESC, rating DESC, barbers.created_at DESC").Find(&barbers)
 
+	for i := range barbers {
+		h.syncBarberQueueLength(&barbers[i])
+	}
+
 	utils.PaginatedResponse(c, barbers, page, pageSize, total)
 }
 
@@ -725,6 +753,7 @@ func (h *BarberHandler) GetDashboard(c *gin.Context) {
 		completedToday       int64
 		totalEarnings        float64
 		pendingHomeServices  int64
+		pendingReviews       int64
 		documentsTotal       int64
 		documentsVerified    int64
 		queueBookings        []models.Booking
@@ -735,7 +764,8 @@ func (h *BarberHandler) GetDashboard(c *gin.Context) {
 	h.db.Model(&models.Booking{}).Where("barber_id = ? AND status = ?", barber.ID, models.BookingStatusInProgress).Count(&inProgressCount)
 	h.db.Model(&models.Booking{}).Where("barber_id = ? AND status = ? AND scheduled_start >= ? AND scheduled_start < ?", barber.ID, models.BookingStatusCompleted, today, tomorrow).Count(&completedToday)
 	h.db.Model(&models.Booking{}).Where("barber_id = ? AND status = ? AND scheduled_start >= ? AND scheduled_start < ?", barber.ID, models.BookingStatusCompleted, today, tomorrow).Select("COALESCE(SUM(final_price), 0)").Scan(&totalEarnings)
-	h.db.Model(&models.Booking{}).Where("barber_id = ? AND is_home_service = ? AND status = ?", barber.ID, true, models.BookingStatusPending).Count(&pendingHomeServices)
+	h.db.Model(&models.Booking{}).Where("barber_id = ? AND is_home_service = ? AND status = ?", barber.ID, true, models.BookingStatusHomeServicePending).Count(&pendingHomeServices)
+	h.db.Model(&models.Review{}).Where("shop_id = ? AND status = ?", barber.ID, models.ReviewStatusPending).Count(&pendingReviews)
 	h.db.Model(&models.BarberDocument{}).Where("barber_id = ?", barber.ID).Count(&documentsTotal)
 	h.db.Model(&models.BarberDocument{}).Where("barber_id = ? AND status = ?", barber.ID, "approved").Count(&documentsVerified)
 	h.db.Where("barber_id = ? AND scheduled_start >= ? AND status IN ?", barber.ID, time.Now(), []models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusInProgress}).Order("scheduled_start ASC").Find(&queueBookings)
@@ -748,6 +778,7 @@ func (h *BarberHandler) GetDashboard(c *gin.Context) {
 		"completed_today":       completedToday,
 		"total_earnings":        totalEarnings,
 		"pending_home_services": pendingHomeServices,
+		"pending_reviews":       pendingReviews,
 		"documents_total":       documentsTotal,
 		"documents_verified":    documentsVerified,
 		"online":                barber.IsAvailable,

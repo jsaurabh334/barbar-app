@@ -52,6 +52,13 @@ func (s *PresenceService) SetOnline(ctx context.Context, userID uuid.UUID, devic
 		DeviceID:       deviceID,
 	})
 
+	s.db.Model(&models.DeliveryPartner{}).
+		Where("user_id = ?", userID).
+		Updates(map[string]interface{}{
+			"availability_status": models.DeliveryPartnerStatusAvailable,
+			"last_heartbeat_at":   time.Now().UTC(),
+		})
+
 	s.wsHub.BroadcastToRole("admin", &websocket.WSMessage{
 		Type: websocket.MsgDriverOnline,
 		Payload: map[string]interface{}{
@@ -80,6 +87,13 @@ func (s *PresenceService) SetOffline(ctx context.Context, userID uuid.UUID) erro
 		Status:         models.DriverOffline,
 	})
 
+	s.db.Model(&models.DeliveryPartner{}).
+		Where("user_id = ?", userID).
+		Updates(map[string]interface{}{
+			"availability_status": models.DeliveryPartnerStatusOffline,
+			"last_heartbeat_at":   time.Now().UTC(),
+		})
+
 	s.wsHub.BroadcastToRole("admin", &websocket.WSMessage{
 		Type: websocket.MsgDriverOffline,
 		Payload: map[string]interface{}{
@@ -107,6 +121,10 @@ func (s *PresenceService) SetBusy(ctx context.Context, userID uuid.UUID, orderID
 		Status:         models.DriverBusy,
 		CurrentOrderID: &orderID,
 	})
+
+	s.db.Model(&models.DeliveryPartner{}).
+		Where("user_id = ?", userID).
+		Update("availability_status", models.DeliveryPartnerStatusBusy)
 
 	s.wsHub.BroadcastToRole("admin", &websocket.WSMessage{
 		Type: websocket.MsgDriverBusy,
@@ -149,15 +167,29 @@ func (s *PresenceService) SetAvailable(ctx context.Context, userID uuid.UUID) er
 }
 
 func (s *PresenceService) Heartbeat(ctx context.Context, userID uuid.UUID) error {
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
+	nowStr := now.Format(time.RFC3339)
 	key := redisKey(userID)
 
-	err := database.RedisClient.HSet(ctx, key, map[string]interface{}{
-		"last_heartbeat_at": now,
-	}).Err()
+	status, err := database.RedisClient.HGet(ctx, key, "status").Result()
+	if err != nil || status == "" {
+		return fmt.Errorf("driver %s has no presence record", userID)
+	}
+
+	pipe := database.RedisClient.Pipeline()
+	pipe.HSet(ctx, key, map[string]interface{}{
+		"last_heartbeat_at": nowStr,
+		"last_seen_at":      nowStr,
+	})
+	pipe.HSetNX(ctx, key, "status", "online")
+	_, err = pipe.Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to update heartbeat: %w", err)
 	}
+
+	s.db.Model(&models.DeliveryPartner{}).
+		Where("user_id = ?", userID).
+		Update("last_heartbeat_at", now)
 
 	return nil
 }
@@ -186,7 +218,7 @@ func (s *PresenceService) IsEligibleForAssignment(ctx context.Context, userID uu
 			return false, fmt.Errorf("driver %s already has an active order", userID)
 		}
 		if result["status"] == "online" {
-			return true, nil
+			return s.checkDeliveryLimits(ctx, userID)
 		}
 	}
 
@@ -198,6 +230,37 @@ func (s *PresenceService) IsEligibleForAssignment(ctx context.Context, userID uu
 
 	// Auto-enable online status for approved driver assignment
 	_ = s.SetOnline(ctx, userID, "admin-assigned", "1.0")
+
+	return s.checkDeliveryLimits(ctx, userID)
+}
+
+func (s *PresenceService) checkDeliveryLimits(ctx context.Context, userID uuid.UUID) (bool, error) {
+	var partner models.DeliveryPartner
+	if err := s.db.Where("user_id = ?", userID).First(&partner).Error; err != nil {
+		return false, fmt.Errorf("driver not found")
+	}
+
+	now := time.Now().UTC()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
+	var activeOrders int64
+	s.db.Model(&models.Order{}).
+		Where("delivery_partner_id = ? AND status IN ?", userID,
+			[]string{"driver_assigned", "driver_accepted", "assigned", "picked_up", "out_for_delivery",
+				"return_pickup_assigned", "return_picked_up"}).
+		Count(&activeOrders)
+
+	if int(activeOrders) >= partner.MaxConcurrentDeliveries {
+		return false, fmt.Errorf("driver has reached max concurrent deliveries (%d)", partner.MaxConcurrentDeliveries)
+	}
+
+	if partner.LastDeliveryDate == nil || partner.LastDeliveryDate.Before(today) {
+		return true, nil
+	}
+
+	if partner.TodayDeliveryCount >= partner.DailyDeliveryLimit {
+		return false, fmt.Errorf("driver has reached daily delivery limit (%d)", partner.DailyDeliveryLimit)
+	}
 
 	return true, nil
 }
@@ -533,6 +596,10 @@ func (s *PresenceService) cleanupStalePresence(ctx context.Context) {
 				"status":       "offline",
 				"last_seen_at": now.UTC().Format(time.RFC3339),
 			})
+
+			s.db.Model(&models.DeliveryPartner{}).
+				Where("user_id = ?", userID).
+				Update("availability_status", models.DeliveryPartnerStatusOffline)
 
 			s.db.Create(&models.DeliveryPresenceLog{
 				DeliveryUserID: userID,

@@ -238,4 +238,22 @@ class DeliveryRemoteDataSource {
     }
     throw Exception(response.data['error'] ?? 'Failed to fetch withdrawal history');
   }
+
+  // ==================== Return Pickup ====================
+
+  Future<Map<String, dynamic>> getDeliveryDashboard() async {
+    final response = await _apiClient.dio.get('/delivery/dashboard');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return response.data['data'] as Map<String, dynamic>;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to fetch dashboard');
+  }
+
+  Future<void> acceptReturnPickup(String orderId) async {
+    final response = await _apiClient.dio.put('/delivery/orders/$orderId/accept-return-pickup');
+    if (response.statusCode == 200 && response.data['status'] == 'success') {
+      return;
+    }
+    throw Exception(response.data['error'] ?? 'Failed to accept return pickup');
+  }
 }

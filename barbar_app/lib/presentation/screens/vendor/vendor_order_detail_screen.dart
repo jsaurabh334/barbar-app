@@ -346,8 +346,14 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
             children: [
               const Icon(LucideIcons.shoppingBag, size: 20, color: AppColors.primary),
               const SizedBox(width: 8),
-              Text('#${order.orderNumber}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-              const Spacer(),
+              Expanded(
+                child: Text(
+                  '#${order.orderNumber}',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
               _statusBadge(order.status),
             ],
           ),
@@ -612,6 +618,43 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
         return [
           _ActionButton('Delivered', LucideIcons.checkCircle, AppColors.success, 'info'),
         ];
+      case OrderModel.returnRequested:
+        return [
+          _ActionButton('Approve Return', LucideIcons.checkCircle, AppColors.success, 'action'),
+          _ActionButton('Reject Return', LucideIcons.xCircle, AppColors.error, 'action'),
+        ];
+      case OrderModel.returnApproved:
+        return [
+          _ActionButton('Return Approved — Awaiting Pickup', LucideIcons.clock, const Color(0xFF8B5CF6), 'info'),
+        ];
+      case OrderModel.returnPickupAssigned:
+        return [
+          _ActionButton('Pickup Assigned', LucideIcons.userCheck, Colors.cyan, 'info'),
+        ];
+      case OrderModel.returnPickedUp:
+        return [
+          _ActionButton('Confirm Return Received', LucideIcons.packageCheck, const Color(0xFF059669), 'action'),
+        ];
+      case OrderModel.returnReceived:
+        return [
+          _ActionButton('Return Received — Refund Processing', LucideIcons.refreshCw, const Color(0xFF2563EB), 'info'),
+        ];
+      case OrderModel.refundProcessing:
+        return [
+          _ActionButton('Refund Processing', LucideIcons.refreshCw, const Color(0xFF2563EB), 'info'),
+        ];
+      case OrderModel.returnRejected:
+        return [
+          _ActionButton('Return Rejected', LucideIcons.xCircle, AppColors.error, 'info'),
+        ];
+      case OrderModel.returned:
+        return [
+          _ActionButton('Returned', LucideIcons.rotateCcw, const Color(0xFF7C3AED), 'info'),
+        ];
+      case OrderModel.refunded:
+        return [
+          _ActionButton('Refunded', LucideIcons.checkCircle, AppColors.success, 'info'),
+        ];
       case OrderModel.cancelled:
         return [
           _ActionButton('Cancelled', LucideIcons.xCircle, AppColors.error, 'info'),
@@ -636,7 +679,47 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
       case 'Ready for Pickup':
         bloc.add(ReadyForPickupOrder(orderId));
         break;
+      case 'Approve Return':
+        bloc.add(ApproveVendorReturn(orderId));
+        break;
+      case 'Reject Return':
+        _showRejectReturnDialog(orderId);
+        break;
+      case 'Confirm Return Received':
+        bloc.add(ReceiveVendorReturn(orderId));
+        break;
     }
+  }
+
+  void _showRejectReturnDialog(String orderId) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Reject Return'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Reason for rejection',
+            hintText: 'Enter reason...',
+          ),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL')),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              if (controller.text.trim().isNotEmpty) {
+                context.read<VendorBloc>().add(RejectVendorReturn(orderId, controller.text.trim()));
+              }
+            },
+            child: const Text('REJECT'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showRejectDialog(String orderId) {
@@ -719,6 +802,24 @@ class _VendorOrderDetailScreenState extends State<VendorOrderDetailScreen> {
       case OrderModel.outForDelivery:
         return const Color(0xFFFF6B35);
       case OrderModel.delivered:
+        return AppColors.success;
+      case OrderModel.returnRequested:
+        return AppColors.warning;
+      case OrderModel.returnApproved:
+        return const Color(0xFF8B5CF6);
+      case OrderModel.returnPickupAssigned:
+        return Colors.cyan;
+      case OrderModel.returnPickedUp:
+        return const Color(0xFF059669);
+      case OrderModel.returnReceived:
+        return const Color(0xFF2563EB);
+      case OrderModel.refundProcessing:
+        return const Color(0xFF2563EB);
+      case OrderModel.returnRejected:
+        return AppColors.error;
+      case OrderModel.returned:
+        return const Color(0xFF7C3AED);
+      case OrderModel.refunded:
         return AppColors.success;
       case OrderModel.cancelled:
         return AppColors.error;

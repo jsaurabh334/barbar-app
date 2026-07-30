@@ -1,12 +1,35 @@
 package cart
 
 import (
+	"github.com/barbar-app/backend/internal/auth"
 	"github.com/barbar-app/backend/internal/models"
 	"github.com/barbar-app/backend/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+func getCartUserRole(c *gin.Context) string {
+	claims, exists := c.Get("claims")
+	if !exists {
+		return string(models.RoleCustomer)
+	}
+	userClaims, ok := claims.(*auth.Claims)
+	if !ok {
+		return string(models.RoleCustomer)
+	}
+	return userClaims.Role
+}
+
+func getCartPrice(product models.Product, role string) float64 {
+	if role == string(models.RoleBarber) && product.ProfessionalPrice != nil && *product.ProfessionalPrice > 0 {
+		return *product.ProfessionalPrice
+	}
+	if product.DiscountPrice > 0 {
+		return product.DiscountPrice
+	}
+	return product.BasePrice
+}
 
 type CartHandler struct {
 	db *gorm.DB
@@ -24,6 +47,7 @@ type AddToCartRequest struct {
 
 func (h *CartHandler) AddItem(c *gin.Context) {
 	userID := c.MustGet("user").(uuid.UUID)
+	role := getCartUserRole(c)
 
 	var req AddToCartRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -34,6 +58,16 @@ func (h *CartHandler) AddItem(c *gin.Context) {
 	var product models.Product
 	if err := h.db.Where("id = ? AND is_active = ? AND is_approved = ?", req.ProductID, true, true).First(&product).Error; err != nil {
 		utils.BadRequestResponse(c, "Product not available")
+		return
+	}
+
+	// Visibility validation
+	if product.Visibility == models.VisibilityHidden {
+		utils.BadRequestResponse(c, "Product not available")
+		return
+	}
+	if product.Visibility == models.VisibilityProfessional && role != string(models.RoleBarber) {
+		utils.BadRequestResponse(c, "Product not available for purchase")
 		return
 	}
 
@@ -116,6 +150,7 @@ func (h *CartHandler) RemoveItem(c *gin.Context) {
 
 func (h *CartHandler) GetCart(c *gin.Context) {
 	userID := c.MustGet("user").(uuid.UUID)
+	role := getCartUserRole(c)
 
 	var items []models.CartItem
 	h.db.Where("user_id = ?", userID).
@@ -128,26 +163,34 @@ func (h *CartHandler) GetCart(c *gin.Context) {
 	var totalAmount float64
 	var totalItems int
 	vendorGroups := make(map[uuid.UUID][]models.CartItem)
+	type cartItemResponse struct {
+		models.CartItem
+		Price float64 `json:"price"`
+	}
+	var cartItems []cartItemResponse
 	for _, item := range items {
-		price := item.Product.BasePrice
-		if item.Product.DiscountPrice > 0 {
-			price = item.Product.DiscountPrice
-		}
+		var price float64
 		if item.Variant != nil {
 			if item.Variant.DiscountPrice > 0 {
 				price = item.Variant.DiscountPrice
 			} else {
 				price = item.Variant.Price
 			}
+		} else if item.Product != nil {
+			price = getCartPrice(*item.Product, role)
 		}
 		totalAmount += price * float64(item.Quantity)
 		totalItems += item.Quantity
 		vendorGroups[item.VendorID] = append(vendorGroups[item.VendorID], item)
+		cartItems = append(cartItems, cartItemResponse{
+			CartItem: item,
+			Price:    price,
+		})
 	}
 
 	utils.SuccessResponse(c, gin.H{
-		"items":       items,
-		"total_items": totalItems,
+		"items":        cartItems,
+		"total_items":  totalItems,
 		"total_amount": totalAmount,
 		"vendor_groups": vendorGroups,
 	})

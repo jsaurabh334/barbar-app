@@ -97,12 +97,76 @@ func (s *EarningService) GetSummary(partnerID uuid.UUID) (*EarningSummary, error
 	return &summary, nil
 }
 
-func (s *EarningService) SettleEarning(earningID uuid.UUID) error {
-	now := time.Now()
-	result := s.db.Model(&models.DeliveryEarning{}).Where("id = ? AND status = ?", earningID, models.EarningStatusPending).
-		Updates(map[string]interface{}{"status": models.EarningStatusSettled, "settled_at": &now})
-	if result.RowsAffected == 0 {
-		return errors.New("earning not found or already settled")
+func findOrCreateWallet(tx *gorm.DB, userID uuid.UUID, _ *uuid.UUID) (*models.Wallet, error) {
+	var wallet models.Wallet
+	err := tx.Where("user_id = ?", userID).First(&wallet).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			wallet = models.Wallet{
+				UserID:   &userID,
+				Balance:  0,
+				IsActive: true,
+			}
+			if createErr := tx.Create(&wallet).Error; createErr != nil {
+				return nil, createErr
+			}
+			return &wallet, nil
+		}
+		return nil, err
 	}
-	return result.Error
+	return &wallet, nil
+}
+
+func (s *EarningService) SettleEarning(earningID uuid.UUID) error {
+	var earning models.DeliveryEarning
+	if err := s.db.First(&earning, earningID).Error; err != nil {
+		return errors.New("earning not found")
+	}
+	if earning.Status != models.EarningStatusPending {
+		return errors.New("earning not pending or already settled")
+	}
+
+	now := time.Now()
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&earning).Updates(map[string]interface{}{
+			"status":     models.EarningStatusSettled,
+			"settled_at": &now,
+		}).Error; err != nil {
+			return err
+		}
+
+		partnerID := earning.DeliveryPartnerID
+		var partner models.DeliveryPartner
+		if err := tx.Where("user_id = ?", partnerID).First(&partner).Error; err != nil {
+			return err
+		}
+
+		wallet, err := findOrCreateWallet(tx, partnerID, nil)
+		if err != nil {
+			return err
+		}
+
+		wallet.Balance += earning.TotalAmount
+		wallet.TotalCredited += earning.TotalAmount
+		if err := tx.Save(wallet).Error; err != nil {
+			return err
+		}
+
+		refID := earning.ID.String()
+		txn := models.WalletTransaction{
+			WalletID:      wallet.ID,
+			TxnType:       models.TxnTypeCredit,
+			Amount:        earning.TotalAmount,
+			RunningBalance: wallet.Balance,
+			ReferenceType: models.TxnRefDeliveryEarning,
+			ReferenceID:   refID,
+			Description:   "Delivery earning settled",
+			Status:        "completed",
+			TxnDate:       now,
+		}
+		return tx.Create(&txn).Error
+	})
+
+	return err
 }

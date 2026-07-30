@@ -3,6 +3,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/app_theme.dart';
+import '../../data/models/product_model.dart';
+import '../../domain/repositories/vendor_repository.dart';
 import '../bloc/auth/auth_bloc.dart';
 import '../bloc/auth/auth_event.dart';
 import '../bloc/marketplace/marketplace_bloc.dart';
@@ -122,9 +124,19 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
                     ),
                     title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: Text('Stock: ${p.availableStock} remaining'),
-                    trailing: Text(
-                      '₹${p.basePrice.toInt()}',
-                      style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.primary, fontSize: 16),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '₹${p.basePrice.toInt()}',
+                          style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.primary, fontSize: 16),
+                        ),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          icon: const Icon(LucideIcons.pencil, size: 16),
+                          onPressed: () => _showEditProductDialog(context, p),
+                        ),
+                      ],
                     ),
                   ),
                 );
@@ -304,39 +316,268 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
   }
 
   void _showAddProductDialog(BuildContext context) {
+    final nameCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final priceCtrl = TextEditingController();
+    final profPriceCtrl = TextEditingController();
+    final stockCtrl = TextEditingController();
+    String visibility = 'both';
+    int profMoq = 1;
+
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: AppColors.surface,
-          title: const Text('Register Product'),
-          content: const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(decoration: InputDecoration(labelText: 'Product Name')),
-              SizedBox(height: 12),
-              TextField(decoration: InputDecoration(labelText: 'Description')),
-              SizedBox(height: 12),
-              TextField(decoration: InputDecoration(labelText: 'Base Price')),
-              SizedBox(height: 12),
-              TextField(decoration: InputDecoration(labelText: 'Initial Stock')),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('CANCEL'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Product submitted for Admin approval!'), backgroundColor: AppColors.success),
-                );
-                Navigator.pop(context);
-              },
-              child: const Text('SUBMIT'),
-            ),
-          ],
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.surface,
+              title: const Text('Register Product'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameCtrl,
+                      decoration: const InputDecoration(labelText: 'Product Name'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: descCtrl,
+                      decoration: const InputDecoration(labelText: 'Description'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: priceCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Base Price (₹)'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: profPriceCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Professional Price (₹) — optional'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: stockCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Initial Stock'),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: visibility,
+                      dropdownColor: AppColors.cardBg,
+                      decoration: const InputDecoration(labelText: 'Visibility'),
+                      items: const [
+                        DropdownMenuItem(value: 'both', child: Text('Both (Retail + Professional)')),
+                        DropdownMenuItem(value: 'retail', child: Text('Retail Only')),
+                        DropdownMenuItem(value: 'professional', child: Text('Professional Only')),
+                        DropdownMenuItem(value: 'hidden', child: Text('Hidden')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) {
+                          setDialogState(() => visibility = v);
+                        }
+                      },
+                    ),
+                    if (visibility == 'professional' || visibility == 'both') ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Professional MOQ'),
+                        onChanged: (v) {
+                          profMoq = int.tryParse(v) ?? 1;
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('CANCEL'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (nameCtrl.text.isEmpty || priceCtrl.text.isEmpty) return;
+
+                    final data = <String, dynamic>{
+                      'name': nameCtrl.text,
+                      'description': descCtrl.text,
+                      'base_price': double.tryParse(priceCtrl.text) ?? 0,
+                      'total_stock': int.tryParse(stockCtrl.text) ?? 0,
+                      'visibility': visibility,
+                    };
+
+                    final profPrice = double.tryParse(profPriceCtrl.text);
+                    if (profPrice != null && profPrice > 0) {
+                      data['professional_price'] = profPrice;
+                    }
+                    if (visibility == 'professional' || visibility == 'both') {
+                      data['professional_moq'] = profMoq;
+                    }
+
+                    try {
+                      final vendorRepo = RepositoryProvider.of<VendorRepository>(ctx);
+                      await vendorRepo.createProduct(data);
+                      if (ctx.mounted) {
+                        Navigator.pop(ctx);
+                        context.read<MarketplaceBloc>().add(FetchProducts());
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Product created!'), backgroundColor: AppColors.success),
+                        );
+                      }
+                    } catch (e) {
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.error),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('SUBMIT'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showEditProductDialog(BuildContext context, ProductModel product) {
+    final nameCtrl = TextEditingController(text: product.name);
+    final descCtrl = TextEditingController(text: product.description);
+    final priceCtrl = TextEditingController(text: product.basePrice.toString());
+    final profPriceCtrl = TextEditingController(
+        text: product.professionalPrice != null ? product.professionalPrice.toString() : '');
+    final stockCtrl = TextEditingController(text: product.totalStock.toString());
+    String visibility = product.visibility;
+    int profMoq = product.professionalMoq;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.surface,
+              title: const Text('Edit Product'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameCtrl,
+                      decoration: const InputDecoration(labelText: 'Product Name'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: descCtrl,
+                      decoration: const InputDecoration(labelText: 'Description'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: priceCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Base Price (₹)'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: profPriceCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Professional Price (₹) — optional'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: stockCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Stock'),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: visibility,
+                      dropdownColor: AppColors.cardBg,
+                      decoration: const InputDecoration(labelText: 'Visibility'),
+                      items: const [
+                        DropdownMenuItem(value: 'both', child: Text('Both (Retail + Professional)')),
+                        DropdownMenuItem(value: 'retail', child: Text('Retail Only')),
+                        DropdownMenuItem(value: 'professional', child: Text('Professional Only')),
+                        DropdownMenuItem(value: 'hidden', child: Text('Hidden')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) {
+                          setDialogState(() => visibility = v);
+                        }
+                      },
+                    ),
+                    if (visibility == 'professional' || visibility == 'both') ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(labelText: 'Professional MOQ'),
+                        controller: TextEditingController(text: profMoq.toString()),
+                        onChanged: (v) {
+                          profMoq = int.tryParse(v) ?? 1;
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('CANCEL'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (nameCtrl.text.isEmpty || priceCtrl.text.isEmpty) return;
+
+                    final data = <String, dynamic>{
+                      'name': nameCtrl.text,
+                      'description': descCtrl.text,
+                      'base_price': double.tryParse(priceCtrl.text) ?? 0,
+                      'total_stock': int.tryParse(stockCtrl.text) ?? 0,
+                      'visibility': visibility,
+                    };
+
+                    final profPrice = double.tryParse(profPriceCtrl.text);
+                    if (profPrice != null && profPrice > 0) {
+                      data['professional_price'] = profPrice;
+                    } else {
+                      data['professional_price'] = null;
+                    }
+                    if (visibility == 'professional' || visibility == 'both') {
+                      data['professional_moq'] = profMoq;
+                    } else {
+                      data['professional_moq'] = null;
+                    }
+
+                    try {
+                      final vendorRepo = RepositoryProvider.of<VendorRepository>(ctx);
+                      await vendorRepo.updateProduct(product.id, data);
+                      if (ctx.mounted) {
+                        Navigator.pop(ctx);
+                        context.read<MarketplaceBloc>().add(FetchProducts());
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Product updated!'), backgroundColor: AppColors.success),
+                        );
+                      }
+                    } catch (e) {
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.error),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('SAVE'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -344,6 +585,7 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
 
   void _showWithdrawDialog(BuildContext context, double maxBalance) {
     _amountController.clear();
+    String? bankAccountId;
     showDialog(
       context: context,
       builder: (context) {
@@ -366,14 +608,24 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
               child: const Text('CANCEL'),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 final amt = double.tryParse(_amountController.text.trim());
                 if (amt == null || amt <= 0) return;
-                
+
+                if (bankAccountId == null) {
+                  try {
+                    final vendorRepo = RepositoryProvider.of<VendorRepository>(context);
+                    final accounts = await vendorRepo.getBankAccounts();
+                    if (accounts.isNotEmpty) {
+                      bankAccountId = accounts.first['id'] as String;
+                    }
+                  } catch (_) {}
+                }
+
                 context.read<WalletBloc>().add(
                   RequestWithdrawal(
                     amount: amt,
-                    bankAccountId: 'merchant-bank-1',
+                    bankAccountId: bankAccountId ?? '',
                   ),
                 );
                 Navigator.pop(context);

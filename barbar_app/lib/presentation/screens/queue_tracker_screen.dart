@@ -42,8 +42,9 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
       if (!mounted) return;
       if (event['type'] == 'queue_update') {
         final payload = event['payload'] as Map<String, dynamic>;
-        final position = payload['current_position'] as int;
-        final waitMin = (payload['estimated_wait_min'] as num).toInt();
+        // Use safe num→int casts (backend may send int or double)
+        final position = (payload['current_position'] as num?)?.toInt() ?? 0;
+        final waitMin = (payload['estimated_wait_min'] as num?)?.toInt() ?? 0;
         final remainingTime = (payload['remaining_time'] as num?)?.toInt() ?? 0;
         final currentlyServing = payload['currently_serving'] as String? ?? '';
         
@@ -57,7 +58,12 @@ class _QueueTrackerScreenState extends State<QueueTrackerScreen> with SingleTick
         );
       } else if (event['type'] == 'notification') {
         final payload = event['payload'] as Map<String, dynamic>;
-        if (payload['type'] == 'payment_success' || payload['type'] == 'booking_status_updated') {
+        final notifType = payload['type'] as String? ?? '';
+        // Refresh booking when service starts, completes, or payment changes
+        if (notifType == 'payment_success' ||
+            notifType == 'booking_status_updated' ||
+            notifType == 'barber_started' ||
+            notifType == 'barber_completed') {
           context.read<BookingBloc>().add(FetchAllBookings());
         }
       }

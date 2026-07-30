@@ -103,7 +103,7 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
           _barberData = barber;
           _barberStatus = barber?['status'] as String? ?? 'inactive';
           _todayBookings = dashboard['today_bookings'] as int? ?? 0;
-          _earningsToday = (dashboard['earnings_today'] as num?)?.toDouble() ?? 0;
+          _earningsToday = (dashboard['total_earnings'] as num?)?.toDouble() ?? 0;
           _pendingHomeServices = dashboard['pending_home_services'] as int? ?? 0;
           _pendingReviews = dashboard['pending_reviews'] as int? ?? 0;
           _shopName = (barber?['shop_name'] as String?) ?? 'My Shop';

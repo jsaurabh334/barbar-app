@@ -51,7 +51,6 @@ class MarketplaceRepositoryImpl implements MarketplaceRepository {
     try {
       await _remoteDataSource.updateOrderStatus(orderId, status);
     } catch (_) {
-      // local update fallback
     }
     _cachedOrders = _cachedOrders.map((o) {
       return o.id == orderId
@@ -67,5 +66,60 @@ class MarketplaceRepositoryImpl implements MarketplaceRepository {
   @override
   Future<Map<String, dynamic>> getDriverLocation(String orderId) async {
     return await _remoteDataSource.getDriverLocation(orderId);
+  }
+
+  @override
+  Future<void> cancelOrder(String orderId, {String? reason}) async {
+    await _remoteDataSource.cancelOrder(orderId, reason: reason);
+    _cachedOrders = _cachedOrders.map((o) {
+      return o.id == orderId
+          ? OrderModel(id: o.id, orderNumber: o.orderNumber, status: 'cancelled',
+              itemsTotal: o.itemsTotal, shippingCharge: o.shippingCharge,
+              taxAmount: o.taxAmount, discountAmount: o.discountAmount,
+              finalAmount: o.finalAmount, paymentStatus: o.paymentStatus,
+              items: o.items)
+          : o;
+    }).toList();
+  }
+
+  @override
+  Future<void> submitReturnRequest(String orderId, {required String reason, List<String>? images}) async {
+    await _remoteDataSource.submitReturnRequest(orderId, reason: reason, images: images);
+    _cachedOrders = _cachedOrders.map((o) {
+      return o.id == orderId
+          ? OrderModel(id: o.id, orderNumber: o.orderNumber, status: 'return_requested',
+              itemsTotal: o.itemsTotal, shippingCharge: o.shippingCharge,
+              taxAmount: o.taxAmount, discountAmount: o.discountAmount,
+              finalAmount: o.finalAmount, paymentStatus: o.paymentStatus,
+              items: o.items)
+          : o;
+    }).toList();
+  }
+
+  @override
+  Future<void> reportIssue(String orderId, {required String issueType, required String description}) async {
+    await _remoteDataSource.reportIssue(orderId, issueType: issueType, description: description);
+  }
+
+  @override
+  Future<Map<String, dynamic>> initiatePayment(String orderId, {required String gateway}) async {
+    return await _remoteDataSource.initiatePayment(orderId: orderId, gateway: gateway);
+  }
+
+  @override
+  Future<Map<String, dynamic>> verifyPayment({
+    required String paymentId,
+    required String gateway,
+    required String razorpayOrderId,
+    required String razorpayPaymentId,
+    required String razorpaySignature,
+  }) async {
+    return await _remoteDataSource.verifyPayment(
+      paymentId: paymentId,
+      gateway: gateway,
+      razorpayOrderId: razorpayOrderId,
+      razorpayPaymentId: razorpayPaymentId,
+      razorpaySignature: razorpaySignature,
+    );
   }
 }
