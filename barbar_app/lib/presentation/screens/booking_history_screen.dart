@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import '../../core/network/websocket_client.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/booking_model.dart';
 import '../bloc/booking/booking_bloc.dart';
@@ -8,6 +10,7 @@ import '../bloc/booking/booking_event.dart';
 import '../bloc/booking/booking_state.dart';
 import '../bloc/check_in/check_in_bloc.dart';
 import '../bloc/check_in/check_in_event.dart';
+import '../widgets/completion_otp_card.dart';
 import 'customer/check_in_screen.dart' show CheckInScreen;
 import 'review_screen.dart';
 
@@ -20,8 +23,10 @@ class BookingHistoryScreen extends StatefulWidget {
 
 class _BookingHistoryScreenState extends State<BookingHistoryScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final Map<String, String> _otpByBookingId = {};
+  StreamSubscription<Map<String, dynamic>>? _otpSub;
 
-  static const _activeStatuses = ['pending', 'home_service_pending', 'confirmed', 'checked_in', 'waiting', 'next', 'in_progress', 'rescheduled'];
+  static const _activeStatuses = ['pending', 'home_service_pending', 'confirmed', 'checked_in', 'waiting', 'next', 'in_progress', 'awaiting_customer_confirmation', 'rescheduled'];
   static const _historyStatuses = ['completed', 'cancelled', 'no_show'];
 
   @override
@@ -29,10 +34,21 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     context.read<BookingBloc>().add(FetchAllBookings());
+    _otpSub = context.read<WebSocketClient>().eventsByType('booking_otp_generated').listen((event) {
+      if (!mounted) return;
+      final payload = event['payload'] is Map ? (event['payload'] as Map) : event;
+      final bookingId = payload['booking_id'] as String?;
+      final otp = payload['completion_otp'] as String?;
+      if (bookingId != null && otp != null) {
+        setState(() => _otpByBookingId[bookingId] = otp);
+        context.read<BookingBloc>().add(FetchAllBookings());
+      }
+    });
   }
 
   @override
   void dispose() {
+    _otpSub?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -55,42 +71,55 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
           ],
         ),
       ),
-      body: BlocBuilder<BookingBloc, BookingState>(
-        builder: (context, state) {
-          if (state is BookingLoading) {
-            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-          } else if (state is BookingFailure) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(LucideIcons.alertCircle, size: 48, color: AppColors.error),
-                  const SizedBox(height: 12),
-                  Text(state.error, style: const TextStyle(color: AppColors.textSecondary)),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => context.read<BookingBloc>().add(FetchAllBookings()),
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
+      body: BlocListener<BookingBloc, BookingState>(
+        listener: (context, state) {
+          if (state is CompletionOtpActionSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(state.message), backgroundColor: AppColors.success),
             );
-          } else if (state is BookingsLoaded) {
-            final upcoming = state.bookings.where((b) => _activeStatuses.contains(b.status)).toList()
-              ..sort((a, b) => a.scheduledStart.compareTo(b.scheduledStart));
-            final history = state.bookings.where((b) => _historyStatuses.contains(b.status)).toList()
-              ..sort((a, b) => b.scheduledStart.compareTo(a.scheduledStart));
-
-            return TabBarView(
-              controller: _tabController,
-              children: [
-                _buildUpcomingList(upcoming),
-                _buildHistoryList(history),
-              ],
+          } else if (state is BookingFailure) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(state.error), backgroundColor: AppColors.error),
             );
           }
-          return const SizedBox.shrink();
         },
+        child: BlocBuilder<BookingBloc, BookingState>(
+          builder: (context, state) {
+            if (state is BookingLoading) {
+              return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+            } else if (state is BookingFailure) {
+              return Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(LucideIcons.alertCircle, size: 48, color: AppColors.error),
+                    const SizedBox(height: 12),
+                    Text(state.error, style: const TextStyle(color: AppColors.textSecondary)),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => context.read<BookingBloc>().add(FetchAllBookings()),
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              );
+            } else if (state is BookingsLoaded) {
+              final upcoming = state.bookings.where((b) => _activeStatuses.contains(b.status)).toList()
+                ..sort((a, b) => a.scheduledStart.compareTo(b.scheduledStart));
+              final history = state.bookings.where((b) => _historyStatuses.contains(b.status)).toList()
+                ..sort((a, b) => b.scheduledStart.compareTo(a.scheduledStart));
+
+              return TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildUpcomingList(upcoming),
+                  _buildHistoryList(history),
+                ],
+              );
+            }
+            return const SizedBox.shrink();
+          },
+        ),
       ),
     );
   }
@@ -143,6 +172,13 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
     final isLate = booking.isLate;
     final hasQueue = booking.queueAssignedAt != null;
     final hasImComing = booking.imComingAt != null;
+    
+    final bookingDate = DateTime.tryParse(booking.scheduledStart)?.toLocal();
+    final now = DateTime.now();
+    final isTodayOrPast = bookingDate != null &&
+        (bookingDate.year < now.year ||
+            (bookingDate.year == now.year && bookingDate.month < now.month) ||
+            (bookingDate.year == now.year && bookingDate.month == now.month && bookingDate.day <= now.day));
 
     return GestureDetector(
       onTap: () => _openCheckIn(booking),
@@ -283,19 +319,18 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
                     Expanded(
                       child: _miniButton('AWAITING APPROVAL', AppColors.warning, () => _openCheckIn(booking)),
                     ),
-                  if (booking.status == 'confirmed' && hasQueue)
-                    Expanded(
-                      child: _miniButton('CHECK IN', AppColors.success, () => _openCheckIn(booking)),
-                    ),
-                  if (booking.status == 'confirmed' && !hasImComing)
-                    Padding(
-                      padding: EdgeInsets.only(left: booking.status == 'confirmed' && hasQueue ? 8 : 0),
-                      child: _miniButton('I\'M COMING', AppColors.warning, () => _imComing(booking)),
-                    ),
-                  if (booking.status == 'confirmed' && !hasQueue)
-                    Expanded(
-                      child: _miniButton('I\'M COMING', AppColors.warning, () => _imComing(booking)),
-                    ),
+                  if (booking.status == 'confirmed' && isTodayOrPast) ...[
+                    if (hasQueue)
+                      Expanded(
+                        child: _miniButton('CHECK IN', AppColors.success, () => _openCheckIn(booking)),
+                      ),
+                    if (!hasImComing) ...[
+                      if (hasQueue) const SizedBox(width: 8),
+                      Expanded(
+                        child: _miniButton('I\'M COMING', AppColors.warning, () => _imComing(booking)),
+                      ),
+                    ],
+                  ],
                   if (booking.status == 'waiting' || booking.status == 'checked_in')
                     Expanded(
                       child: _miniButton('VIEW QUEUE', AppColors.primary, () => _openCheckIn(booking)),
@@ -310,6 +345,10 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
                     ),
                 ],
               ),
+              if (booking.isHomeService && booking.status == BookingModel.statusAwaitingCustomerConfirmation) ...[
+                const SizedBox(height: 16),
+                CompletionOtpCard(booking: booking, otp: _otpByBookingId[booking.id]),
+              ],
             ],
           ),
         ),
@@ -476,6 +515,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
       case 'waiting': return LucideIcons.clock;
       case 'next': return LucideIcons.chevronsRight;
       case 'in_progress': return LucideIcons.scissors;
+      case 'awaiting_customer_confirmation': return LucideIcons.shieldCheck;
       case 'completed': return LucideIcons.checkCircle;
       case 'cancelled': return LucideIcons.xCircle;
       default: return LucideIcons.clock;
@@ -491,6 +531,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
       case 'waiting': return AppColors.warning;
       case 'next': return AppColors.success;
       case 'in_progress': return AppColors.info;
+      case 'awaiting_customer_confirmation': return AppColors.warning;
       case 'completed': return AppColors.success;
       case 'cancelled': return AppColors.error;
       default: return AppColors.textMuted;
@@ -506,6 +547,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> with Single
       case 'waiting': return 'Waiting';
       case 'next': return 'You\'re Next';
       case 'in_progress': return 'In Progress';
+      case 'awaiting_customer_confirmation': return 'Confirm Completion';
       case 'completed': return 'Completed';
       case 'cancelled': return 'Cancelled';
       default: return status;

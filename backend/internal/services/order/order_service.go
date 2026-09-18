@@ -27,27 +27,27 @@ var otpPepper = func() string {
 }()
 
 var AllowedTransitions = map[models.OrderStatus][]models.OrderStatus{
-	models.OrderStatusPending:           {models.OrderStatusAccepted, models.OrderStatusCancelled},
-	models.OrderStatusAccepted:          {models.OrderStatusPacked, models.OrderStatusCancelled},
-	models.OrderStatusPacked:            {models.OrderStatusReadyForPickup},
-	models.OrderStatusReadyForPickup:    {models.OrderStatusDriverAssigned},
-	models.OrderStatusDriverAssigned:    {models.OrderStatusDriverAccepted, models.OrderStatusReadyForPickup},
-	models.OrderStatusDriverAccepted:    {models.OrderStatusPickedUp},
-	models.OrderStatusPickedUp:          {models.OrderStatusOutForDelivery},
-	models.OrderStatusOutForDelivery:    {models.OrderStatusDelivered},
-	models.OrderStatusDelivered:         {models.OrderStatusReturnRequested},
-	models.OrderStatusReturnRequested:   {models.OrderStatusReturnApproved, models.OrderStatusReturnRejected},
-	models.OrderStatusReturnApproved:    {models.OrderStatusReturnPickupAssigned},
+	models.OrderStatusPending:              {models.OrderStatusAccepted, models.OrderStatusCancelled},
+	models.OrderStatusAccepted:             {models.OrderStatusPacked, models.OrderStatusCancelled},
+	models.OrderStatusPacked:               {models.OrderStatusReadyForPickup, models.OrderStatusCancelled},
+	models.OrderStatusReadyForPickup:       {models.OrderStatusDriverAssigned, models.OrderStatusCancelled},
+	models.OrderStatusDriverAssigned:       {models.OrderStatusDriverAccepted, models.OrderStatusReadyForPickup, models.OrderStatusCancelled},
+	models.OrderStatusDriverAccepted:       {models.OrderStatusPickedUp, models.OrderStatusCancelled},
+	models.OrderStatusPickedUp:             {models.OrderStatusOutForDelivery},
+	models.OrderStatusOutForDelivery:       {models.OrderStatusDelivered},
+	models.OrderStatusDelivered:            {models.OrderStatusReturnRequested},
+	models.OrderStatusReturnRequested:      {models.OrderStatusReturnApproved, models.OrderStatusReturnRejected},
+	models.OrderStatusReturnApproved:       {models.OrderStatusReturnPickupAssigned},
 	models.OrderStatusReturnPickupAssigned: {models.OrderStatusReturnPickedUp, models.OrderStatusReturnApproved},
-	models.OrderStatusReturnPickedUp:    {models.OrderStatusReturnReceived},
-	models.OrderStatusReturnReceived:    {models.OrderStatusRefundProcessing},
-	models.OrderStatusRefundProcessing:  {models.OrderStatusRefunded},
+	models.OrderStatusReturnPickedUp:       {models.OrderStatusReturnReceived},
+	models.OrderStatusReturnReceived:       {models.OrderStatusRefundProcessing},
+	models.OrderStatusRefundProcessing:     {models.OrderStatusRefunded},
 }
 
 type OrderService struct {
-	db         *gorm.DB
-	dispatcher notification.Dispatcher
-	wsHub      *websocket.Hub
+	db          *gorm.DB
+	dispatcher  notification.Dispatcher
+	wsHub       *websocket.Hub
 	presenceSvc *deliverySvc.PresenceService
 }
 
@@ -90,61 +90,145 @@ func (s *OrderService) TransitionOrder(ctx context.Context, orderID, userID uuid
 	case models.OrderStatusCancelled:
 		order.CancelledAt = &now
 		order.CancellationReason = note
+		err := s.db.Transaction(func(tx *gorm.DB) error {
+			// Restore stock for all items
+			var items []models.OrderItem
+			tx.Where("order_id = ?", order.ID).Find(&items)
+			for _, item := range items {
+				if item.VariantID != nil {
+					tx.Model(&models.ProductVariant{}).Where("id = ?", *item.VariantID).
+						Updates(map[string]interface{}{
+							"stock":          gorm.Expr("stock + ?", item.Quantity),
+							"reserved_stock": gorm.Expr("GREATEST(0, reserved_stock - ?)", item.Quantity),
+						})
+				}
+				tx.Model(&models.Product{}).Where("id = ?", item.ProductID).
+					Updates(map[string]interface{}{
+						"available_stock": gorm.Expr("available_stock + ?", item.Quantity),
+						"reserved_stock":  gorm.Expr("GREATEST(0, reserved_stock - ?)", item.Quantity),
+						"sold_count":      gorm.Expr("GREATEST(0, sold_count - ?)", item.Quantity),
+					})
+			}
+
+			// Refund wallet if used - check idempotency to avoid duplicate wallet credit
+			if order.WalletUsed > 0 {
+				var existingRefund models.WalletTransaction
+				if err := tx.Where("reference_type = ? AND reference_id = ? AND txn_type = ?", models.TxnRefOrder, order.OrderNumber, models.TxnTypeCredit).First(&existingRefund).Error; err != nil {
+					var wallet models.Wallet
+					if err := tx.Where("user_id = ?", order.CustomerID).First(&wallet).Error; err == nil {
+						tx.Model(&wallet).Update("balance", gorm.Expr("balance + ?", order.WalletUsed))
+						tx.Create(&models.WalletTransaction{
+							WalletID:      wallet.ID,
+							TxnType:       models.TxnTypeCredit,
+							Amount:        order.WalletUsed,
+							ReferenceType: models.TxnRefOrder,
+							ReferenceID:   order.OrderNumber,
+							Description:   "Wallet refund for cancelled order " + order.OrderNumber,
+							TxnDate:       now,
+						})
+					}
+				}
+			}
+
+			// Decrement coupon usage if applied
+			if order.CouponCode != "" {
+				tx.Model(&models.Coupon{}).Where("code = ?", order.CouponCode).
+					Update("used_count", gorm.Expr("GREATEST(0, used_count - 1)"))
+			}
+
+			// Cancel any active delivery assignments
+			tx.Model(&models.OrderDeliveryAssignment{}).
+				Where("order_id = ? AND status IN (?)", order.ID, []models.AssignmentStatus{models.AssignmentPending, models.AssignmentAccepted}).
+				Updates(map[string]interface{}{
+					"status": models.AssignmentCancelled,
+				})
+
+			return nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to process cancellation side effects: %w", err)
+		}
+
 	case models.OrderStatusDelivered:
 		order.DeliveredAt = &now
-		s.db.Transaction(func(tx *gorm.DB) error {
-			tx.Create(&models.CommissionTransaction{
-				OrderID:          order.ID,
-				VendorID:         order.VendorID,
-				OrderAmount:      order.FinalAmount,
-				CommissionRate:   order.CommissionAmount / order.FinalAmount,
-				CommissionAmount: order.CommissionAmount,
-				PlatformFee:      order.PlatformFee,
-				NetAmount:        order.VendorEarnings,
-				Status:           "settled",
-			})
-			var wallet models.Wallet
-			if err := tx.Where("vendor_id = ?", order.VendorID).First(&wallet).Error; err == nil {
-				tx.Model(&wallet).Update("balance", gorm.Expr("balance + ?", order.VendorEarnings))
-				tx.Create(&models.WalletTransaction{
-					WalletID:      wallet.ID,
-					TxnType:       models.TxnTypeCredit,
-					Amount:        order.VendorEarnings,
-					ReferenceType: models.TxnRefOrder,
-					ReferenceID:   order.OrderNumber,
-					Description:   "Earnings from order " + order.OrderNumber,
-					TxnDate:       now,
-				})
-			}
-			if order.DeliveryPartnerID != nil {
-				deliveryBase := order.ShippingCharge
-				if deliveryBase == 0 {
-					deliveryBase = 30.0
+		err := s.db.Transaction(func(tx *gorm.DB) error {
+			// Idempotent commission settlement & vendor wallet credit
+			var existingCommission models.CommissionTransaction
+			if err := tx.Where("order_id = ?", order.ID).First(&existingCommission).Error; err != nil {
+				commRate := 0.0
+				if order.FinalAmount > 0 {
+					commRate = order.CommissionAmount / order.FinalAmount
 				}
-				tx.Create(&models.DeliveryEarning{
-					DeliveryPartnerID: *order.DeliveryPartnerID,
-					OrderID:           order.ID,
-					BaseAmount:        deliveryBase,
-					TotalAmount:       deliveryBase,
-					Status:            models.EarningStatusPending,
-					Description:       "Delivery fee for order " + order.OrderNumber,
+				tx.Create(&models.CommissionTransaction{
+					OrderID:          order.ID,
+					VendorID:         order.VendorID,
+					OrderAmount:      order.FinalAmount,
+					CommissionRate:   commRate,
+					CommissionAmount: order.CommissionAmount,
+					PlatformFee:      order.PlatformFee,
+					NetAmount:        order.VendorEarnings,
+					Status:           "settled",
 				})
-				var dwallet models.Wallet
-				if err := tx.Where("user_id = ?", order.DeliveryPartnerID).First(&dwallet).Error; err == nil {
-					tx.Model(&dwallet).Update("balance", gorm.Expr("balance + ?", deliveryBase))
-					tx.Create(&models.WalletTransaction{
-						WalletID:      dwallet.ID,
-						TxnType:       models.TxnTypeCredit,
-						Amount:        deliveryBase,
-						ReferenceType: models.TxnRefDeliveryEarning,
-						ReferenceID:   order.OrderNumber,
-						Description:   "Delivery earnings for order " + order.OrderNumber,
-						TxnDate:       now,
+
+				// Check if vendor wallet transaction was already created
+				var existingTxn models.WalletTransaction
+				if err := tx.Where("reference_type = ? AND reference_id = ?", models.TxnRefOrder, order.OrderNumber).First(&existingTxn).Error; err != nil {
+					var wallet models.Wallet
+					if err := tx.Where("vendor_id = ?", order.VendorID).First(&wallet).Error; err == nil {
+						tx.Model(&wallet).Update("balance", gorm.Expr("balance + ?", order.VendorEarnings))
+						tx.Create(&models.WalletTransaction{
+							WalletID:      wallet.ID,
+							TxnType:       models.TxnTypeCredit,
+							Amount:        order.VendorEarnings,
+							ReferenceType: models.TxnRefOrder,
+							ReferenceID:   order.OrderNumber,
+							Description:   "Earnings from order " + order.OrderNumber,
+							TxnDate:       now,
+						})
+					}
+				}
+			}
+
+			// Idempotent delivery partner earning and wallet credit
+			if order.DeliveryPartnerID != nil {
+				var existingEarning models.DeliveryEarning
+				if err := tx.Where("order_id = ?", order.ID).First(&existingEarning).Error; err != nil {
+					deliveryBase := order.ShippingCharge
+					if deliveryBase == 0 {
+						deliveryBase = 30.0
+					}
+					tx.Create(&models.DeliveryEarning{
+						DeliveryPartnerID: *order.DeliveryPartnerID,
+						OrderID:           order.ID,
+						BaseAmount:        deliveryBase,
+						TotalAmount:       deliveryBase,
+						Status:            models.EarningStatusSettled,
+						Description:       "Delivery fee for order " + order.OrderNumber,
 					})
+
+					var existingDriverTxn models.WalletTransaction
+					if err := tx.Where("reference_type = ? AND reference_id = ?", models.TxnRefDeliveryEarning, order.OrderNumber).First(&existingDriverTxn).Error; err != nil {
+						var dwallet models.Wallet
+						if err := tx.Where("user_id = ?", order.DeliveryPartnerID).First(&dwallet).Error; err == nil {
+							tx.Model(&dwallet).Update("balance", gorm.Expr("balance + ?", deliveryBase))
+							tx.Create(&models.WalletTransaction{
+								WalletID:      dwallet.ID,
+								TxnType:       models.TxnTypeCredit,
+								Amount:        deliveryBase,
+								ReferenceType: models.TxnRefDeliveryEarning,
+								ReferenceID:   order.OrderNumber,
+								Description:   "Delivery earnings for order " + order.OrderNumber,
+								TxnDate:       now,
+							})
+						}
+					}
 				}
 			}
 			return nil
 		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to process delivery settlement: %w", err)
+		}
 		go s.generateInvoice(&order)
 	case models.OrderStatusDriverAssigned:
 		order.DeliveryPartnerID = &userID
@@ -247,6 +331,11 @@ func (s *OrderService) TransitionOrder(ctx context.Context, orderID, userID uuid
 }
 
 func (s *OrderService) generateInvoice(order *models.Order) {
+	// Idempotent invoice check
+	var existing models.Invoice
+	if err := s.db.Where("order_id = ?", order.ID).First(&existing).Error; err == nil {
+		return
+	}
 	invoiceNo := "INV-" + order.OrderNumber + "-" + time.Now().Format("20060102150405")
 	invoice := models.Invoice{
 		OrderID:       order.ID,
@@ -636,21 +725,33 @@ func (s *OrderService) VerifyDeliveryOTP(ctx context.Context, orderID, userID uu
 		return nil, fmt.Errorf("not the assigned driver for this order")
 	}
 
-	targetType := "delivery"
-	if otpType == "pickup" {
-		targetType = "pickup"
+	targetType := otpType
+	if targetType == "" {
+		switch order.Status {
+		case models.OrderStatusDriverAccepted, models.OrderStatusDriverAssigned:
+			targetType = "pickup"
+		case models.OrderStatusReturnPickupAssigned:
+			targetType = "return_pickup"
+		default:
+			targetType = "delivery"
+		}
+	}
+
+	switch targetType {
+	case "pickup":
 		if order.Status != models.OrderStatusDriverAccepted && order.Status != models.OrderStatusDriverAssigned {
 			return nil, fmt.Errorf("order is not ready for pickup verification")
 		}
-	} else if otpType == "return_pickup" {
-		targetType = "return_pickup"
+	case "return_pickup":
 		if order.Status != models.OrderStatusReturnPickupAssigned {
 			return nil, fmt.Errorf("order is not ready for return pickup verification")
 		}
-	} else {
+	case "delivery":
 		if order.Status != models.OrderStatusOutForDelivery {
 			return nil, fmt.Errorf("order is not out for delivery")
 		}
+	default:
+		return nil, fmt.Errorf("invalid OTP type: %s", targetType)
 	}
 
 	var deliveryOTP models.DeliveryOTP

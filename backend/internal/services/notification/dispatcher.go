@@ -57,6 +57,8 @@ var NotificationMatrix = map[models.NotificationType][]string{
 	models.NotifCustomerCheckedIn:  {RoleBarber},
 	models.NotifBarberStarted:      {RoleCustomer},
 	models.NotifBarberCompleted:    {RoleCustomer},
+	models.NotifBookingOTPGenerated:   {RoleCustomer},
+	models.NotifBookingProblemReported: {RoleBarber},
 	models.NotifReviewReceived:   {RoleBarber},
 	models.NotifReviewModerated:  {RoleCustomer},
 	models.NotifReviewReply:      {RoleCustomer},
@@ -308,6 +310,16 @@ func (d *notificationDispatcher) buildMessageFallback(event NotificationEvent) (
 		title = "Service Completed"
 		body = "Your service has been completed."
 		action = ActionOpenReview
+	case models.NotifBookingOTPGenerated:
+		title = "Service Completion OTP"
+		body = "Share this OTP with the barber only if you are satisfied with the service."
+		action = ActionOpenBooking
+		priority = models.PriorityHigh
+	case models.NotifBookingProblemReported:
+		title = "Customer Reported a Problem"
+		body = "The customer is not fully satisfied. Please continue working on the service."
+		action = ActionOpenBooking
+		priority = models.PriorityHigh
 	case models.NotifReviewReceived:
 		title = "New Review"
 		body = "You have received a new review."

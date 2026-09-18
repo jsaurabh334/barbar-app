@@ -30,6 +30,10 @@ func TestIsValidTransition(t *testing.T) {
 		{"next -> cancelled", models.BookingStatusNext, models.BookingStatusCancelled, true},
 		{"in_progress -> completed", models.BookingStatusInProgress, models.BookingStatusCompleted, true},
 		{"in_progress -> cancelled", models.BookingStatusInProgress, models.BookingStatusCancelled, false},
+		{"in_progress -> awaiting_customer_confirmation", models.BookingStatusInProgress, models.BookingStatusAwaitingCustomerConfirmation, true},
+		{"awaiting_customer_confirmation -> completed", models.BookingStatusAwaitingCustomerConfirmation, models.BookingStatusCompleted, true},
+		{"awaiting_customer_confirmation -> in_progress", models.BookingStatusAwaitingCustomerConfirmation, models.BookingStatusInProgress, true},
+		{"awaiting_customer_confirmation -> cancelled", models.BookingStatusAwaitingCustomerConfirmation, models.BookingStatusCancelled, false},
 		{"completed -> in_progress", models.BookingStatusCompleted, models.BookingStatusInProgress, false},
 		{"completed -> cancelled", models.BookingStatusCompleted, models.BookingStatusCancelled, false},
 		{"cancelled -> confirmed", models.BookingStatusCancelled, models.BookingStatusConfirmed, false},
@@ -70,6 +74,7 @@ func TestQueueAndActiveStatuses(t *testing.T) {
 	assert.Contains(t, active, models.BookingStatusConfirmed)
 	assert.Contains(t, active, models.BookingStatusCheckedIn)
 	assert.Contains(t, active, models.BookingStatusInProgress)
+	assert.Contains(t, active, models.BookingStatusAwaitingCustomerConfirmation)
 	assert.NotContains(t, active, models.BookingStatusCompleted)
 	assert.NotContains(t, active, models.BookingStatusCancelled)
 

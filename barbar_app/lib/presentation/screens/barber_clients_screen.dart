@@ -87,8 +87,23 @@ class _BarberClientsScreenState extends State<BarberClientsScreen> {
                 clientBookings[name]!.add(booking);
               }
 
+              DateTime getLatestBookingDate(List<BookingModel> list) {
+                DateTime latest = DateTime(1970);
+                for (var b in list) {
+                  final dt = DateTime.tryParse(b.scheduledStart)?.toLocal();
+                  if (dt != null && dt.isAfter(latest)) {
+                    latest = dt;
+                  }
+                }
+                return latest;
+              }
+
               var clients = clientBookings.keys.toList();
-              clients.sort((a, b) => a.compareTo(b));
+              clients.sort((a, b) {
+                final dtA = getLatestBookingDate(clientBookings[a]!);
+                final dtB = getLatestBookingDate(clientBookings[b]!);
+                return dtB.compareTo(dtA);
+              });
 
               if (_searchQuery.isNotEmpty) {
                 clients = clients.where((clientName) {

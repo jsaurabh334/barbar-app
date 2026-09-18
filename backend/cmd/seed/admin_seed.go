@@ -9,14 +9,23 @@ import (
 )
 
 func seedAdmin(db *gorm.DB) {
-	var count int64
-	db.Model(&models.User{}).Where("email = ?", "admin@barbar.app").Count(&count)
-	if count > 0 {
-		log.Println("Admin user already exists, skipping...")
+	var user models.User
+	err := db.Where("email = ? OR phone = ?", "admin@barbar.app", "+919999999999").First(&user).Error
+
+	hash, _ := bcrypt.GenerateFromPassword([]byte("Admin@123"), bcrypt.DefaultCost)
+	if err == nil {
+		db.Model(&user).Updates(map[string]interface{}{
+			"email":         "admin@barbar.app",
+			"phone":         "+919999999999",
+			"full_name":     "Super Admin",
+			"password_hash": string(hash),
+			"role":          models.RoleAdmin,
+			"status":        models.UserStatusActive,
+		})
+		log.Printf("Admin user updated: admin@barbar.app / Admin@123")
 		return
 	}
 
-	hash, _ := bcrypt.GenerateFromPassword([]byte("Admin@123"), bcrypt.DefaultCost)
 	admin := models.User{
 		FullName:     "Super Admin",
 		Email:        "admin@barbar.app",

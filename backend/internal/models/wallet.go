@@ -35,6 +35,7 @@ const (
 	TxnRefBonus       TxnReferenceType = "bonus"
 	TxnRefDeliveryEarning TxnReferenceType = "delivery_earning"
 	TxnRefCancellation TxnReferenceType = "cancellation"
+	TxnRefBarberEarning TxnReferenceType = "barber_earning"
 )
 
 type WalletTransaction struct {

@@ -130,25 +130,32 @@ class _BarberHomeServiceScreenState extends State<BarberHomeServiceScreen> with 
           ],
           if (showActions) ...[
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _showRejectDialog(booking.id),
-                    style: OutlinedButton.styleFrom(foregroundColor: AppColors.error, side: const BorderSide(color: AppColors.error)),
-                    child: const Text('Reject'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      context.read<BookingBloc>().add(AcceptHomeServiceRequest(booking.id));
-                    },
-                    child: const Text('Accept'),
-                  ),
-                ),
-              ],
+            Builder(
+              builder: (context) {
+                final isExpired = scheduledStart.isBefore(DateTime.now());
+                return Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => _showRejectDialog(booking.id),
+                        style: OutlinedButton.styleFrom(foregroundColor: AppColors.error, side: const BorderSide(color: AppColors.error)),
+                        child: const Text('Reject'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: isExpired
+                            ? null
+                            : () {
+                                context.read<BookingBloc>().add(AcceptHomeServiceRequest(booking.id));
+                              },
+                        child: Text(isExpired ? 'EXPIRED' : 'Accept'),
+                      ),
+                    ),
+                  ],
+                );
+              }
             ),
           ],
         ],

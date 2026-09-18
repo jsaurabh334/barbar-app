@@ -32,21 +32,42 @@ class LocalNotificationService {
     );
   }
 
-  static void showNotification(RemoteMessage message) async {
+  static void showNotification(RemoteMessage message, {int? badgeCount}) async {
     try {
       final id = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
-      const AndroidNotificationDetails androidDetails =
+      int? finalBadge = badgeCount;
+      if (finalBadge == null) {
+        if (message.data['badge'] != null) {
+          finalBadge = int.tryParse(message.data['badge'].toString());
+        } else if (message.notification?.apple?.badge != null) {
+          finalBadge = int.tryParse(message.notification!.apple!.badge!);
+        }
+      }
+
+      final AndroidNotificationDetails androidDetails =
           AndroidNotificationDetails(
         'high_importance_channel', // id
         'High Importance Notifications', // title
         channelDescription: 'This channel is used for important notifications.',
         importance: Importance.max,
         priority: Priority.high,
+        playSound: true,
+        number: finalBadge,
       );
 
-      const NotificationDetails notificationDetails =
-          NotificationDetails(android: androidDetails);
+      final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        badgeNumber: finalBadge,
+      );
+
+      final NotificationDetails notificationDetails =
+          NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
 
       await _notificationsPlugin.show(
         id: id,

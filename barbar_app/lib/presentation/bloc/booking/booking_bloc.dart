@@ -22,6 +22,11 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
     on<FetchHomeServiceRequests>(_onFetchHomeServiceRequests);
     on<AcceptHomeServiceRequest>(_onAcceptHomeServiceRequest);
     on<RejectHomeServiceRequest>(_onRejectHomeServiceRequest);
+    on<RequestCompletion>(_onRequestCompletion);
+    on<VerifyCompletionOtp>(_onVerifyCompletionOtp);
+    on<RegenerateCompletionOtp>(_onRegenerateCompletionOtp);
+    on<ResendCompletionOtp>(_onResendCompletionOtp);
+    on<ProblemStillExists>(_onProblemStillExists);
   }
 
   Future<void> _onFetchServices(FetchServices event, Emitter<BookingState> emit) async {
@@ -194,6 +199,64 @@ class BookingBloc extends Bloc<BookingEvent, BookingState> {
       await _bookingRepository.rejectHomeService(event.bookingId, event.reason);
       final requests = await _bookingRepository.getHomeServiceRequests();
       emit(BookingsLoaded(requests));
+    } catch (e) {
+      emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onRequestCompletion(RequestCompletion event, Emitter<BookingState> emit) async {
+    emit(BookingLoading());
+    try {
+      final data = await _bookingRepository.requestCompletion(event.bookingId);
+      emit(CompletionOtpActionSuccess('OTP sent to the customer', data));
+      final bookings = await _bookingRepository.getBarberBookings();
+      emit(BookingsLoaded(bookings));
+    } catch (e) {
+      emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onVerifyCompletionOtp(VerifyCompletionOtp event, Emitter<BookingState> emit) async {
+    emit(BookingLoading());
+    try {
+      final booking = await _bookingRepository.verifyCompletionOtp(event.bookingId, event.otp);
+      emit(BookingCompletedSuccess(booking));
+      final bookings = await _bookingRepository.getBarberBookings();
+      emit(BookingsLoaded(bookings));
+    } catch (e) {
+      emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onRegenerateCompletionOtp(RegenerateCompletionOtp event, Emitter<BookingState> emit) async {
+    emit(BookingLoading());
+    try {
+      final data = await _bookingRepository.regenerateCompletionOtp(event.bookingId);
+      emit(CompletionOtpActionSuccess('A new OTP has been sent to the customer', data));
+      final bookings = await _bookingRepository.getBarberBookings();
+      emit(BookingsLoaded(bookings));
+    } catch (e) {
+      emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onResendCompletionOtp(ResendCompletionOtp event, Emitter<BookingState> emit) async {
+    emit(BookingLoading());
+    try {
+      final data = await _bookingRepository.resendCompletionOtp(event.bookingId);
+      emit(CompletionOtpActionSuccess('A new OTP has been sent to you', data));
+      final bookings = await _bookingRepository.getAllBookings();
+      emit(BookingsLoaded(bookings));
+    } catch (e) {
+      emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  Future<void> _onProblemStillExists(ProblemStillExists event, Emitter<BookingState> emit) async {
+    emit(BookingLoading());
+    try {
+      await _bookingRepository.problemStillExists(event.bookingId);
+      emit(BookingsLoaded(await _bookingRepository.getAllBookings()));
     } catch (e) {
       emit(BookingFailure(e.toString().replaceAll('Exception: ', '')));
     }

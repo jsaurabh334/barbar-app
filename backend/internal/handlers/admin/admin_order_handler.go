@@ -1,6 +1,10 @@
 package admin
 
 import (
+	"encoding/json"
+	"net/http"
+	"strings"
+
 	"github.com/barbar-app/backend/internal/auth"
 	"github.com/barbar-app/backend/internal/models"
 	orderService "github.com/barbar-app/backend/internal/services/order"
@@ -33,6 +37,9 @@ func (h *AdminOrderHandler) ListAllOrders(c *gin.Context) {
 		Preload("ShippingAddress").
 		Preload("StatusLog", func(db *gorm.DB) *gorm.DB {
 			return db.Order("created_at ASC")
+		}).
+		Preload("Timeline", func(db *gorm.DB) *gorm.DB {
+			return db.Order("created_at ASC")
 		})
 
 	if status := c.Query("status"); status != "" {
@@ -44,11 +51,8 @@ func (h *AdminOrderHandler) ListAllOrders(c *gin.Context) {
 	if vendorID := c.Query("vendor_id"); vendorID != "" {
 		query = query.Where("vendor_id = ?", vendorID)
 	}
-	if deliveryPartnerID := c.Query("delivery_partner_id"); deliveryPartnerID != "" {
-		query = query.Where("delivery_partner_id = ?", deliveryPartnerID)
-	}
-	if customerID := c.Query("customer_id"); customerID != "" {
-		query = query.Where("customer_id = ?", customerID)
+	if search := c.Query("search"); search != "" {
+		query = query.Where("order_number ILIKE ?", "%"+search+"%")
 	}
 	if dateFrom := c.Query("date_from"); dateFrom != "" {
 		query = query.Where("created_at >= ?", dateFrom)
@@ -56,12 +60,9 @@ func (h *AdminOrderHandler) ListAllOrders(c *gin.Context) {
 	if dateTo := c.Query("date_to"); dateTo != "" {
 		query = query.Where("created_at <= ?", dateTo)
 	}
-	if search := c.Query("search"); search != "" {
-		query = query.Where("order_number ILIKE ? OR id::text ILIKE ?", "%"+search+"%", "%"+search+"%")
-	}
 
 	query.Count(&total)
-	query.Offset((page-1)*pageSize).Limit(pageSize).Order("created_at DESC").Find(&orders)
+	query.Offset((page - 1) * pageSize).Limit(pageSize).Order("created_at DESC").Find(&orders)
 
 	utils.PaginatedResponse(c, orders, page, pageSize, total)
 }
@@ -83,6 +84,9 @@ func (h *AdminOrderHandler) GetOrderDetail(c *gin.Context) {
 		Preload("Payment").
 		Preload("Refund").
 		Preload("StatusLog", func(db *gorm.DB) *gorm.DB {
+			return db.Order("created_at ASC")
+		}).
+		Preload("Timeline", func(db *gorm.DB) *gorm.DB {
 			return db.Order("created_at ASC")
 		}).
 		First(&order, orderID).Error; err != nil {
@@ -114,18 +118,52 @@ func (h *AdminOrderHandler) UpdateOrderStatus(c *gin.Context) {
 		return
 	}
 
+	targetStatus := models.OrderStatus(req.Status)
+	if targetStatus == models.OrderStatusCancelled && strings.TrimSpace(req.Note) == "" {
+		utils.BadRequestResponse(c, "Cancellation note/reason is required")
+		return
+	}
+
+	var existingOrder models.Order
+	if err := h.db.First(&existingOrder, orderID).Error; err != nil {
+		utils.NotFoundResponse(c, "Order not found")
+		return
+	}
+	previousStatus := string(existingOrder.Status)
+
 	updated, err := h.orderSvc.TransitionOrder(
 		c.Request.Context(),
 		orderID,
 		adminID,
 		claims.Role,
-		models.OrderStatus(req.Status),
+		targetStatus,
 		req.Note,
 	)
 	if err != nil {
 		utils.BadRequestResponse(c, err.Error())
 		return
 	}
+
+	// Atomic/System-level Audit Log for Admin status mutation
+	oldValJSON, _ := json.Marshal(map[string]interface{}{"status": previousStatus})
+	newValJSON, _ := json.Marshal(map[string]interface{}{
+		"status": req.Status,
+		"note":   req.Note,
+		"role":   claims.Role,
+	})
+	h.db.Create(&models.AuditLog{
+		UserID:     adminID,
+		Action:     "order_status_update",
+		EntityType: "order",
+		EntityID:   orderID.String(),
+		OldValues:  models.JSONB(oldValJSON),
+		NewValues:  models.JSONB(newValJSON),
+		IPAddress:  c.ClientIP(),
+		UserAgent:  c.GetHeader("User-Agent"),
+		Endpoint:   c.Request.URL.Path,
+		Method:     c.Request.Method,
+		Status:     http.StatusOK,
+	})
 
 	utils.SuccessResponse(c, updated)
 }

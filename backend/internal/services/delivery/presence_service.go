@@ -236,7 +236,7 @@ func (s *PresenceService) IsEligibleForAssignment(ctx context.Context, userID uu
 
 func (s *PresenceService) checkDeliveryLimits(ctx context.Context, userID uuid.UUID) (bool, error) {
 	var partner models.DeliveryPartner
-	if err := s.db.Where("user_id = ?", userID).First(&partner).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).First(&partner).Error; err != nil {
 		return false, fmt.Errorf("driver not found")
 	}
 
@@ -244,7 +244,7 @@ func (s *PresenceService) checkDeliveryLimits(ctx context.Context, userID uuid.U
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
 	var activeOrders int64
-	s.db.Model(&models.Order{}).
+	s.db.WithContext(ctx).Model(&models.Order{}).
 		Where("delivery_partner_id = ? AND status IN ?", userID,
 			[]string{"driver_assigned", "driver_accepted", "assigned", "picked_up", "out_for_delivery",
 				"return_pickup_assigned", "return_picked_up"}).

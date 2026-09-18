@@ -2,6 +2,18 @@ import 'dart:convert';
 import 'service_model.dart';
 
 class BookingModel {
+  static const String statusPending = 'pending';
+  static const String statusHomeServicePending = 'home_service_pending';
+  static const String statusConfirmed = 'confirmed';
+  static const String statusCheckedIn = 'checked_in';
+  static const String statusWaiting = 'waiting';
+  static const String statusNext = 'next';
+  static const String statusInProgress = 'in_progress';
+  static const String statusAwaitingCustomerConfirmation = 'awaiting_customer_confirmation';
+  static const String statusCompleted = 'completed';
+  static const String statusCancelled = 'cancelled';
+  static const String statusNoShow = 'no_show';
+
   final String id;
   final String barberId;
   final String customerId;
@@ -34,6 +46,8 @@ class BookingModel {
   final bool canCallCustomer;
   final String? maskedShopPhone;
   final String? maskedCustomerPhone;
+  final String? endOtpGeneratedAt;
+  final String? endOtpVerifiedAt;
 
   BookingModel({
     required this.id,
@@ -68,6 +82,8 @@ class BookingModel {
     this.canCallCustomer = false,
     this.maskedShopPhone,
     this.maskedCustomerPhone,
+    this.endOtpGeneratedAt,
+    this.endOtpVerifiedAt,
   });
 
   factory BookingModel.fromJson(Map<String, dynamic> json) {
@@ -128,6 +144,8 @@ class BookingModel {
       canCallCustomer: json['can_call_customer'] as bool? ?? false,
       maskedShopPhone: json['shop_phone'] as String?,
       maskedCustomerPhone: json['customer_phone'] as String?,
+      endOtpGeneratedAt: json['end_otp_generated_at'] as String?,
+      endOtpVerifiedAt: json['end_otp_verified_at'] as String?,
     );
   }
 
@@ -159,6 +177,8 @@ class BookingModel {
       'late_at': lateAt,
       'grace_extended_until': graceExtendedUntil,
       'im_coming_at': imComingAt,
+      'end_otp_generated_at': endOtpGeneratedAt,
+      'end_otp_verified_at': endOtpVerifiedAt,
     };
   }
 
@@ -195,6 +215,8 @@ class BookingModel {
     bool? canCallCustomer,
     String? maskedShopPhone,
     String? maskedCustomerPhone,
+    String? endOtpGeneratedAt,
+    String? endOtpVerifiedAt,
   }) {
     return BookingModel(
       id: id ?? this.id,
@@ -229,6 +251,12 @@ class BookingModel {
       canCallCustomer: canCallCustomer ?? this.canCallCustomer,
       maskedShopPhone: maskedShopPhone ?? this.maskedShopPhone,
       maskedCustomerPhone: maskedCustomerPhone ?? this.maskedCustomerPhone,
+      endOtpGeneratedAt: endOtpGeneratedAt ?? this.endOtpGeneratedAt,
+      endOtpVerifiedAt: endOtpVerifiedAt ?? this.endOtpVerifiedAt,
     );
   }
+
+  bool get isHomeServiceBooking => isHomeService;
+  bool get isAwaitingCustomerConfirmation => status == statusAwaitingCustomerConfirmation;
+  bool get isCompletedBooking => status == statusCompleted;
 }

@@ -141,4 +141,120 @@ void main() {
       expect(booking.services[1].price, 20.0);
     });
   });
+
+  group('BookingModel - end OTP fields', () {
+    test('should parse end_otp_generated_at / end_otp_verified_at from JSON', () {
+      final json = {
+        'id': 'booking-1',
+        'barber_id': 'barber-1',
+        'customer_id': 'customer-1',
+        'status': 'awaiting_customer_confirmation',
+        'scheduled_start': '2026-07-28T10:00:00Z',
+        'scheduled_end': '2026-07-28T11:00:00Z',
+        'queue_position': 0,
+        'estimated_wait_minutes': 0,
+        'final_price': 0.0,
+        'payment_status': 'pending',
+        'is_home_service': true,
+        'end_otp_generated_at': '2026-07-28T11:00:00Z',
+        'end_otp_verified_at': null,
+      };
+
+      final booking = BookingModel.fromJson(json);
+      expect(booking.status, BookingModel.statusAwaitingCustomerConfirmation);
+      expect(booking.endOtpGeneratedAt, '2026-07-28T11:00:00Z');
+      expect(booking.endOtpVerifiedAt, isNull);
+      expect(booking.isAwaitingCustomerConfirmation, isTrue);
+      expect(booking.isCompletedBooking, isFalse);
+    });
+
+    test('should default end OTP fields when absent', () {
+      final json = {
+        'id': 'booking-1',
+        'barber_id': 'barber-1',
+        'customer_id': 'customer-1',
+        'status': 'in_progress',
+        'scheduled_start': '2026-07-28T10:00:00Z',
+        'scheduled_end': '2026-07-28T11:00:00Z',
+        'queue_position': 0,
+        'estimated_wait_minutes': 0,
+        'final_price': 0.0,
+        'payment_status': 'pending',
+      };
+
+      final booking = BookingModel.fromJson(json);
+      expect(booking.endOtpGeneratedAt, isNull);
+      expect(booking.endOtpVerifiedAt, isNull);
+      expect(booking.isAwaitingCustomerConfirmation, isFalse);
+    });
+
+    test('should parse end_otp_verified_at when booking completed', () {
+      final json = {
+        'id': 'booking-1',
+        'barber_id': 'barber-1',
+        'customer_id': 'customer-1',
+        'status': 'completed',
+        'scheduled_start': '2026-07-28T10:00:00Z',
+        'scheduled_end': '2026-07-28T11:00:00Z',
+        'queue_position': 0,
+        'estimated_wait_minutes': 0,
+        'final_price': 0.0,
+        'payment_status': 'paid',
+        'end_otp_verified_at': '2026-07-28T11:00:00Z',
+      };
+
+      final booking = BookingModel.fromJson(json);
+      expect(booking.status, BookingModel.statusCompleted);
+      expect(booking.endOtpVerifiedAt, '2026-07-28T11:00:00Z');
+      expect(booking.isCompletedBooking, isTrue);
+    });
+
+    test('copyWith should update end OTP fields without mutating original', () {
+      final base = BookingModel(
+        id: 'b1',
+        barberId: 'bar-1',
+        customerId: 'c1',
+        status: BookingModel.statusInProgress,
+        scheduledStart: '2026-07-28T10:00:00Z',
+        scheduledEnd: '2026-07-28T11:00:00Z',
+        queuePosition: 0,
+        estimatedWaitMinutes: 0,
+        finalPrice: 0,
+        paymentStatus: 'pending',
+        isHomeService: true,
+      );
+
+      final modified = base.copyWith(
+        status: BookingModel.statusCompleted,
+        endOtpGeneratedAt: '2026-07-28T10:55:00Z',
+        endOtpVerifiedAt: '2026-07-28T11:00:00Z',
+      );
+
+      expect(modified.status, BookingModel.statusCompleted);
+      expect(modified.endOtpGeneratedAt, '2026-07-28T10:55:00Z');
+      expect(modified.endOtpVerifiedAt, '2026-07-28T11:00:00Z');
+      expect(base.status, BookingModel.statusInProgress, reason: 'original should be unchanged');
+      expect(base.endOtpVerifiedAt, isNull);
+    });
+
+    test('toJson should include end OTP fields', () {
+      final booking = BookingModel(
+        id: 'b1',
+        barberId: 'bar-1',
+        customerId: 'c1',
+        status: BookingModel.statusAwaitingCustomerConfirmation,
+        scheduledStart: '2026-07-28T10:00:00Z',
+        scheduledEnd: '2026-07-28T11:00:00Z',
+        queuePosition: 0,
+        estimatedWaitMinutes: 0,
+        finalPrice: 0,
+        paymentStatus: 'pending',
+        endOtpGeneratedAt: '2026-07-28T10:55:00Z',
+      );
+
+      final output = booking.toJson();
+      expect(output['end_otp_generated_at'], '2026-07-28T10:55:00Z');
+      expect(output['end_otp_verified_at'], isNull);
+    });
+  });
 }

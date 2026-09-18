@@ -309,20 +309,30 @@ func (h *OrderHandler) PlaceOrder(c *gin.Context) {
 			}
 			order.Items = append(order.Items, orderItem)
 
-			// Decrease stock
+			// Decrease stock atomically to prevent race conditions and negative inventory
 			if item.VariantID != nil {
-				tx.Model(&models.ProductVariant{}).Where("id = ?", *item.VariantID).
+				res := tx.Model(&models.ProductVariant{}).Where("id = ? AND stock >= ?", *item.VariantID, item.Quantity).
 					Updates(map[string]interface{}{
 						"stock":          gorm.Expr("stock - ?", item.Quantity),
 						"reserved_stock": gorm.Expr("reserved_stock + ?", item.Quantity),
 					})
+				if res.Error != nil || res.RowsAffected == 0 {
+					tx.Rollback()
+					utils.BadRequestResponse(c, fmt.Sprintf("Insufficient stock for variant %s", variantName))
+					return
+				}
 			}
-			tx.Model(&models.Product{}).Where("id = ?", item.ProductID).
+			res := tx.Model(&models.Product{}).Where("id = ? AND available_stock >= ?", item.ProductID, item.Quantity).
 				Updates(map[string]interface{}{
 					"available_stock": gorm.Expr("available_stock - ?", item.Quantity),
 					"reserved_stock":  gorm.Expr("reserved_stock + ?", item.Quantity),
 					"sold_count":      gorm.Expr("sold_count + ?", item.Quantity),
 				})
+			if res.Error != nil || res.RowsAffected == 0 {
+				tx.Rollback()
+				utils.BadRequestResponse(c, fmt.Sprintf("Insufficient stock for %s", product.Name))
+				return
+			}
 		}
 
 		shippingCharge := getShippingCharge(orderTotal)
@@ -574,24 +584,77 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 		return
 	}
 
+	fromStatus := order.Status
 	now := time.Now()
-	order.Status = models.OrderStatusCancelled
-	order.CancellationReason = req.Reason
-	order.CancelledAt = &now
-	h.db.Save(&order)
 
-	h.db.Create(&models.OrderStatusLog{
-		OrderID: order.ID,
-		FromStatus: order.Status,
-		ToStatus:   models.OrderStatusCancelled,
-		ChangedBy:  userID,
-		Role:       "customer",
-		Note:       req.Reason,
+	err = h.db.Transaction(func(tx *gorm.DB) error {
+		order.Status = models.OrderStatusCancelled
+		order.CancellationReason = req.Reason
+		order.CancelledAt = &now
+		if err := tx.Save(&order).Error; err != nil {
+			return err
+		}
+
+		// Restore stock for all items
+		var items []models.OrderItem
+		tx.Where("order_id = ?", order.ID).Find(&items)
+		for _, item := range items {
+			if item.VariantID != nil {
+				tx.Model(&models.ProductVariant{}).Where("id = ?", *item.VariantID).
+					Updates(map[string]interface{}{
+						"stock":          gorm.Expr("stock + ?", item.Quantity),
+						"reserved_stock": gorm.Expr("GREATEST(0, reserved_stock - ?)", item.Quantity),
+					})
+			}
+			tx.Model(&models.Product{}).Where("id = ?", item.ProductID).
+				Updates(map[string]interface{}{
+					"available_stock": gorm.Expr("available_stock + ?", item.Quantity),
+					"reserved_stock":  gorm.Expr("GREATEST(0, reserved_stock - ?)", item.Quantity),
+					"sold_count":      gorm.Expr("GREATEST(0, sold_count - ?)", item.Quantity),
+				})
+		}
+
+		// Refund wallet if used
+		if order.WalletUsed > 0 {
+			var wallet models.Wallet
+			if err := tx.Where("user_id = ?", order.CustomerID).First(&wallet).Error; err == nil {
+				tx.Model(&wallet).Update("balance", gorm.Expr("balance + ?", order.WalletUsed))
+				tx.Create(&models.WalletTransaction{
+					WalletID:      wallet.ID,
+					TxnType:       models.TxnTypeCredit,
+					Amount:        order.WalletUsed,
+					ReferenceType: models.TxnRefOrder,
+					ReferenceID:   order.OrderNumber,
+					Description:   "Wallet refund for cancelled order " + order.OrderNumber,
+					TxnDate:       now,
+				})
+			}
+		}
+
+		// Decrement coupon usage if applied
+		if order.CouponCode != "" {
+			tx.Model(&models.Coupon{}).Where("code = ?", order.CouponCode).
+				Update("used_count", gorm.Expr("GREATEST(0, used_count - 1)"))
+		}
+
+		return tx.Create(&models.OrderStatusLog{
+			OrderID:    order.ID,
+			FromStatus: fromStatus,
+			ToStatus:   models.OrderStatusCancelled,
+			ChangedBy:  userID,
+			Role:       "customer",
+			Note:       req.Reason,
+		}).Error
 	})
+
+	if err != nil {
+		utils.InternalErrorResponse(c, "Failed to cancel order: "+err.Error())
+		return
+	}
 
 	h.dispatchOrderEvent(c.Request.Context(), order, models.NotifOrderCancelled)
 
-	utils.SuccessResponse(c, gin.H{"message": "Order cancelled"})
+	utils.SuccessResponse(c, gin.H{"message": "Order cancelled successfully", "order": order})
 }
 
 func (h *OrderHandler) TrackOrder(c *gin.Context) {

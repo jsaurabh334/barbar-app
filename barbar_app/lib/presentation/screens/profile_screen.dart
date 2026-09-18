@@ -21,15 +21,19 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AuthBloc, AuthState>(
-      builder: (context, state) {
-        if (state is AuthAuthenticated) {
-          return _ProfileBody(user: state.user);
-        }
-        return const Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
-        );
-      },
+    return SafeArea(
+      top: true,
+      bottom: false,
+      child: BlocBuilder<AuthBloc, AuthState>(
+        builder: (context, state) {
+          if (state is AuthAuthenticated) {
+            return _ProfileBody(user: state.user);
+          }
+          return const Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          );
+        },
+      ),
     );
   }
 }

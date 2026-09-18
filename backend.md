@@ -445,6 +445,44 @@ All requests must send `Accept: application/json` and `Content-Type: application
     ```
 *   **Realtime Update Note**: Triggers `queue_position_changed` WebSocket message to all customers in the queue, reducing their wait times.
 
+#### 3.4.2 Home Service Completion OTP (Customer Approval)
+
+Home service bookings cannot be marked `completed` directly. The barber requests completion, the customer receives a one-time passcode (OTP) via push + WebSocket, the barber enters it to verify, and only then does the booking reach `completed`. The customer can resend the OTP any time or report that a problem still exists (which sends the booking back to `in_progress`).
+
+**Flow**:
+```
+in_progress ──(barber requests completion)──▶ awaiting_customer_confirmation
+awaiting_customer_confirmation ──(barber verifies OTP)──▶ completed
+awaiting_customer_confirmation ──(customer reports problem)──▶ in_progress
+```
+
+*   **Security**:
+    *   OTP is 6 digits, generated with `crypto/rand`, delivered ONLY to the customer (never returned in HTTP responses).
+    *   Only its HMAC-SHA256 hash (`end_otp_hash`) is stored; verification is constant-time.
+    *   Max **5** failed attempts — further attempts are rejected until the customer resends.
+    *   OTP is valid while status = `awaiting_customer_confirmation` and not verified/regenerated/cancelled (no expiry).
+
+**Barber endpoints** (Role: `barber`):
+
+*   `POST /api/v1/barber/home-service/:id/request-completion` — moves booking to `awaiting_customer_confirmation`, generates + delivers OTP to the customer.
+    ```json
+    { "success": true, "data": { "booking_id": "...", "status": "awaiting_customer_confirmation", "end_otp_generated_at": "2026-07-28T10:00:00Z" } }
+    ```
+*   `POST /api/v1/barber/home-service/:id/verify-completion-otp` — body `{ "otp": "123456" }`. On success booking becomes `completed`.
+    ```json
+    { "success": true, "data": { "booking_id": "...", "status": "completed", "end_otp_verified_at": "..." } }
+    ```
+    *   `400` if attempts exhausted (5) — customer must resend.
+    *   `401`/`404` per ownership/auth rules.
+*   `POST /api/v1/barber/home-service/:id/regenerate-completion-otp` — invalidates the current OTP and issues a new one to the customer (attempts reset).
+
+**Customer endpoints** (Role: `customer`):
+
+*   `POST /api/v1/bookings/:id/completion-otp/resend` — invalidates the current OTP and delivers a new one (attempts reset).
+*   `POST /api/v1/bookings/:id/problem-still-exists` — booking returns to `in_progress`, OTP invalidated, barber/staff notified.
+
+**OTP delivery**: plaintext OTP is sent to the customer only via WebSocket event `booking_otp_generated` (payload key `completion_otp`) and FCM push. Assigned barber OR assigned staff (`isAssignedActor`) may request/verify/regenerate.
+
 ---
 
 ### 3.5 Vendor & Marketplace Endpoints
@@ -651,6 +689,7 @@ Every field is detailed for Flutter data serialization layer. Nullable fields ar
 *   `pending`: Initial status on booking creation.
 *   `confirmed`: Payment verified / booking accepted by barber.
 *   `in_progress`: Customer checked-in; service execution started.
+*   `awaiting_customer_confirmation`: Home service finished; barber requested completion and is waiting for the customer's OTP approval.
 *   `completed`: Service finished; invoice generated.
 *   `cancelled`: Cancelled by user or barber. Triggered refund check.
 *   `no_show`: Customer did not arrive within 15 minutes of slot start. Reschedules queue position.
@@ -734,6 +773,22 @@ The WebSocket node is hosted at `ws://<base_url>/ws?token=<access_token>`.
     }
     ```
 *   **Frontend Behavior**: Triggers state transition. Redirects user dashboard showing "Active Service Started".
+
+#### 7.1.3 booking_otp_generated
+*   **Trigger Source**: Barber requests completion / regenerates OTP, or customer resends OTP on a home service booking.
+*   **Delivered To**: `customer` only.
+*   **Payload Structure**:
+    ```json
+    {
+      "type": "booking_otp_generated",
+      "payload": {
+        "booking_id": "a0f2c4d6-8fc2-11eb-8dcd-0242ac130003",
+        "completion_otp": "123456",
+        "generated_at": "2026-07-28T10:00:00Z"
+      }
+    }
+    ```
+*   **Frontend Behavior**: Customer shows the OTP on the booking card, with "RESEND OTP" and "PROBLEM STILL EXISTS" actions. The plaintext OTP never appears in any HTTP response.
 
 ---
 
@@ -909,3 +964,4 @@ STRIPE_PUBLISHABLE_KEY=pk_live_51P...
 
 ## 15. CHANGELOG
 *   `v1.0.0` (2026-06-03): Initial release catalog. Full support for queue calculation, multi-vendor cart routing, and escrow-wallet ledger splitting.
+*   End OTP (customer approval) flow for home service bookings: `awaiting_customer_confirmation` status, HMAC-SHA256 OTP hashing, 5-attempt limit, WebSocket `booking_otp_generated` + FCM delivery, resend/regenerate/problem-still-exists endpoints.

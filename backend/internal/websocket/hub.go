@@ -33,6 +33,7 @@ const (
 	MsgDriverLocation  MessageType = "driver.location_updated"
 	MsgOrderStatusChanged  MessageType = "order.status_changed"
 	MsgDeliveryOTPGenerated MessageType = "delivery_otp_generated"
+	MsgBookingOTPGenerated  MessageType = "booking_otp_generated"
 
 	MsgPing        MessageType = "ping"
 	MsgPong        MessageType = "pong"
@@ -81,7 +82,10 @@ type Hub struct {
 }
 
 func NewHub(cfg *config.Config, jwt *auth.JWTManager) *Hub {
-	allowedOrigins := parseAllowedOrigins(cfg.Server.AllowOrigins)
+	var allowedOrigins []string
+	if cfg != nil {
+		allowedOrigins = parseAllowedOrigins(cfg.Server.AllowOrigins)
+	}
 	return &Hub{
 		cfg: cfg,
 		jwt: jwt,
@@ -89,11 +93,17 @@ func NewHub(cfg *config.Config, jwt *auth.JWTManager) *Hub {
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 			CheckOrigin: func(r *http.Request) bool {
+				if cfg == nil {
+					return true
+				}
 				origin := r.Header.Get("Origin")
+				if origin == "" {
+					return true
+				}
 				if cfg.IsDevMode() && len(allowedOrigins) == 0 {
 					return true
 				}
-				if origin == "" || len(allowedOrigins) == 0 {
+				if len(allowedOrigins) == 0 {
 					return false
 				}
 				for _, allowed := range allowedOrigins {

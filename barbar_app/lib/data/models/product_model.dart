@@ -67,7 +67,7 @@ class ProductModel {
     this.professionalMoq = 1,
   });
 
-  double get displayPrice => price > 0 ? price : basePrice;
+  double get displayPrice => hasDiscount ? discountPrice! : (price > 0 ? price : basePrice);
   double getActivePrice(bool isBarber) {
     if (isBarber && hasProfessionalPrice) {
       return professionalPrice!;

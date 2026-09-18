@@ -87,3 +87,22 @@ class BookingFailure extends BookingState {
   @override
   List<Object?> get props => [error];
 }
+
+class CompletionOtpActionSuccess extends BookingState {
+  final String message;
+  final Map<String, dynamic> data;
+
+  const CompletionOtpActionSuccess(this.message, this.data);
+
+  @override
+  List<Object?> get props => [message, data];
+}
+
+class BookingCompletedSuccess extends BookingState {
+  final BookingModel booking;
+
+  const BookingCompletedSuccess(this.booking);
+
+  @override
+  List<Object?> get props => [booking];
+}

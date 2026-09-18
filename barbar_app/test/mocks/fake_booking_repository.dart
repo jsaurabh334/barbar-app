@@ -6,9 +6,11 @@ class FakeBookingRepository implements BookingRepository {
   final List<BookingModel> _bookings = [];
   bool shouldThrow = false;
   String? nextToken;
+  String _validOtp = '123456';
 
   void addBooking(BookingModel booking) => _bookings.add(booking);
   void clear() => _bookings.clear();
+  void setValidOtp(String otp) => _validOtp = otp;
 
   @override
   Future<List<ServiceModel>> getServices(String barberId) async {
@@ -232,5 +234,95 @@ class FakeBookingRepository implements BookingRepository {
   @override
   Future<void> markNoShow(String bookingId) async {
     if (shouldThrow) throw Exception('No-show error');
+  }
+
+  @override
+  Future<Map<String, dynamic>> requestCompletion(String bookingId) async {
+    if (shouldThrow) throw Exception('Request completion error');
+    _mutate(bookingId, (b) => b.copyWith(
+      status: BookingModel.statusAwaitingCustomerConfirmation,
+      endOtpGeneratedAt: DateTime.now().toIso8601String(),
+      endOtpVerifiedAt: null,
+    ));
+    return {
+      'booking_id': bookingId,
+      'status': BookingModel.statusAwaitingCustomerConfirmation,
+      'end_otp_generated_at': DateTime.now().toIso8601String(),
+    };
+  }
+
+  @override
+  Future<BookingModel> verifyCompletionOtp(String bookingId, String otp) async {
+    if (shouldThrow) throw Exception('Verify OTP error');
+    if (otp != _validOtp) throw Exception('Invalid OTP. 4 attempt(s) remaining.');
+    final updated = _mutate(bookingId, (b) => b.copyWith(
+      status: BookingModel.statusCompleted,
+      endOtpVerifiedAt: DateTime.now().toIso8601String(),
+    ));
+    return updated;
+  }
+
+  @override
+  Future<Map<String, dynamic>> regenerateCompletionOtp(String bookingId) async {
+    if (shouldThrow) throw Exception('Regenerate OTP error');
+    _mutate(bookingId, (b) => b.copyWith(
+      endOtpGeneratedAt: DateTime.now().toIso8601String(),
+      endOtpVerifiedAt: null,
+    ));
+    return {
+      'booking_id': bookingId,
+      'status': BookingModel.statusAwaitingCustomerConfirmation,
+      'end_otp_generated_at': DateTime.now().toIso8601String(),
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> resendCompletionOtp(String bookingId) async {
+    if (shouldThrow) throw Exception('Resend OTP error');
+    _mutate(bookingId, (b) => b.copyWith(
+      endOtpGeneratedAt: DateTime.now().toIso8601String(),
+      endOtpVerifiedAt: null,
+    ));
+    return {
+      'booking_id': bookingId,
+      'status': BookingModel.statusAwaitingCustomerConfirmation,
+      'end_otp_generated_at': DateTime.now().toIso8601String(),
+    };
+  }
+
+  @override
+  Future<BookingModel> problemStillExists(String bookingId) async {
+    if (shouldThrow) throw Exception('Problem still exists error');
+    return _mutate(bookingId, (b) => b.copyWith(
+      status: BookingModel.statusInProgress,
+      endOtpGeneratedAt: null,
+      endOtpVerifiedAt: null,
+    ));
+  }
+
+  BookingModel _mutate(String bookingId, BookingModel Function(BookingModel) transform) {
+    final index = _bookings.indexWhere((b) => b.id == bookingId);
+    final current = index >= 0
+        ? _bookings[index]
+        : BookingModel(
+            id: bookingId,
+            barberId: 'barber-1',
+            customerId: 'customer-1',
+            status: BookingModel.statusInProgress,
+            scheduledStart: '2026-07-28T10:00:00Z',
+            scheduledEnd: '2026-07-28T11:00:00Z',
+            queuePosition: 0,
+            estimatedWaitMinutes: 0,
+            finalPrice: 0,
+            paymentStatus: 'pending',
+            isHomeService: true,
+          );
+    final updated = transform(current);
+    if (index >= 0) {
+      _bookings[index] = updated;
+    } else {
+      _bookings.add(updated);
+    }
+    return updated;
   }
 }

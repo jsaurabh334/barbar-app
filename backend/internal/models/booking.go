@@ -19,6 +19,7 @@ const (
 	BookingStatusNoShow              BookingStatus = "no_show"
 	BookingStatusRescheduled         BookingStatus = "rescheduled"
 	BookingStatusHomeServicePending  BookingStatus = "home_service_pending"
+	BookingStatusAwaitingCustomerConfirmation BookingStatus = "awaiting_customer_confirmation"
 )
 
 type ServiceMode string
@@ -70,6 +71,14 @@ type Booking struct {
 	TravelTimeMin     int           `gorm:"default:0" json:"travel_time_minutes"`
 	TravelCharge      float64       `gorm:"default:0" json:"travel_charge"`
 	StaffID           *uuid.UUID    `gorm:"type:uuid;index" json:"staff_id,omitempty"`
+
+	// Home service End OTP (customer approval proof). Valid until verified,
+	// regenerated, or the booking leaves the awaiting_customer_confirmation state.
+	EndOTPHash        string     `gorm:"size:64" json:"-"`
+	EndOTPPrevHash    string     `gorm:"size:64" json:"-"`
+	EndOTPGeneratedAt *time.Time `json:"end_otp_generated_at,omitempty"`
+	EndOTPVerifiedAt  *time.Time `json:"end_otp_verified_at,omitempty"`
+	EndOTPAttempts    int        `gorm:"default:0" json:"-"`
 
 	// Queue & Late flags (events, not statuses)
 	QueueAssignedAt    *time.Time  `json:"queue_assigned_at,omitempty"`

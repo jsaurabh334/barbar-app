@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/network/websocket_client.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/booking_model.dart';
+import '../../data/models/barber_model.dart';
 import '../../domain/repositories/barber_repository.dart';
 import '../bloc/booking/booking_bloc.dart';
 import '../bloc/booking/booking_event.dart';
@@ -527,8 +529,28 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
         UpdateBookingStatus(bookingId: booking.id, status: 'confirmed'),
       );
     } else {
-      context.read<BookingBloc>().add(
-        UpdateBookingStatus(bookingId: booking.id, status: 'in_progress'),
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.cardBg,
+          title: const Text('Start Service?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          content: Text('Are you sure you want to start the service for ${booking.customerName}?', style: const TextStyle(color: AppColors.textSecondary)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('CANCEL', style: TextStyle(color: Colors.grey)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                context.read<BookingBloc>().add(
+                  UpdateBookingStatus(bookingId: booking.id, status: 'in_progress'),
+                );
+              },
+              child: const Text('START', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
       );
     }
   }
@@ -539,13 +561,32 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
     final isConfirmed = booking.status == 'confirmed';
     final isCompleted = booking.status == 'completed';
     final isCancelled = booking.status == 'cancelled';
+    final isAwaitingOtp = booking.isHomeService && booking.isAwaitingCustomerConfirmation;
     final isPaid = booking.paymentStatus == 'paid';
+
+    final bookingDate = DateTime.tryParse(booking.scheduledStart)?.toLocal();
+    final now = DateTime.now();
+    final isToday = bookingDate != null &&
+        bookingDate.year == now.year &&
+        bookingDate.month == now.month &&
+        bookingDate.day == now.day;
+    final isTodayOrPast = isToday || (bookingDate != null && bookingDate.isBefore(now));
 
     Color statusColor = AppColors.warning;
     if (isInProgress) statusColor = AppColors.success;
     else if (isCompleted) statusColor = AppColors.info;
     else if (isCancelled) statusColor = AppColors.error;
     else if (isPending) statusColor = AppColors.warning;
+    else if (isAwaitingOtp) statusColor = AppColors.warning;
+
+    String statusLabel;
+    if (isAwaitingOtp) {
+      statusLabel = 'AWAITING OTP';
+    } else if (isInProgress) {
+      statusLabel = 'IN PROGRESS';
+    } else {
+      statusLabel = booking.status.toUpperCase();
+    }
 
     return GestureDetector(
       onTap: () => _showCustomerDetails(booking),
@@ -568,7 +609,12 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
                 children: [
                   CircleAvatar(
                     backgroundColor: AppColors.surface,
-                    child: const Icon(LucideIcons.user, color: AppColors.textSecondary, size: 18),
+                    backgroundImage: booking.customer?['avatar'] != null && (booking.customer!['avatar'] as String).isNotEmpty
+                        ? CachedNetworkImageProvider(BarberModel.getFullImageUrl(booking.customer!['avatar'] as String))
+                        : null,
+                    child: booking.customer?['avatar'] == null || (booking.customer!['avatar'] as String).isEmpty
+                        ? const Icon(LucideIcons.user, color: AppColors.textSecondary, size: 18)
+                        : null,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -607,7 +653,7 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      isInProgress ? 'IN PROGRESS' : booking.status.toUpperCase(),
+                      statusLabel,
                       style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10),
                     ),
                   ),
@@ -636,7 +682,17 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
                           },
                         ),
                       ),
-                    if (isInProgress)
+                    if (isInProgress && booking.isHomeService)
+                      Expanded(
+                        child: _actionButton(
+                          label: 'FINISH SERVICE',
+                          color: AppColors.success,
+                          onTap: () {
+                            context.read<BookingBloc>().add(RequestCompletion(booking.id));
+                          },
+                        ),
+                      ),
+                    if (isInProgress && !booking.isHomeService)
                       Expanded(
                         child: _actionButton(
                           label: 'FINISH SERVICE',
@@ -646,6 +702,14 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
                               UpdateBookingStatus(bookingId: booking.id, status: 'completed'),
                             );
                           },
+                        ),
+                      ),
+                    if (isAwaitingOtp)
+                      Expanded(
+                        child: _actionButton(
+                          label: 'VERIFY OTP',
+                          color: AppColors.warning,
+                          onTap: () => _showCustomerDetails(booking),
                         ),
                       ),
                     if (isPending) ...[
@@ -670,7 +734,7 @@ class _BarberDashboardScreenState extends State<BarberDashboardScreen> {
                         ),
                       ),
                     ],
-                    if (isConfirmed) ...[
+                    if (isConfirmed && isTodayOrPast) ...[
                       Expanded(
                         child: _actionButton(
                           label: 'START SERVICE',

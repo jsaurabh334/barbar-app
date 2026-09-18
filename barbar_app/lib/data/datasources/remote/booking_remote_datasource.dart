@@ -313,4 +313,67 @@ class BookingRemoteDataSource {
       throw Exception(response.data['error'] ?? 'Failed to mark no show');
     }
   }
+
+  Future<Map<String, dynamic>> requestCompletion(String bookingId) async {
+    try {
+      final response = await _apiClient.dio.post('/barber/home-service/$bookingId/request-completion');
+      if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        return response.data['data'] as Map<String, dynamic>;
+      }
+      throw Exception(response.data['error'] ?? 'Failed to request completion');
+    } on DioException catch (e) {
+      throw Exception(_parseDioError(e, 'Failed to request completion'));
+    }
+  }
+
+  Future<BookingModel> verifyCompletionOtp(String bookingId, String otp) async {
+    try {
+      final response = await _apiClient.dio.post(
+        '/barber/home-service/$bookingId/verify-completion-otp',
+        data: {'otp': otp},
+      );
+      if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        return BookingModel.fromJson(response.data['data'] as Map<String, dynamic>);
+      }
+      throw Exception(response.data['error'] ?? 'Failed to verify OTP');
+    } on DioException catch (e) {
+      throw Exception(_parseDioError(e, 'Failed to verify OTP'));
+    }
+  }
+
+  Future<Map<String, dynamic>> regenerateCompletionOtp(String bookingId) async {
+    try {
+      final response = await _apiClient.dio.post('/barber/home-service/$bookingId/regenerate-completion-otp');
+      if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        return response.data['data'] as Map<String, dynamic>;
+      }
+      throw Exception(response.data['error'] ?? 'Failed to regenerate OTP');
+    } on DioException catch (e) {
+      throw Exception(_parseDioError(e, 'Failed to regenerate OTP'));
+    }
+  }
+
+  Future<Map<String, dynamic>> resendCompletionOtp(String bookingId) async {
+    try {
+      final response = await _apiClient.dio.post('/bookings/$bookingId/completion-otp/resend');
+      if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        return response.data['data'] as Map<String, dynamic>;
+      }
+      throw Exception(response.data['error'] ?? 'Failed to resend OTP');
+    } on DioException catch (e) {
+      throw Exception(_parseDioError(e, 'Failed to resend OTP'));
+    }
+  }
+
+  Future<BookingModel> problemStillExists(String bookingId) async {
+    try {
+      final response = await _apiClient.dio.post('/bookings/$bookingId/problem-still-exists');
+      if (response.statusCode == 200 && (response.data['status'] == 'success' || response.data['status'] == 'created')) {
+        return BookingModel.fromJson(response.data['data'] as Map<String, dynamic>);
+      }
+      throw Exception(response.data['error'] ?? 'Failed to report problem');
+    } on DioException catch (e) {
+      throw Exception(_parseDioError(e, 'Failed to report problem'));
+    }
+  }
 }

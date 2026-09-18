@@ -160,4 +160,29 @@ class BookingRepositoryImpl implements BookingRepository {
   Future<void> markNoShow(String bookingId) async {
     await _remoteDataSource.markNoShow(bookingId);
   }
+
+  @override
+  Future<Map<String, dynamic>> requestCompletion(String bookingId) async {
+    return await _remoteDataSource.requestCompletion(bookingId);
+  }
+
+  @override
+  Future<BookingModel> verifyCompletionOtp(String bookingId, String otp) async {
+    return await _remoteDataSource.verifyCompletionOtp(bookingId, otp);
+  }
+
+  @override
+  Future<Map<String, dynamic>> regenerateCompletionOtp(String bookingId) async {
+    return await _remoteDataSource.regenerateCompletionOtp(bookingId);
+  }
+
+  @override
+  Future<Map<String, dynamic>> resendCompletionOtp(String bookingId) async {
+    return await _remoteDataSource.resendCompletionOtp(bookingId);
+  }
+
+  @override
+  Future<BookingModel> problemStillExists(String bookingId) async {
+    return await _remoteDataSource.problemStillExists(bookingId);
+  }
 }

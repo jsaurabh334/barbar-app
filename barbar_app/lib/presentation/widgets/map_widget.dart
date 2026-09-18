@@ -36,7 +36,7 @@ class MapWidget extends StatelessWidget {
       ),
       children: [
         TileLayer(
-          urlTemplate: 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'com.barbar.app',
         ),
         MarkerLayer(

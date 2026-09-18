@@ -1027,8 +1027,8 @@ func (h *AdminHandler) ListAllBookings(c *gin.Context) {
 	if search := c.Query("search"); search != "" {
 		searchPattern := "%" + search + "%"
 		query = query.Where(
-			"id::text ILIKE ? OR customer_id::text ILIKE ? OR EXISTS (SELECT 1 FROM users WHERE users.id = bookings.customer_id AND users.full_name ILIKE ?)",
-			searchPattern, searchPattern, searchPattern,
+			"id::text ILIKE ? OR customer_id::text ILIKE ? OR EXISTS (SELECT 1 FROM users WHERE users.id = bookings.customer_id AND (users.full_name ILIKE ? OR users.phone ILIKE ? OR users.email ILIKE ?)) OR EXISTS (SELECT 1 FROM barbers WHERE barbers.id = bookings.barber_id AND (barbers.shop_name ILIKE ? OR barbers.business_name ILIKE ?))",
+			searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern,
 		)
 	}
 	if status := c.Query("status"); status != "" {

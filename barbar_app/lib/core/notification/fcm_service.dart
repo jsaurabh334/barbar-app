@@ -11,6 +11,7 @@ import '../../presentation/screens/vendor/vendor_order_detail_screen.dart';
 import '../../presentation/screens/vendor/vendor_order_list_screen.dart';
 import '../../presentation/screens/customer/customer_order_tracking_screen.dart';
 import '../../presentation/screens/order_history_screen.dart';
+import '../../presentation/screens/booking_history_screen.dart';
 import '../../presentation/screens/delivery/delivery_order_detail_screen.dart';
 import '../../presentation/screens/delivery/delivery_offer_screen.dart';
 import 'local_notification_service.dart';
@@ -37,9 +38,15 @@ class FCMService {
 
       _instance.onTokenRefresh.listen(_onTokenRefresh);
 
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
         debugPrint('Got a message whilst in the foreground!');
-        LocalNotificationService.showNotification(message);
+        int? unreadCount;
+        if (_repository != null) {
+          try {
+            unreadCount = await _repository!.getUnreadCount();
+          } catch (_) {}
+        }
+        LocalNotificationService.showNotification(message, badgeCount: unreadCount);
       });
 
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
@@ -153,6 +160,12 @@ class FCMService {
         }
         break;
       case 'OPEN_BOOKING':
+        if (data['type'] == 'booking_otp_generated') {
+          screen = const BookingHistoryScreen();
+        } else {
+          screen = const NotificationsScreen();
+        }
+        break;
       case 'OPEN_QUEUE':
       case 'OPEN_REVIEW':
       case 'OPEN_NOTIFICATIONS':

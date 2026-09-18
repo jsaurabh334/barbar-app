@@ -37,7 +37,12 @@ var validTransitions = map[models.BookingStatus]map[models.BookingStatus]bool{
 		models.BookingStatusNoShow:     true,
 	},
 	models.BookingStatusInProgress: {
-		models.BookingStatusCompleted: true,
+		models.BookingStatusCompleted:                      true,
+		models.BookingStatusAwaitingCustomerConfirmation:   true,
+	},
+	models.BookingStatusAwaitingCustomerConfirmation: {
+		models.BookingStatusCompleted:  true,
+		models.BookingStatusInProgress: true,
 	},
 	models.BookingStatusCompleted: {},
 	models.BookingStatusCancelled:  {},
@@ -83,5 +88,6 @@ func ActiveStatuses() []models.BookingStatus {
 		models.BookingStatusWaiting,
 		models.BookingStatusNext,
 		models.BookingStatusInProgress,
+		models.BookingStatusAwaitingCustomerConfirmation,
 	}
 }

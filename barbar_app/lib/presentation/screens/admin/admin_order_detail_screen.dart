@@ -72,54 +72,227 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
     return 'Customer';
   }
 
-  Future<void> _showStatusDialog() async {
-    final noteController = TextEditingController();
-    final selectedStatus = ValueNotifier<String?>(null);
-    final statuses = ['pending', 'accepted', 'packed', 'ready_for_pickup', 'assigned', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
+  static const Map<String, List<String>> _validNextTransitions = {
+    'pending': ['accepted', 'cancelled'],
+    'accepted': ['packed', 'cancelled'],
+    'packed': ['ready_for_pickup', 'cancelled'],
+    'ready_for_pickup': ['driver_assigned', 'cancelled'],
+    'driver_assigned': ['driver_accepted', 'ready_for_pickup', 'cancelled'],
+    'driver_accepted': ['picked_up', 'cancelled'],
+    'picked_up': ['out_for_delivery'],
+    'out_for_delivery': ['delivered'],
+    'delivered': ['return_requested'],
+    'return_requested': ['return_approved', 'return_rejected'],
+    'return_approved': ['return_pickup_assigned'],
+    'return_pickup_assigned': ['return_picked_up', 'return_approved'],
+    'return_picked_up': ['return_received'],
+    'return_received': ['refund_processing'],
+    'refund_processing': ['refunded'],
+  };
 
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.cardBg,
-        title: const Text('Update Order Status', style: TextStyle(color: AppColors.textPrimary)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DropdownButtonFormField<String>(
-              dropdownColor: AppColors.cardBg,
-              style: const TextStyle(color: AppColors.textPrimary),
-              decoration: const InputDecoration(labelText: 'Status', labelStyle: TextStyle(color: AppColors.textSecondary), border: OutlineInputBorder()),
-              items: statuses.map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(color: AppColors.textPrimary)))).toList(),
-              onChanged: (v) => selectedStatus.value = v,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: noteController,
-              style: const TextStyle(color: AppColors.textPrimary),
-              decoration: const InputDecoration(labelText: 'Note (optional)', labelStyle: TextStyle(color: AppColors.textSecondary), border: OutlineInputBorder()),
-              maxLines: 2,
+  List<String> _getValidNextStatuses(String currentStatus) {
+    return _validNextTransitions[currentStatus.toLowerCase()] ?? [];
+  }
+
+  String _getStatusLabel(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending': return 'Pending';
+      case 'accepted': return 'Accepted';
+      case 'packed': return 'Packed';
+      case 'ready_for_pickup': return 'Ready for Pickup';
+      case 'driver_assigned': return 'Driver Assigned';
+      case 'driver_accepted': return 'Driver Accepted';
+      case 'picked_up': return 'Picked Up';
+      case 'out_for_delivery': return 'Out for Delivery';
+      case 'delivered': return 'Delivered';
+      case 'cancelled': return 'Cancelled';
+      case 'return_requested': return 'Return Requested';
+      case 'return_approved': return 'Return Approved';
+      case 'return_rejected': return 'Return Rejected';
+      case 'return_pickup_assigned': return 'Return Pickup Assigned';
+      case 'return_picked_up': return 'Return Picked Up';
+      case 'return_received': return 'Return Received';
+      case 'refund_processing': return 'Refund Processing';
+      case 'refunded': return 'Refunded';
+      default: return status.replaceAll('_', ' ').toUpperCase();
+    }
+  }
+
+  Future<void> _showStatusDialog() async {
+    final currentStatus = (_order['status'] as String? ?? 'pending').toLowerCase();
+    final allowedStatuses = _getValidNextStatuses(currentStatus);
+
+    if (allowedStatuses.isEmpty) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.cardBg,
+          title: const Text('Status Locked', style: TextStyle(color: AppColors.textPrimary)),
+          content: Text(
+            'Order is currently "${_getStatusLabel(currentStatus)}". No further forward transitions are available.',
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK', style: TextStyle(color: AppColors.primary)),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Back', style: TextStyle(color: AppColors.textSecondary))),
-          ValueListenableBuilder(
-            valueListenable: selectedStatus,
-            builder: (_, v, __) => ElevatedButton(
-              onPressed: v == null ? null : () => Navigator.pop(ctx, v),
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.black),
-              child: const Text('Update'),
+      );
+      return;
+    }
+
+    final noteController = TextEditingController();
+    String? selectedStatus = allowedStatuses.first;
+    String? errorMessage;
+    bool isSubmitting = false;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: !isSubmitting,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) {
+          final isCancelling = selectedStatus == 'cancelled';
+
+          return AlertDialog(
+            backgroundColor: AppColors.cardBg,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                const Icon(Icons.swap_horiz, color: AppColors.primary, size: 22),
+                const SizedBox(width: 8),
+                const Text('Update Order Status', style: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+              ],
             ),
-          ),
-        ],
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      children: [
+                        const Text('Current: ', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                        Text(_getStatusLabel(currentStatus), style: TextStyle(color: _statusColor(currentStatus), fontWeight: FontWeight.bold, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedStatus,
+                    dropdownColor: AppColors.cardBg,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                    decoration: const InputDecoration(
+                      labelText: 'Next Valid Status',
+                      labelStyle: TextStyle(color: AppColors.textSecondary),
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                    ),
+                    items: allowedStatuses.map((s) => DropdownMenuItem(
+                      value: s,
+                      child: Text(_getStatusLabel(s), style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
+                    )).toList(),
+                    onChanged: isSubmitting ? null : (v) {
+                      setDialogState(() {
+                        selectedStatus = v;
+                        errorMessage = null;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: noteController,
+                    enabled: !isSubmitting,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                    decoration: InputDecoration(
+                      labelText: isCancelling ? 'Cancellation Reason (Required)' : 'Admin Note (Optional)',
+                      labelStyle: TextStyle(color: isCancelling ? AppColors.error : AppColors.textSecondary),
+                      border: const OutlineInputBorder(),
+                      errorText: errorMessage,
+                    ),
+                    maxLines: 2,
+                    onChanged: (_) {
+                      if (errorMessage != null) {
+                        setDialogState(() => errorMessage = null);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+              ),
+              ElevatedButton(
+                onPressed: isSubmitting || selectedStatus == null ? null : () async {
+                  if (selectedStatus == 'cancelled' && noteController.text.trim().isEmpty) {
+                    setDialogState(() {
+                      errorMessage = 'Reason is mandatory for order cancellation';
+                    });
+                    return;
+                  }
+
+                  final targetStatus = selectedStatus!;
+                  final noteText = noteController.text.trim();
+
+                  // Confirmation step
+                  final confirmed = await showDialog<bool>(
+                    context: ctx,
+                    builder: (confirmCtx) => AlertDialog(
+                      backgroundColor: AppColors.cardBg,
+                      title: const Text('Confirm Transition', style: TextStyle(color: AppColors.textPrimary)),
+                      content: Text(
+                        'Change order #${_order['order_number']} status to "${_getStatusLabel(targetStatus)}"?',
+                        style: const TextStyle(color: AppColors.textSecondary),
+                      ),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(confirmCtx, false), child: const Text('Back', style: TextStyle(color: AppColors.textSecondary))),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(confirmCtx, true),
+                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.black),
+                          child: const Text('Confirm'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirmed != true) return;
+
+                  setDialogState(() => isSubmitting = true);
+
+                  if (!ctx.mounted) return;
+                  Navigator.pop(ctx);
+                  if (mounted) {
+                    context.read<AdminOrdersBloc>().add(UpdateOrderStatus(
+                      _order['id'] as String,
+                      targetStatus,
+                      note: noteText.isEmpty ? null : noteText,
+                    ));
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isCancelling ? AppColors.error : AppColors.primary,
+                  foregroundColor: isCancelling ? Colors.white : Colors.black,
+                ),
+                child: isSubmitting
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                    : Text(isCancelling ? 'Cancel Order' : 'Update Status'),
+              ),
+            ],
+          );
+        },
       ),
     );
-
-    if (result != null && mounted) {
-      context.read<AdminOrdersBloc>().add(UpdateOrderStatus(
-        _order['id'] as String, result, note: noteController.text,
-      ));
-    }
   }
 
   Future<void> _showAssignDialog() async {
@@ -441,9 +614,9 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
-              color: sColor.withOpacity(0.15),
+              color: sColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: sColor.withOpacity(0.4)),
+              border: Border.all(color: sColor.withValues(alpha: 0.4)),
             ),
             child: Text(
               status.replaceAll('_', ' ').toUpperCase(),

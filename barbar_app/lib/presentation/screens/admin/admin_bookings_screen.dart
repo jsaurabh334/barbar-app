@@ -1,9 +1,13 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:barbar_app/core/constants/constants.dart';
 import 'package:barbar_app/presentation/bloc/admin/admin_bookings_bloc.dart';
 import 'package:barbar_app/presentation/screens/admin/admin_booking_detail_screen.dart';
 import 'package:barbar_app/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:barbar_app/core/utils/debouncer.dart';
 import 'package:intl/intl.dart';
 
 class AdminBookingsScreen extends StatefulWidget {
@@ -16,6 +20,7 @@ class AdminBookingsScreen extends StatefulWidget {
 class _AdminBookingsScreenState extends State<AdminBookingsScreen> with SingleTickerProviderStateMixin {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
+  final _debouncer = Debouncer(milliseconds: 350);
   String? _selectedStatus;
   String? _selectedDate;
   int _currentPage = 1;
@@ -42,6 +47,7 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> with SingleTi
   void dispose() {
     _searchController.dispose();
     _scrollController.dispose();
+    _debouncer.dispose();
     super.dispose();
   }
 
@@ -179,13 +185,27 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> with SingleTi
             child: TextField(
               controller: _searchController,
               style: const TextStyle(color: AppColors.textPrimary),
-              decoration: const InputDecoration(
-                hintText: 'Search bookings by ID, Name...',
-                hintStyle: TextStyle(color: AppColors.textMuted),
-                prefixIcon: Icon(LucideIcons.search, color: AppColors.textSecondary, size: 20),
+              decoration: InputDecoration(
+                hintText: 'Search bookings by ID, Name, Phone...',
+                hintStyle: const TextStyle(color: AppColors.textMuted),
+                prefixIcon: const Icon(LucideIcons.search, color: AppColors.textSecondary, size: 20),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(LucideIcons.x, size: 16, color: AppColors.textSecondary),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {});
+                          _resetPage();
+                        },
+                      )
+                    : null,
                 border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
+              onChanged: (val) {
+                setState(() {});
+                _debouncer.run(() => _resetPage());
+              },
               onSubmitted: (_) => _resetPage(),
             ),
           ),
@@ -321,6 +341,7 @@ class _BookingCard extends StatelessWidget {
     final shortId = id.length > 8 ? id.substring(0, 8) : id;
     final status = bookingData['status'] as String? ?? 'unknown';
     final customerName = _customerName(bookingData);
+    final customerAvatarUrl = _customerAvatar(bookingData);
     final shopName = _shopName(bookingData);
     final scheduledStart = bookingData['scheduled_start'] as String? ?? '';
     final price = (bookingData['final_price'] as num?)?.toDouble() ?? (bookingData['total_price'] as num?)?.toDouble() ?? 0.0;
@@ -366,17 +387,17 @@ class _BookingCard extends StatelessWidget {
                         shape: BoxShape.circle,
                         border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                       ),
-                      alignment: Alignment.center,
-                      child: initial != null
-                          ? Text(
-                              initial,
-                              style: const TextStyle(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            )
-                          : const Icon(LucideIcons.user, size: 20, color: AppColors.primary),
+                      child: ClipOval(
+                        child: customerAvatarUrl != null
+                            ? Image.network(
+                                customerAvatarUrl,
+                                width: 42,
+                                height: 42,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _buildAvatarFallback(initial),
+                              )
+                            : _buildAvatarFallback(initial),
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -503,6 +524,44 @@ class _BookingCard extends StatelessWidget {
     final sName = (data['shop_name'] ?? data['barber_shop_name']) as String?;
     if (sName != null && sName.trim().isNotEmpty) return sName;
     return '';
+  }
+
+  String? _customerAvatar(Map<String, dynamic> data) {
+    String? raw;
+    if (data['customer'] != null && data['customer'] is Map) {
+      final m = data['customer'] as Map<String, dynamic>;
+      raw = (m['avatar'] ?? m['avatar_url'] ?? m['profile_image'] ?? m['image']) as String?;
+    }
+    if (raw == null && data['user'] != null && data['user'] is Map) {
+      final m = data['user'] as Map<String, dynamic>;
+      raw = (m['avatar'] ?? m['avatar_url'] ?? m['profile_image'] ?? m['image']) as String?;
+    }
+    raw ??= (data['customer_avatar'] ?? data['user_avatar'] ?? data['avatar'] ?? data['avatar_url']) as String?;
+    if (raw == null || raw.trim().isEmpty) return null;
+    raw = raw.trim();
+    if (raw.startsWith('http')) {
+      if (!kIsWeb && Platform.isAndroid && raw.contains('localhost')) {
+        return raw.replaceAll('localhost', '10.0.2.2');
+      }
+      return raw;
+    }
+    final base = AppConfig.apiBaseUrl.replaceAll('/api/v1', '');
+    return '$base$raw';
+  }
+
+  Widget _buildAvatarFallback(String? initial) {
+    return Center(
+      child: initial != null
+          ? Text(
+              initial,
+              style: const TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            )
+          : const Icon(LucideIcons.user, size: 20, color: AppColors.primary),
+    );
   }
 
   String _formatDateTime(String iso) {

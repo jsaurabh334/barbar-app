@@ -46,6 +46,7 @@ import (
 	notifService "github.com/barbar-app/backend/internal/services/notification"
 	queueService "github.com/barbar-app/backend/internal/services/queue"
 	searchSvc "github.com/barbar-app/backend/internal/services/search"
+	settlementService "github.com/barbar-app/backend/internal/services/settlement"
 	uploadService "github.com/barbar-app/backend/internal/services/upload"
 	webhookSvc "github.com/barbar-app/backend/internal/services/webhook"
 )
@@ -90,7 +91,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 	authH := authHandler.NewAuthHandler(db, jwtManager)
 	barberH := barberHandler.NewBarberHandler(db, cfg)
 	staffH := barberHandler.NewStaffHandler(db)
-	bookingH := bookingHandler.NewBookingHandler(db, dispatcher, hub)
+	bookingH := bookingHandler.NewBookingHandler(db, dispatcher, hub, settlementService.NewBookingSettlementService(db))
 	vendorH := vendorHandler.NewVendorHandler(db)
 	deliveryPartnerH := deliveryPartnerHandler.NewDeliveryPartnerHandler(db)
 	productH := productHandler.NewProductHandler(db)
@@ -257,6 +258,8 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			bookingRoutes.POST("/:id/check-in", bookingH.CheckIn)
 			bookingRoutes.POST("/:id/im-coming", bookingH.ImComing)
 			bookingRoutes.GET("/:id/call-permission", bookingH.GetCallPermission)
+			bookingRoutes.POST("/:id/completion-otp/resend", bookingH.ResendCompletionOTP)
+			bookingRoutes.POST("/:id/problem-still-exists", bookingH.ProblemStillExists)
 		}
 
 		// ==================== Review routes ====================
@@ -275,6 +278,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 		{
 			// Registration accessible by any authenticated user
 			barberRoutes.POST("/register", barberH.Register)
+			barberRoutes.GET("/queue/:booking_id", bookingH.GetMyQueuePosition)
 		}
 		barberAuth := barberRoutes.Group("")
 		barberAuth.Use(authMW.RequireRole(string(models.RoleBarber)))
@@ -289,7 +293,6 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			barberAuth.PUT("/bookings/:id/services", bookingH.ModifyServices)
 			barberAuth.GET("/queue", bookingH.GetQueue)
 			barberAuth.GET("/queue/today", bookingH.GetTodayQueue)
-			barberAuth.GET("/queue/:booking_id", bookingH.GetMyQueuePosition)
 			barberAuth.PUT("/queue/reorder", bookingH.ReorderQueue)
 			barberAuth.PUT("/queue/:id/skip", bookingH.QueueSkip)
 			barberAuth.PUT("/queue/:id/start", bookingH.QueueStartService)
@@ -302,6 +305,11 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			barberAuth.GET("/home-service-requests", bookingH.ListHomeServiceRequests)
 			barberAuth.POST("/home-service-requests/:id/accept", bookingH.AcceptHomeService)
 			barberAuth.POST("/home-service-requests/:id/reject", bookingH.RejectHomeService)
+
+			// Home service End OTP approval workflow
+			barberAuth.POST("/home-service/:id/request-completion", bookingH.RequestCompletion)
+			barberAuth.POST("/home-service/:id/verify-completion-otp", bookingH.VerifyCompletionOTP)
+			barberAuth.POST("/home-service/:id/regenerate-completion-otp", bookingH.RegenerateCompletionOTP)
 
 			// Services management
 			barberAuth.GET("/services", barberH.ListServices)
@@ -652,6 +660,7 @@ func SetupRouter(db *gorm.DB, cfg *config.Config, jwtManager *auth.JWTManager, h
 			adminRoutes.POST("/orders/:id/assign-driver", deliveryOrderH.AssignDriver)
 			adminRoutes.GET("/delivery/presence", presenceH.GetOnlineDrivers)
 			adminRoutes.GET("/delivery/presence/summary", presenceH.GetPresenceSummary)
+			adminRoutes.GET("/delivery/presence-summary", presenceH.GetPresenceSummary)
 
 			// Delivery Partner Management
 			adminRoutes.GET("/delivery", adminH.ListDeliveryPartners)

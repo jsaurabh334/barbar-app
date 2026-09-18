@@ -138,10 +138,11 @@ type OrderStatusLog struct {
 type AssignmentStatus string
 
 const (
-	AssignmentPending  AssignmentStatus = "pending"
-	AssignmentAccepted AssignmentStatus = "accepted"
-	AssignmentRejected AssignmentStatus = "rejected"
-	AssignmentExpired  AssignmentStatus = "expired"
+	AssignmentPending   AssignmentStatus = "pending"
+	AssignmentAccepted  AssignmentStatus = "accepted"
+	AssignmentRejected  AssignmentStatus = "rejected"
+	AssignmentExpired   AssignmentStatus = "expired"
+	AssignmentCancelled AssignmentStatus = "cancelled"
 )
 
 type OrderDeliveryAssignment struct {

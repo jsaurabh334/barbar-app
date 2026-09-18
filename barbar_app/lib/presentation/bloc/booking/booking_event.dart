@@ -166,3 +166,49 @@ class RejectHomeServiceRequest extends BookingEvent {
   @override
   List<Object?> get props => [bookingId, reason];
 }
+
+class RequestCompletion extends BookingEvent {
+  final String bookingId;
+
+  const RequestCompletion(this.bookingId);
+
+  @override
+  List<Object?> get props => [bookingId];
+}
+
+class VerifyCompletionOtp extends BookingEvent {
+  final String bookingId;
+  final String otp;
+
+  const VerifyCompletionOtp({required this.bookingId, required this.otp});
+
+  @override
+  List<Object?> get props => [bookingId, otp];
+}
+
+class RegenerateCompletionOtp extends BookingEvent {
+  final String bookingId;
+
+  const RegenerateCompletionOtp(this.bookingId);
+
+  @override
+  List<Object?> get props => [bookingId];
+}
+
+class ResendCompletionOtp extends BookingEvent {
+  final String bookingId;
+
+  const ResendCompletionOtp(this.bookingId);
+
+  @override
+  List<Object?> get props => [bookingId];
+}
+
+class ProblemStillExists extends BookingEvent {
+  final String bookingId;
+
+  const ProblemStillExists(this.bookingId);
+
+  @override
+  List<Object?> get props => [bookingId];
+}

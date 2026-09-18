@@ -7,7 +7,6 @@ import (
 
 	"github.com/barbar-app/backend/internal/config"
 	"github.com/barbar-app/backend/internal/database"
-	"github.com/barbar-app/backend/internal/models"
 	"github.com/barbar-app/backend/internal/services/encryption"
 	"gorm.io/gorm"
 )
@@ -99,18 +98,11 @@ func main() {
 
 func seedAllData(db *gorm.DB) {
 	log.Println("Seeding demo data...")
-
-	var existingBarbers int64
-	db.Model(&models.Barber{}).Count(&existingBarbers)
-	if existingBarbers > 0 {
-		log.Println("Demo data already exists, skipping. Use --reset to re-seed.")
-		return
-	}
-
 	seedDemoCustomer(db)
 	seedDemoDelivery(db)
 	seedVendorsAndShops(db)
 	seedProducts(db)
+	seedDemoActivity(db)
 }
 
 func printHelp() {

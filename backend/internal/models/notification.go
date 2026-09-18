@@ -68,6 +68,8 @@ const (
 	NotifDeliveryReactivated  NotificationType = "delivery_reactivated"
 	NotifCustomerUpNext      NotificationType = "customer_up_next"
 	NotifCustomerCheckedIn   NotificationType = "customer_checked_in"
+	NotifBookingOTPGenerated NotificationType = "booking_otp_generated"
+	NotifBookingProblemReported NotificationType = "booking_problem_reported"
 )
 
 type DeliveryStatus string

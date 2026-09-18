@@ -405,11 +405,24 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
           width: double.infinity,
           child: ElevatedButton.icon(
             onPressed: () {
-              bloc.add(PickupOrder(order.id));
-              setState(() => _actionLoading = true);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => DeliveryOtpScreen(
+                    orderId: order.id,
+                    title: 'Pickup OTP',
+                    subtitle: 'Ask the vendor for the Pickup OTP to confirm handover',
+                    otpType: 'pickup',
+                  ),
+                ),
+              ).then((verified) {
+                if (verified == true) {
+                  _load();
+                }
+              });
             },
             icon: const Icon(LucideIcons.package, size: 18),
-            label: const Text('PICKUP ORDER', style: TextStyle(fontWeight: FontWeight.bold)),
+            label: const Text('PICKUP ORDER (ENTER OTP)', style: TextStyle(fontWeight: FontWeight.bold)),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF14B8A6),
               foregroundColor: Colors.black,
@@ -453,13 +466,12 @@ class _DeliveryOrderDetailScreenState extends State<DeliveryOrderDetailScreen> {
                 ),
               ).then((verified) {
                 if (verified == true) {
-                  bloc.add(DeliverOrder(order.id));
-                  setState(() => _actionLoading = true);
+                  _load();
                 }
               });
             },
             icon: const Icon(LucideIcons.checkCircle, size: 18),
-            label: const Text('CONFIRM DELIVERY', style: TextStyle(fontWeight: FontWeight.bold)),
+            label: const Text('CONFIRM DELIVERY (ENTER OTP)', style: TextStyle(fontWeight: FontWeight.bold)),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.success,
               foregroundColor: Colors.black,

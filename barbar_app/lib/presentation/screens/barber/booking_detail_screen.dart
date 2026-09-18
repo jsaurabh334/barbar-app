@@ -2,18 +2,35 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/booking_model.dart';
+import '../../../data/models/barber_model.dart';
 import '../../bloc/booking/booking_bloc.dart';
 import '../../bloc/booking/booking_event.dart';
+import '../../bloc/booking/booking_state.dart';
 
-class BarberBookingDetailScreen extends StatelessWidget {
+class BarberBookingDetailScreen extends StatefulWidget {
   final BookingModel booking;
 
   const BarberBookingDetailScreen({super.key, required this.booking});
 
   @override
+  State<BarberBookingDetailScreen> createState() => _BarberBookingDetailScreenState();
+}
+
+class _BarberBookingDetailScreenState extends State<BarberBookingDetailScreen> {
+  final TextEditingController _otpController = TextEditingController();
+
+  @override
+  void dispose() {
+    _otpController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final booking = widget.booking;
     final customerMap = booking.customer;
     final name = customerMap?['full_name'] as String? ?? booking.customerName;
     final phone = customerMap?['phone'] as String? ?? '';
@@ -22,6 +39,7 @@ class BarberBookingDetailScreen extends StatelessWidget {
     final isConfirmed = booking.status == 'confirmed';
     final isInProgress = booking.status == 'in_progress';
     final isCompleted = booking.status == 'completed';
+    final isAwaiting = booking.isHomeService && booking.isAwaitingCustomerConfirmation;
     final isPaid = booking.paymentStatus == 'paid';
 
     double total = 0;
@@ -37,284 +55,398 @@ class BarberBookingDetailScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('BOOKING DETAILS'),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Customer Header
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.cardBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 36,
-                    backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-                    child: const Icon(LucideIcons.user, size: 36, color: AppColors.primary),
+      body: BlocConsumer<BookingBloc, BookingState>(
+        listener: (context, state) {
+          if (state is CompletionOtpActionSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(state.message), backgroundColor: AppColors.success),
+            );
+            Navigator.pop(context);
+          } else if (state is BookingCompletedSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Service completed — customer approved'), backgroundColor: AppColors.success),
+            );
+            Navigator.pop(context);
+          }
+        },
+        builder: (context, state) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Customer Header
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBg,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.border),
                   ),
-                  const SizedBox(height: 12),
-                  Text(name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text(
-                    phone.isNotEmpty ? phone : 'No phone',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: phone.isNotEmpty ? AppColors.textSecondary : AppColors.textMuted,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: Column(
                     children: [
-                      if (phone.isNotEmpty)
-                        _actionChip(
-                          icon: LucideIcons.phone,
-                          label: 'Call',
-                          color: AppColors.success,
-                          onTap: () => _launchPhone(context, phone),
+                      CircleAvatar(
+                        radius: 36,
+                        backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                        backgroundImage: customerMap?['avatar'] != null && (customerMap!['avatar'] as String).isNotEmpty
+                            ? CachedNetworkImageProvider(BarberModel.getFullImageUrl(customerMap['avatar'] as String))
+                            : null,
+                        child: customerMap?['avatar'] == null || (customerMap!['avatar'] as String).isEmpty
+                            ? const Icon(LucideIcons.user, size: 36, color: AppColors.primary)
+                            : null,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Text(
+                        phone.isNotEmpty ? phone : 'No phone',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: phone.isNotEmpty ? AppColors.textSecondary : AppColors.textMuted,
                         ),
-                      if (phone.isNotEmpty) const SizedBox(width: 12),
-                      if (email.isNotEmpty)
-                        _actionChip(
-                          icon: LucideIcons.mail,
-                          label: 'Email',
-                          color: AppColors.info,
-                          onTap: () => _launchEmail(context, email),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Booking Info
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.cardBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _infoRow(LucideIcons.calendar, 'Date', _formatDate(booking.scheduledStart)),
-                  const Divider(height: 20, color: AppColors.border),
-                  _infoRow(LucideIcons.clock, 'Time',
-                    '${_formatTime(booking.scheduledStart)} - ${_formatTime(booking.scheduledEnd)}'),
-                  const Divider(height: 20, color: AppColors.border),
-                  _infoRow(LucideIcons.hourglass, 'Duration', '$totalMinutes min'),
-                  const Divider(height: 20, color: AppColors.border),
-                  _infoRow(LucideIcons.hash, 'Booking ID', booking.id.substring(0, 8).toUpperCase()),
-                  if (booking.staff != null) ...[
-                    const Divider(height: 20, color: AppColors.border),
-                    _infoRow(LucideIcons.user, 'Staff', booking.staff!['name'] ?? '—'),
-                  ],
-                  if (booking.customerNotes != null && booking.customerNotes!.isNotEmpty) ...[
-                    const Divider(height: 20, color: AppColors.border),
-                    _infoRow(LucideIcons.fileText, 'Notes', booking.customerNotes!),
-                  ],
-                  if (booking.isHomeService && booking.homeServiceAddress != null) ...[
-                    const Divider(height: 20, color: AppColors.border),
-                    _infoRow(LucideIcons.mapPin, 'Address', () {
-                      final addr = booking.homeServiceAddress!;
-                      final line1 = addr['line_1'] ?? addr['street'] ?? '';
-                      final city = addr['city'] ?? '';
-                      final state = addr['state'] ?? '';
-                      final pincode = addr['pincode'] ?? addr['zip'] ?? '';
-                      final parts = [
-                        if (line1.toString().isNotEmpty) line1,
-                        if (city.toString().isNotEmpty) city,
-                        if (state.toString().isNotEmpty) state,
-                        if (pincode.toString().isNotEmpty) pincode,
-                      ];
-                      return parts.join(', ');
-                    }()),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Payment Info
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.cardBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Payment', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  const SizedBox(height: 12),
-                  _infoRow(LucideIcons.creditCard, 'Method',
-                    booking.paymentMethod.isEmpty ? 'Not selected' : booking.paymentMethod.toUpperCase()),
-                  const Divider(height: 20, color: AppColors.border),
-                  _infoRow(
-                    booking.paymentStatus == 'paid' ? LucideIcons.checkCircle : LucideIcons.clock,
-                    'Status',
-                    booking.paymentStatus == 'paid' ? 'Paid' :
-                    booking.paymentStatus == 'initiated' ? 'Processing' :
-                    booking.paymentStatus == 'failed' ? 'Failed' : 'Pending',
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Services
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.cardBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Services', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  const SizedBox(height: 12),
-                  ...booking.services.map((s) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        const Icon(LucideIcons.scissors, size: 14, color: AppColors.textSecondary),
-                        const SizedBox(width: 10),
-                        Expanded(child: Text(s.name, style: const TextStyle(fontSize: 13))),
-                        Text('${s.durationMinutes} min',
-                          style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
-                        const SizedBox(width: 12),
-                        Text('₹${s.price.toInt()}',
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                      ],
-                    ),
-                  )),
-                  const Divider(height: 24, color: AppColors.border),
-                  if (booking.travelCharge > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Text('Travel Charge', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                          const Spacer(),
-                          Text('₹${booking.travelCharge.toInt()}',
-                            style: const TextStyle(fontSize: 13)),
+                          if (phone.isNotEmpty)
+                            _actionChip(
+                              icon: LucideIcons.phone,
+                              label: 'Call',
+                              color: AppColors.success,
+                              onTap: () => _launchPhone(context, phone),
+                            ),
+                          if (phone.isNotEmpty) const SizedBox(width: 12),
+                          if (email.isNotEmpty)
+                            _actionChip(
+                              icon: LucideIcons.mail,
+                              label: 'Email',
+                              color: AppColors.info,
+                              onTap: () => _launchEmail(context, email),
+                            ),
                         ],
                       ),
-                    ),
-                  Row(
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Booking Info
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBg,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Total', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const Spacer(),
-                      Text(
-                        '₹${total.toInt()}',
-                        style: const TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.primary,
-                        ),
+                      _infoRow(LucideIcons.calendar, 'Date', _formatDate(booking.scheduledStart)),
+                      const Divider(height: 20, color: AppColors.border),
+                      _infoRow(LucideIcons.clock, 'Time',
+                        '${_formatTime(booking.scheduledStart)} - ${_formatTime(booking.scheduledEnd)}'),
+                      const Divider(height: 20, color: AppColors.border),
+                      _infoRow(LucideIcons.hourglass, 'Duration', '$totalMinutes min'),
+                      const Divider(height: 20, color: AppColors.border),
+                      _infoRow(LucideIcons.hash, 'Booking ID', booking.id.substring(0, 8).toUpperCase()),
+                      if (booking.staff != null) ...[
+                        const Divider(height: 20, color: AppColors.border),
+                        _infoRow(LucideIcons.user, 'Staff', booking.staff!['name'] ?? '—'),
+                      ],
+                      if (booking.customerNotes != null && booking.customerNotes!.isNotEmpty) ...[
+                        const Divider(height: 20, color: AppColors.border),
+                        _infoRow(LucideIcons.fileText, 'Notes', booking.customerNotes!),
+                      ],
+                      if (booking.isHomeService && booking.homeServiceAddress != null) ...[
+                        const Divider(height: 20, color: AppColors.border),
+                        _infoRow(LucideIcons.mapPin, 'Address', () {
+                          final addr = booking.homeServiceAddress!;
+                          final line1 = addr['line_1'] ?? addr['street'] ?? '';
+                          final city = addr['city'] ?? '';
+                          final state = addr['state'] ?? '';
+                          final pincode = addr['pincode'] ?? addr['zip'] ?? '';
+                          final parts = [
+                            if (line1.toString().isNotEmpty) line1,
+                            if (city.toString().isNotEmpty) city,
+                            if (state.toString().isNotEmpty) state,
+                            if (pincode.toString().isNotEmpty) pincode,
+                          ];
+                          return parts.join(', ');
+                        }()),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Payment Info
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBg,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Payment', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      const SizedBox(height: 12),
+                      _infoRow(LucideIcons.creditCard, 'Method',
+                        booking.paymentMethod.isEmpty ? 'Not selected' : booking.paymentMethod.toUpperCase()),
+                      const Divider(height: 20, color: AppColors.border),
+                      _infoRow(
+                        booking.paymentStatus == 'paid' ? LucideIcons.checkCircle : LucideIcons.clock,
+                        'Status',
+                        booking.paymentStatus == 'paid' ? 'Paid' :
+                        booking.paymentStatus == 'initiated' ? 'Processing' :
+                        booking.paymentStatus == 'failed' ? 'Failed' : 'Pending',
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            if (isPending || isConfirmed || isInProgress || (isCompleted && !isPaid)) ...[
-              const SizedBox(height: 24),
-              // Action Buttons
-              if (isPending)
-                Row(
-                  children: [
-                    Expanded(
+                ),
+                const SizedBox(height: 16),
+
+                // Services
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBg,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Services', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      const SizedBox(height: 12),
+                      ...booking.services.map((s) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            const Icon(LucideIcons.scissors, size: 14, color: AppColors.textSecondary),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text(s.name, style: const TextStyle(fontSize: 13))),
+                            Text('${s.durationMinutes} min',
+                              style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                            const SizedBox(width: 12),
+                            Text('₹${s.price.toInt()}',
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                          ],
+                        ),
+                      )),
+                      const Divider(height: 24, color: AppColors.border),
+                      if (booking.travelCharge > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              const Text('Travel Charge', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                              const Spacer(),
+                              Text('₹${booking.travelCharge.toInt()}',
+                                style: const TextStyle(fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                      Row(
+                        children: [
+                          const Text('Total', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          const Spacer(),
+                          Text(
+                            '₹${total.toInt()}',
+                            style: const TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                if (isPending || isConfirmed || isInProgress || isAwaiting || (isCompleted && !isPaid)) ...[
+                  const SizedBox(height: 24),
+                  // Action Buttons
+                  if (isPending)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _actionButton(
+                            label: 'ACCEPT',
+                            color: AppColors.success,
+                            onTap: () {
+                              context.read<BookingBloc>().add(
+                                UpdateBookingStatus(bookingId: booking.id, status: 'confirmed'),
+                              );
+                              Navigator.pop(context);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _actionButton(
+                            label: 'REJECT',
+                            color: AppColors.error,
+                            outlined: true,
+                            onTap: () {
+                              context.read<BookingBloc>().add(
+                                UpdateBookingStatus(bookingId: booking.id, status: 'cancelled'),
+                              );
+                              Navigator.pop(context);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (isConfirmed)
+                    SizedBox(
+                      width: double.infinity,
                       child: _actionButton(
-                        label: 'ACCEPT',
+                        label: 'START SERVICE',
+                        color: AppColors.primary,
+                        onTap: () {
+                          context.read<BookingBloc>().add(
+                            UpdateBookingStatus(bookingId: booking.id, status: 'in_progress'),
+                          );
+                          Navigator.pop(context);
+                        },
+                      ),
+                    ),
+                  if (isInProgress && booking.isHomeService)
+                    SizedBox(
+                      width: double.infinity,
+                      child: _actionButton(
+                        label: 'FINISH SERVICE',
+                        color: AppColors.success,
+                        onTap: () {
+                          context.read<BookingBloc>().add(RequestCompletion(booking.id));
+                        },
+                      ),
+                    ),
+                  if (isInProgress && !booking.isHomeService)
+                    SizedBox(
+                      width: double.infinity,
+                      child: _actionButton(
+                        label: 'FINISH SERVICE',
                         color: AppColors.success,
                         onTap: () {
                           context.read<BookingBloc>().add(
-                            UpdateBookingStatus(bookingId: booking.id, status: 'confirmed'),
+                            UpdateBookingStatus(bookingId: booking.id, status: 'completed'),
                           );
                           Navigator.pop(context);
                         },
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
+                  if (isAwaiting) _buildOtpVerificationSection(context, booking),
+                  if (isCompleted && !isPaid)
+                    SizedBox(
+                      width: double.infinity,
                       child: _actionButton(
-                        label: 'REJECT',
-                        color: AppColors.error,
-                        outlined: true,
+                        label: 'COLLECT CASH',
+                        color: AppColors.success,
                         onTap: () {
                           context.read<BookingBloc>().add(
-                            UpdateBookingStatus(bookingId: booking.id, status: 'cancelled'),
+                            PayBooking(
+                              bookingId: booking.id,
+                              method: 'cash',
+                              status: 'paid',
+                              reference: 'CASH${DateTime.now().millisecondsSinceEpoch}',
+                            ),
                           );
                           Navigator.pop(context);
                         },
                       ),
                     ),
-                  ],
-                ),
-              if (isConfirmed)
-                SizedBox(
-                  width: double.infinity,
-                  child: _actionButton(
-                    label: 'START SERVICE',
-                    color: AppColors.primary,
-                    onTap: () {
-                      context.read<BookingBloc>().add(
-                        UpdateBookingStatus(bookingId: booking.id, status: 'in_progress'),
-                      );
-                      Navigator.pop(context);
-                    },
-                  ),
-                ),
-              if (isInProgress)
-                SizedBox(
-                  width: double.infinity,
-                  child: _actionButton(
-                    label: 'FINISH SERVICE',
-                    color: AppColors.success,
-                    onTap: () {
-                      context.read<BookingBloc>().add(
-                        UpdateBookingStatus(bookingId: booking.id, status: 'completed'),
-                      );
-                      Navigator.pop(context);
-                    },
-                  ),
-                ),
-              if (isCompleted && !isPaid)
-                SizedBox(
-                  width: double.infinity,
-                  child: _actionButton(
-                    label: 'COLLECT CASH',
-                    color: AppColors.success,
-                    onTap: () {
-                      context.read<BookingBloc>().add(
-                        PayBooking(
-                          bookingId: booking.id,
-                          method: 'cash',
-                          status: 'paid',
-                          reference: 'CASH${DateTime.now().millisecondsSinceEpoch}',
-                        ),
-                      );
-                      Navigator.pop(context);
-                    },
-                  ),
-                ),
+                ],
+                const SizedBox(height: 24),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildOtpVerificationSection(BuildContext context, BookingModel booking) {
+    final isLoading = context.select<BookingBloc, bool>(
+      (bloc) => bloc.state is BookingLoading,
+    );
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(LucideIcons.shieldCheck, size: 18, color: AppColors.warning),
+              const SizedBox(width: 8),
+              const Text('Customer Confirmation', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
             ],
-            const SizedBox(height: 24),
-          ],
-        ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Ask the customer for the OTP they received. Verify it to complete the booking.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _otpController,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 8),
+            decoration: const InputDecoration(
+              counterText: '',
+              hintText: '••••••',
+              filled: true,
+              fillColor: AppColors.surface,
+              border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: _actionButton(
+              label: isLoading ? 'VERIFYING...' : 'VERIFY OTP',
+              color: AppColors.success,
+              onTap: () {
+                final otp = _otpController.text.trim();
+                if (otp.length != 6) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Enter the 6-digit OTP'), backgroundColor: AppColors.error),
+                  );
+                  return;
+                }
+                FocusScope.of(context).unfocus();
+                context.read<BookingBloc>().add(
+                  VerifyCompletionOtp(bookingId: booking.id, otp: otp),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: _actionButton(
+              label: 'REGENERATE OTP',
+              color: AppColors.warning,
+              outlined: true,
+              onTap: () {
+                context.read<BookingBloc>().add(RegenerateCompletionOtp(booking.id));
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

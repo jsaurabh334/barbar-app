@@ -42,4 +42,9 @@ abstract class BookingRepository {
   Future<void> startService(String bookingId);
   Future<void> completeService(String bookingId);
   Future<void> markNoShow(String bookingId);
+  Future<Map<String, dynamic>> requestCompletion(String bookingId);
+  Future<BookingModel> verifyCompletionOtp(String bookingId, String otp);
+  Future<Map<String, dynamic>> regenerateCompletionOtp(String bookingId);
+  Future<Map<String, dynamic>> resendCompletionOtp(String bookingId);
+  Future<BookingModel> problemStillExists(String bookingId);
 }

@@ -27,6 +27,7 @@ import '../bloc/notification/notification_bloc.dart';
 import '../bloc/notification/notification_event.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/notification_bell.dart';
+import '../widgets/completion_otp_card.dart';
 
 class HomeScreen extends StatefulWidget {
   final WebSocketClient webSocketClient;
@@ -42,6 +43,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
+  final Map<String, String> _otpByBookingId = {};
   bool _isLiveSynced = false;
   double? _selectedMinRating;
   bool _openNow = false;
@@ -89,6 +91,16 @@ class _HomeScreenState extends State<HomeScreen> {
             context.read<BookingBloc>().add(FetchAllBookings());
           }
         }
+        return;
+      }
+      if (type == 'booking_otp_generated') {
+        final payload = event['payload'] as Map<String, dynamic>?;
+        final bookingId = payload?['booking_id'] as String?;
+        final otp = payload?['completion_otp'] as String?;
+        if (bookingId != null && otp != null) {
+          setState(() => _otpByBookingId[bookingId] = otp);
+        }
+        context.read<BookingBloc>().add(FetchAllBookings());
         return;
       }
       if (_activeBooking == null) return;
@@ -627,12 +639,27 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  bool _isActiveBooking(BookingModel? b) {
+    return b?.status == 'confirmed' ||
+        b?.status == 'in_progress' ||
+        b?.status == BookingModel.statusAwaitingCustomerConfirmation;
+  }
+
   Widget _buildActiveQueueTrackerWidget() {
+    String formatBookingTime(String dateStr) {
+      final dt = DateTime.tryParse(dateStr)?.toLocal();
+      if (dt == null) return dateStr;
+      final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+      final min = dt.minute.toString().padLeft(2, '0');
+      final amPm = dt.hour >= 12 ? 'PM' : 'AM';
+      return '${dt.day}/${dt.month}/${dt.year}  $hour:$min $amPm';
+    }
+
     return BlocConsumer<BookingBloc, BookingState>(
       listener: (context, state) {
         if (state is BookingsLoaded) {
           final active = state.bookings.cast<BookingModel?>().firstWhere(
-            (b) => b?.status == 'confirmed' || b?.status == 'in_progress',
+            _isActiveBooking,
             orElse: () => null,
           );
           if (active?.id != _activeBooking?.id) {
@@ -645,7 +672,7 @@ class _HomeScreenState extends State<HomeScreen> {
         
         if (state is BookingsLoaded) {
           currentActive = state.bookings.cast<BookingModel?>().firstWhere(
-            (b) => b?.status == 'confirmed' || b?.status == 'in_progress',
+            _isActiveBooking,
             orElse: () => null,
           );
         }
@@ -654,16 +681,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
         final booking = currentActive;
         final ahead = booking.queuePosition > 1 ? booking.queuePosition - 1 : 0;
+        final isAwaitingOtp =
+            booking.isHomeService && booking.status == BookingModel.statusAwaitingCustomerConfirmation;
+
+        final bookingDate = DateTime.tryParse(booking.scheduledStart)?.toLocal();
+        final now = DateTime.now();
+        final isToday = bookingDate != null &&
+            bookingDate.year == now.year &&
+            bookingDate.month == now.month &&
+            bookingDate.day == now.day;
 
         return GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => QueueTrackerScreen(webSocketClient: widget.webSocketClient),
-              ),
-            );
-          },
+          onTap: isAwaitingOtp
+              ? null
+              : () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => QueueTrackerScreen(webSocketClient: widget.webSocketClient),
+                    ),
+                  );
+                },
           child: GlassCard(
             padding: const EdgeInsets.all(20),
             opacity: 0.12,
@@ -673,9 +711,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'YOUR ACTIVE QUEUE',
-                      style: TextStyle(
+                    Text(
+                      isAwaitingOtp
+                          ? 'CUSTOMER CONFIRMATION'
+                          : (isToday ? 'YOUR ACTIVE QUEUE' : 'UPCOMING BOOKING'),
+                      style: const TextStyle(
                         color: AppColors.primary,
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
@@ -689,7 +729,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        booking.status.toUpperCase(),
+                        isAwaitingOtp
+                            ? 'AWAITING OTP'
+                            : (isToday ? booking.status.toUpperCase() : 'CONFIRMED'),
                         style: const TextStyle(
                           color: AppColors.primary,
                           fontWeight: FontWeight.bold,
@@ -719,45 +761,72 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '#${booking.queuePosition}',
-                          style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                            color: AppColors.primary,
-                            fontSize: 36,
-                            fontWeight: FontWeight.w900,
+                    if (isToday && !isAwaitingOtp)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '#${booking.queuePosition}',
+                            style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                              color: AppColors.primary,
+                              fontSize: 36,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
-                        ),
-                        const Text('Queue Spot', style: TextStyle(fontSize: 10)),
-                      ],
-                    ),
+                          const Text('Queue Spot', style: TextStyle(fontSize: 10)),
+                        ],
+                      ),
                   ],
                 ),
-                const Divider(height: 24, color: AppColors.border),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
+                if (isAwaitingOtp)
+                  CompletionOtpCard(booking: booking, otp: _otpByBookingId[booking.id])
+                else ...[
+                  const Divider(height: 24, color: AppColors.border),
+                  if (isToday)
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Icon(LucideIcons.users, size: 16, color: AppColors.textSecondary),
-                        const SizedBox(width: 8),
-                        Text('$ahead clients ahead of you'),
+                        Row(
+                          children: [
+                            const Icon(LucideIcons.users, size: 16, color: AppColors.textSecondary),
+                            const SizedBox(width: 8),
+                            Text('$ahead clients ahead of you'),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            const Icon(LucideIcons.clock, size: 16, color: AppColors.primary),
+                            const SizedBox(width: 8),
+                            Text(
+                              '~${booking.estimatedWaitMinutes} Mins wait',
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+                            ),
+                          ],
+                        ),
                       ],
-                    ),
-                    Row(
+                    )
+                  else
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(LucideIcons.clock, size: 16, color: AppColors.primary),
-                        const SizedBox(width: 8),
+                        Row(
+                          children: [
+                            const Icon(LucideIcons.calendar, size: 16, color: AppColors.primary),
+                            const SizedBox(width: 8),
+                            Text(
+                              formatBookingTime(booking.scheduledStart),
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
                         Text(
-                          '~${booking.estimatedWaitMinutes} Mins wait',
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+                          'Live queue and wait times will activate tomorrow.',
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
                         ),
                       ],
                     ),
-                  ],
-                ),
+                ],
               ],
             ),
           ),

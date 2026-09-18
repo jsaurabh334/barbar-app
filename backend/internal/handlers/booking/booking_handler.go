@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/http"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/barbar-app/backend/internal/config"
 	"github.com/barbar-app/backend/internal/models"
 	notifService "github.com/barbar-app/backend/internal/services/notification"
+	settlementSvc "github.com/barbar-app/backend/internal/services/settlement"
 	"github.com/barbar-app/backend/internal/utils"
 	"github.com/barbar-app/backend/internal/websocket"
 	"github.com/barbar-app/backend/internal/services/queue"
@@ -21,13 +23,14 @@ import (
 )
 
 type BookingHandler struct {
-	db       *gorm.DB
-	notifSvc notifService.Dispatcher
-	hub      *websocket.Hub
+	db         *gorm.DB
+	notifSvc   notifService.Dispatcher
+	hub        *websocket.Hub
+	settlement settlementSvc.SettlementService
 }
 
-func NewBookingHandler(db *gorm.DB, dispatcher notifService.Dispatcher, hub *websocket.Hub) *BookingHandler {
-	return &BookingHandler{db: db, notifSvc: dispatcher, hub: hub}
+func NewBookingHandler(db *gorm.DB, dispatcher notifService.Dispatcher, hub *websocket.Hub, settlement settlementSvc.SettlementService) *BookingHandler {
+	return &BookingHandler{db: db, notifSvc: dispatcher, hub: hub, settlement: settlement}
 }
 
 func (h *BookingHandler) refreshQueue(barberID uuid.UUID) {
@@ -241,44 +244,41 @@ func (h *BookingHandler) Create(c *gin.Context) {
 	services := assignment.Services
 	assignedStaffID := assignment.StaffID
 
-	// Queue assigned immediately for walk-ins (within 30 min), otherwise at T-30 by scheduler
 	isWalkIn := req.ScheduledStart.Before(time.Now().Add(30 * time.Minute))
 	var queuePosition int
 	var estimatedWait int
 	var queueAssignedAt *time.Time
 
-	if isWalkIn {
-		var aheadCount int64
-		tx.Model(&models.Booking{}).
-			Where("staff_id = ? AND status IN ?", assignedStaffID, []models.BookingStatus{models.BookingStatusConfirmed, models.BookingStatusCheckedIn, models.BookingStatusWaiting, models.BookingStatusInProgress}).
-			Count(&aheadCount)
-		queuePosition = int(aheadCount) + 1
-		now := time.Now()
-		queueAssignedAt = &now
+	var aheadCount int64
+	tx.Model(&models.Booking{}).
+		Where("staff_id = ? AND status IN ? AND DATE(scheduled_start) = DATE(?)", assignedStaffID, []models.BookingStatus{models.BookingStatusPending, models.BookingStatusConfirmed, models.BookingStatusCheckedIn, models.BookingStatusWaiting, models.BookingStatusInProgress}, req.ScheduledStart).
+		Count(&aheadCount)
+	queuePosition = int(aheadCount) + 1
+	now := time.Now()
+	queueAssignedAt = &now
 
-		var aheadBookings []models.Booking
-		tx.Where("staff_id = ? AND status IN ?", assignedStaffID, []models.BookingStatus{models.BookingStatusInProgress, models.BookingStatusCheckedIn, models.BookingStatusWaiting}).Order("queue_position ASC").Find(&aheadBookings)
-		for _, ab := range aheadBookings {
-			dur := ab.TotalDuration
-			if dur <= 0 {
-				dur = barber.SlotDuration
+	var aheadBookings []models.Booking
+	tx.Where("staff_id = ? AND status IN ? AND DATE(scheduled_start) = DATE(?)", assignedStaffID, []models.BookingStatus{models.BookingStatusInProgress, models.BookingStatusCheckedIn, models.BookingStatusWaiting, models.BookingStatusConfirmed, models.BookingStatusPending}, req.ScheduledStart).Order("queue_position ASC").Find(&aheadBookings)
+	for _, ab := range aheadBookings {
+		dur := ab.TotalDuration
+		if dur <= 0 {
+			dur = barber.SlotDuration
+		}
+		if ab.Status == models.BookingStatusInProgress {
+			start := ab.CreatedAt
+			if ab.ActualStart != nil {
+				start = *ab.ActualStart
+			} else if !ab.ScheduledStart.IsZero() {
+				start = ab.ScheduledStart
 			}
-			if ab.Status == models.BookingStatusInProgress {
-				start := ab.CreatedAt
-				if ab.ActualStart != nil {
-					start = *ab.ActualStart
-				} else if !ab.ScheduledStart.IsZero() {
-					start = ab.ScheduledStart
-				}
-				elapsed := int(time.Since(start).Minutes())
-				remaining := dur - elapsed
-				if remaining < 0 {
-					remaining = 0
-				}
-				estimatedWait += remaining + barber.BufferBetweenSlots
-			} else {
-				estimatedWait += dur + barber.BufferBetweenSlots
+			elapsed := int(time.Since(start).Minutes())
+			remaining := dur - elapsed
+			if remaining < 0 {
+				remaining = 0
 			}
+			estimatedWait += remaining + barber.BufferBetweenSlots
+		} else {
+			estimatedWait += dur + barber.BufferBetweenSlots
 		}
 	}
 
@@ -489,7 +489,7 @@ func (h *BookingHandler) Cancel(c *gin.Context) {
 		}
 	}
 
-	if booking.Status != models.BookingStatusPending && booking.Status != models.BookingStatusConfirmed && booking.Status != models.BookingStatusHomeServicePending {
+	if booking.Status != models.BookingStatusPending && booking.Status != models.BookingStatusConfirmed && booking.Status != models.BookingStatusHomeServicePending && booking.Status != models.BookingStatusAwaitingCustomerConfirmation {
 		utils.BadRequestResponse(c, "Booking cannot be cancelled from status: "+string(booking.Status))
 		return
 	}
@@ -564,6 +564,12 @@ func (h *BookingHandler) UpdateStatus(c *gin.Context) {
 
 	fromStatus := booking.Status
 	toStatus := models.BookingStatus(req.Status)
+
+	// Home service completion requires the End OTP approval workflow.
+	if booking.IsHomeService && toStatus == models.BookingStatusCompleted {
+		utils.BadRequestResponse(c, "Home service completion requires customer OTP verification")
+		return
+	}
 
 	// Validate status transition
 	allowed := false
@@ -640,6 +646,509 @@ func (h *BookingHandler) UpdateStatus(c *gin.Context) {
 	h.refreshQueue(booking.BarberID)
 
 	go h.sendStatusUpdateNotifications(&booking)
+
+	utils.SuccessResponse(c, booking)
+}
+
+const maxCompletionOTPAttempts = 5
+
+// isAssignedActor reports whether the given user is the barber owner of the
+// booking or the assigned staff member performing it.
+func (h *BookingHandler) isAssignedActor(booking *models.Booking, userID uuid.UUID) bool {
+	if booking.BarberID != uuid.Nil {
+		var barber models.Barber
+		if err := h.db.Where("id = ?", booking.BarberID).First(&barber).Error; err == nil && barber.UserID != uuid.Nil && barber.UserID == userID {
+			return true
+		}
+	}
+	if booking.StaffID != nil {
+		var staff models.BarberStaff
+		if err := h.db.Where("id = ?", *booking.StaffID).First(&staff).Error; err == nil && staff.UserID != nil && *staff.UserID == userID {
+			return true
+		}
+	}
+	return false
+}
+
+// generateCompletionOTP creates a fresh End OTP, stores only its HMAC-SHA256
+// hash on the booking, and invalidates any previous pending OTP (retaining its
+// hash so a verify attempt with the superseded code gets a clear error).
+func (h *BookingHandler) generateCompletionOTP(booking *models.Booking) string {
+	code := utils.GenerateOTP(6)
+	now := time.Now()
+	booking.EndOTPPrevHash = booking.EndOTPHash
+	booking.EndOTPHash = utils.HashOTP(code)
+	booking.EndOTPGeneratedAt = &now
+	booking.EndOTPVerifiedAt = nil
+	booking.EndOTPAttempts = 0
+	return code
+}
+
+// deliverCompletionOTP sends the plaintext OTP ONLY to the customer via
+// WebSocket and push notification. It is never returned to the barber.
+func (h *BookingHandler) deliverCompletionOTP(booking *models.Booking, code string) {
+	if h.hub != nil {
+		h.hub.SendToUser(booking.CustomerID, &websocket.WSMessage{
+			Type: websocket.MsgBookingOTPGenerated,
+			Payload: map[string]interface{}{
+				"version":         1,
+				"event":           "booking_otp_generated",
+				"booking_id":      booking.ID.String(),
+				"completion_otp":  code,
+				"status":          string(booking.Status),
+			},
+		})
+	}
+	if h.notifSvc != nil {
+		h.notifSvc.Dispatch(context.Background(), notifService.NotificationEvent{
+			Type:       models.NotifBookingOTPGenerated,
+			ReceiverID: booking.CustomerID,
+			Role:       notifService.RoleCustomer,
+			Data: map[string]interface{}{
+				"booking_id":     booking.ID.String(),
+				"completion_otp": code,
+			},
+		})
+	}
+}
+
+func (h *BookingHandler) notifyBarberProblem(booking *models.Booking) {
+	var barber models.Barber
+	h.db.First(&barber, booking.BarberID)
+
+	data := map[string]interface{}{"booking_id": booking.ID.String()}
+	if h.notifSvc != nil && barber.UserID != uuid.Nil {
+		h.notifSvc.Dispatch(context.Background(), notifService.NotificationEvent{
+			Type:       models.NotifBookingProblemReported,
+			ReceiverID: barber.UserID,
+			Role:       notifService.RoleBarber,
+			Data:       data,
+		})
+	}
+
+	if h.hub != nil {
+		if barber.UserID != uuid.Nil {
+			h.hub.SendToUser(barber.UserID, &websocket.WSMessage{
+				Type: websocket.MsgBookingUpdate,
+				Payload: map[string]interface{}{
+					"booking_id": booking.ID.String(),
+					"status":     string(booking.Status),
+				},
+			})
+		}
+		if booking.StaffID != nil {
+			var staff models.BarberStaff
+			if h.db.First(&staff, *booking.StaffID).Error == nil && staff.UserID != nil {
+				h.hub.SendToUser(*staff.UserID, &websocket.WSMessage{
+					Type: websocket.MsgBookingUpdate,
+					Payload: map[string]interface{}{
+						"booking_id": booking.ID.String(),
+						"status":     string(booking.Status),
+					},
+				})
+			}
+		}
+	}
+}
+
+// RequestCompletion is called by the barber/staff when the home service work is
+// finished. It moves the booking to awaiting_customer_confirmation and delivers
+// an End OTP to the customer. The OTP itself is never included in the response.
+func (h *BookingHandler) RequestCompletion(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+	claims := c.MustGet("claims").(*auth.Claims)
+
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid booking ID")
+		return
+	}
+
+	var booking models.Booking
+	if err := h.db.First(&booking, id).Error; err != nil {
+		utils.NotFoundResponse(c, "Booking not found")
+		return
+	}
+
+	if !h.isAssignedActor(&booking, userID) {
+		utils.ForbiddenResponse(c, "Only the assigned barber or staff can request completion")
+		return
+	}
+	if !booking.IsHomeService {
+		utils.BadRequestResponse(c, "Completion OTP applies to home service bookings only")
+		return
+	}
+	if booking.Status != models.BookingStatusInProgress {
+		utils.BadRequestResponse(c, "Booking must be in progress to request completion")
+		return
+	}
+
+	code := h.generateCompletionOTP(&booking)
+	fromStatus := booking.Status
+
+	tx := h.db.Begin()
+	// Optimistic guard: only move an in_progress booking into awaiting
+	// confirmation. If the booking was cancelled or otherwise moved in the
+	// meantime, the update affects zero rows and the request is rejected.
+	res := tx.Model(&models.Booking{}).
+		Where("id = ? AND status = ?", booking.ID, models.BookingStatusInProgress).
+		Updates(map[string]interface{}{
+			"status":               models.BookingStatusAwaitingCustomerConfirmation,
+			"end_otp_hash":         booking.EndOTPHash,
+			"end_otp_prev_hash":    booking.EndOTPPrevHash,
+			"end_otp_generated_at": booking.EndOTPGeneratedAt,
+			"end_otp_verified_at":  nil,
+			"end_otp_attempts":     0,
+		})
+	if res.Error != nil {
+		tx.Rollback()
+		utils.InternalErrorResponse(c, "Failed to request completion")
+		return
+	}
+	if res.RowsAffected == 0 {
+		tx.Rollback()
+		utils.ErrorResponse(c, http.StatusConflict, "Booking state changed. Please refresh and try again")
+		return
+	}
+	tx.Create(&models.BookingStatusLog{
+		BookingID:      booking.ID,
+		FromStatus:     fromStatus,
+		ToStatus:       models.BookingStatusAwaitingCustomerConfirmation,
+		ChangedBy:      userID,
+		ChangedByRole:  claims.Role,
+		Reason:         "Completion requested, End OTP generated",
+	})
+	if err := tx.Commit().Error; err != nil {
+		utils.InternalErrorResponse(c, "Failed to request completion")
+		return
+	}
+
+	booking.Status = models.BookingStatusAwaitingCustomerConfirmation
+
+	h.deliverCompletionOTP(&booking, code)
+
+	utils.SuccessResponse(c, gin.H{
+		"booking_id":            booking.ID,
+		"status":                booking.Status,
+		"end_otp_generated_at":  booking.EndOTPGeneratedAt,
+	})
+}
+
+// VerifyCompletionOTP is called by the barber/staff with the OTP shared by the
+// customer. Success moves the booking to completed. This is the exact hook where
+// future escrow/payment settlement should be released.
+func (h *BookingHandler) VerifyCompletionOTP(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+	claims := c.MustGet("claims").(*auth.Claims)
+
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid booking ID")
+		return
+	}
+
+	var req struct {
+		OTP string `json:"otp" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "OTP is required")
+		return
+	}
+
+	var booking models.Booking
+	if err := h.db.First(&booking, id).Error; err != nil {
+		utils.NotFoundResponse(c, "Booking not found")
+		return
+	}
+
+	if !h.isAssignedActor(&booking, userID) {
+		utils.ForbiddenResponse(c, "Only the assigned barber or staff can verify the OTP")
+		return
+	}
+	if !booking.IsHomeService {
+		utils.BadRequestResponse(c, "Completion OTP applies to home service bookings only")
+		return
+	}
+	if booking.Status != models.BookingStatusAwaitingCustomerConfirmation {
+		utils.BadRequestResponse(c, "Booking is not awaiting customer confirmation")
+		return
+	}
+	if booking.EndOTPHash == "" {
+		utils.BadRequestResponse(c, "No completion OTP has been generated for this booking")
+		return
+	}
+	if booking.EndOTPAttempts >= maxCompletionOTPAttempts {
+		utils.BadRequestResponse(c, "Too many failed attempts. Ask the customer to resend a new OTP")
+		return
+	}
+
+	booking.EndOTPAttempts++
+	if !utils.VerifyOTP(booking.EndOTPHash, req.OTP) {
+		// Distinguish an OTP that was superseded by a resend from a plain wrong
+		// code. A superseded OTP is not penalised against the attempt limit.
+		if booking.EndOTPPrevHash != "" && utils.VerifyOTP(booking.EndOTPPrevHash, req.OTP) {
+			utils.BadRequestResponse(c, "OTP has been replaced. Ask the customer to share the latest OTP")
+			return
+		}
+		h.db.Model(&booking).Update("end_otp_attempts", gorm.Expr("end_otp_attempts + 1"))
+		remaining := maxCompletionOTPAttempts - booking.EndOTPAttempts
+		utils.BadRequestResponse(c, fmt.Sprintf("Invalid OTP. %d attempt(s) remaining.", remaining))
+		return
+	}
+
+	now := time.Now()
+	fromStatus := booking.Status
+
+	tx := h.db.Begin()
+	// Optimistic guard: only transition if the booking is still awaiting
+	// confirmation with the exact OTP hash that was verified. A concurrent
+	// resend, cancel or reassignment leaves RowsAffected == 0 and aborts the
+	// completion instead of clobbering the newer state.
+	res := tx.Model(&models.Booking{}).
+		Where("id = ? AND status = ? AND end_otp_hash = ?", booking.ID, fromStatus, booking.EndOTPHash).
+		Updates(map[string]interface{}{
+			"status":              models.BookingStatusCompleted,
+			"end_otp_verified_at": &now,
+			"actual_end":          &now,
+			"completed_at":        &now,
+		})
+	if res.Error != nil {
+		tx.Rollback()
+		utils.InternalErrorResponse(c, "Failed to complete booking")
+		return
+	}
+	if res.RowsAffected == 0 {
+		tx.Rollback()
+		utils.ErrorResponse(c, http.StatusConflict, "Booking state changed. Please refresh and try again")
+		return
+	}
+	tx.Create(&models.BookingStatusLog{
+		BookingID:      booking.ID,
+		FromStatus:     fromStatus,
+		ToStatus:       models.BookingStatusCompleted,
+		ChangedBy:      userID,
+		ChangedByRole:  claims.Role,
+		Reason:         "End OTP verified by customer",
+	})
+	tx.Model(&models.Barber{}).Where("id = ?", booking.BarberID).Update("current_queue_length", gorm.Expr("GREATEST(current_queue_length - 1, 0)"))
+	if h.settlement != nil {
+		if err := h.settlement.RecordCompletionEarnings(tx, &booking); err != nil {
+			tx.Rollback()
+			utils.InternalErrorResponse(c, "Failed to record completion settlement")
+			return
+		}
+	}
+	if err := tx.Commit().Error; err != nil {
+		utils.InternalErrorResponse(c, "Failed to complete booking")
+		return
+	}
+
+	booking.Status = models.BookingStatusCompleted
+	booking.EndOTPVerifiedAt = &now
+	booking.ActualEnd = &now
+	booking.CompletedAt = &now
+
+	h.refreshQueue(booking.BarberID)
+
+	// Escrow: the barber's earning is now captured as "pending" (held). It is
+	// released to the barber's wallet by settlement.SettleBarberEarning.
+	go h.sendStatusUpdateNotifications(&booking)
+
+	utils.SuccessResponse(c, booking)
+}
+
+// RegenerateCompletionOTP lets the barber/staff issue a fresh OTP (for example
+// when the customer never received it). The previous OTP is invalidated.
+func (h *BookingHandler) RegenerateCompletionOTP(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid booking ID")
+		return
+	}
+
+	var booking models.Booking
+	if err := h.db.First(&booking, id).Error; err != nil {
+		utils.NotFoundResponse(c, "Booking not found")
+		return
+	}
+
+	if !h.isAssignedActor(&booking, userID) {
+		utils.ForbiddenResponse(c, "Only the assigned barber or staff can regenerate the OTP")
+		return
+	}
+	if !booking.IsHomeService {
+		utils.BadRequestResponse(c, "Completion OTP applies to home service bookings only")
+		return
+	}
+	if booking.Status != models.BookingStatusAwaitingCustomerConfirmation {
+		utils.BadRequestResponse(c, "Booking is not awaiting customer confirmation")
+		return
+	}
+
+	code := h.generateCompletionOTP(&booking)
+	// Guard against a concurrent verify/complete: only replace the OTP while the
+	// booking is still awaiting confirmation with the same hash we read.
+	res := h.db.Model(&models.Booking{}).
+		Where("id = ? AND status = ? AND end_otp_hash = ?", booking.ID, models.BookingStatusAwaitingCustomerConfirmation, booking.EndOTPPrevHash).
+		Updates(map[string]interface{}{
+			"end_otp_hash":         booking.EndOTPHash,
+			"end_otp_prev_hash":    booking.EndOTPPrevHash,
+			"end_otp_generated_at": booking.EndOTPGeneratedAt,
+			"end_otp_verified_at":  nil,
+			"end_otp_attempts":     0,
+		})
+	if res.Error != nil {
+		utils.InternalErrorResponse(c, "Failed to regenerate OTP")
+		return
+	}
+	if res.RowsAffected == 0 {
+		utils.ErrorResponse(c, http.StatusConflict, "Booking state changed. Please refresh and try again")
+		return
+	}
+
+	h.deliverCompletionOTP(&booking, code)
+
+	utils.SuccessResponse(c, gin.H{
+		"booking_id":            booking.ID,
+		"status":                booking.Status,
+		"end_otp_generated_at":  booking.EndOTPGeneratedAt,
+	})
+}
+
+// ResendCompletionOTP lets the customer request a fresh OTP at any time while
+// the booking awaits their confirmation. The previous OTP is invalidated.
+func (h *BookingHandler) ResendCompletionOTP(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid booking ID")
+		return
+	}
+
+	var booking models.Booking
+	if err := h.db.First(&booking, id).Error; err != nil {
+		utils.NotFoundResponse(c, "Booking not found")
+		return
+	}
+
+	if booking.CustomerID != userID {
+		utils.ForbiddenResponse(c, "Not your booking")
+		return
+	}
+	if !booking.IsHomeService {
+		utils.BadRequestResponse(c, "Completion OTP applies to home service bookings only")
+		return
+	}
+	if booking.Status != models.BookingStatusAwaitingCustomerConfirmation {
+		utils.BadRequestResponse(c, "Booking is not awaiting customer confirmation")
+		return
+	}
+
+	code := h.generateCompletionOTP(&booking)
+	// Guard against a concurrent verify/complete: only replace the OTP while the
+	// booking is still awaiting confirmation with the same hash we read.
+	res := h.db.Model(&models.Booking{}).
+		Where("id = ? AND status = ? AND end_otp_hash = ?", booking.ID, models.BookingStatusAwaitingCustomerConfirmation, booking.EndOTPPrevHash).
+		Updates(map[string]interface{}{
+			"end_otp_hash":         booking.EndOTPHash,
+			"end_otp_prev_hash":    booking.EndOTPPrevHash,
+			"end_otp_generated_at": booking.EndOTPGeneratedAt,
+			"end_otp_verified_at":  nil,
+			"end_otp_attempts":     0,
+		})
+	if res.Error != nil {
+		utils.InternalErrorResponse(c, "Failed to resend OTP")
+		return
+	}
+	if res.RowsAffected == 0 {
+		utils.ErrorResponse(c, http.StatusConflict, "Booking state changed. Please refresh and try again")
+		return
+	}
+
+	h.deliverCompletionOTP(&booking, code)
+
+	utils.SuccessResponse(c, gin.H{
+		"booking_id":            booking.ID,
+		"status":                booking.Status,
+		"end_otp_generated_at":  booking.EndOTPGeneratedAt,
+	})
+}
+
+// ProblemStillExists is called by the customer when they are not satisfied. The
+// booking moves back to in_progress (OTP invalidated) and the barber/staff are
+// notified to continue working.
+func (h *BookingHandler) ProblemStillExists(c *gin.Context) {
+	userID := c.MustGet("user").(uuid.UUID)
+	claims := c.MustGet("claims").(*auth.Claims)
+
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.BadRequestResponse(c, "Invalid booking ID")
+		return
+	}
+
+	var booking models.Booking
+	if err := h.db.First(&booking, id).Error; err != nil {
+		utils.NotFoundResponse(c, "Booking not found")
+		return
+	}
+
+	if booking.CustomerID != userID {
+		utils.ForbiddenResponse(c, "Not your booking")
+		return
+	}
+	if !booking.IsHomeService {
+		utils.BadRequestResponse(c, "This action applies to home service bookings only")
+		return
+	}
+	if booking.Status != models.BookingStatusAwaitingCustomerConfirmation {
+		utils.BadRequestResponse(c, "Booking is not awaiting customer confirmation")
+		return
+	}
+
+	fromStatus := booking.Status
+
+	// Optimistic guard: only revert a booking that is still awaiting
+	// confirmation. If it was completed or cancelled concurrently, do not
+	// clobber the newer state.
+	res := h.db.Model(&models.Booking{}).
+		Where("id = ? AND status = ?", booking.ID, models.BookingStatusAwaitingCustomerConfirmation).
+		Updates(map[string]interface{}{
+			"status":              models.BookingStatusInProgress,
+			"end_otp_hash":        "",
+			"end_otp_prev_hash":   "",
+			"end_otp_generated_at": nil,
+			"end_otp_verified_at": nil,
+			"end_otp_attempts":    0,
+		})
+	if res.Error != nil {
+		utils.InternalErrorResponse(c, "Failed to update booking")
+		return
+	}
+	if res.RowsAffected == 0 {
+		utils.ErrorResponse(c, http.StatusConflict, "Booking state changed. Please refresh and try again")
+		return
+	}
+
+	booking.Status = models.BookingStatusInProgress
+	booking.EndOTPHash = ""
+	booking.EndOTPPrevHash = ""
+	booking.EndOTPVerifiedAt = nil
+	booking.EndOTPAttempts = 0
+
+	h.db.Create(&models.BookingStatusLog{
+		BookingID:      booking.ID,
+		FromStatus:     fromStatus,
+		ToStatus:       models.BookingStatusInProgress,
+		ChangedBy:      userID,
+		ChangedByRole:  claims.Role,
+		Reason:         "Customer reported that the problem still exists",
+	})
+
+	go h.notifyBarberProblem(&booking)
 
 	utils.SuccessResponse(c, booking)
 }

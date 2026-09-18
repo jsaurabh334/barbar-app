@@ -74,8 +74,6 @@ import 'core/notification/local_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  await LocalNotificationService.initialize();
 
   // Initialize Core Networking & Data Sources
   final localDataSource = AuthLocalDataSource(
@@ -115,7 +113,18 @@ void main() async {
   final vendorRepository = VendorRepositoryImpl(vendorRemoteDataSource);
   final deliveryRepository = DeliveryRepositoryImpl(deliveryRemoteDataSource);
 
-  await FCMService.initialize(notificationRepository);
+  // Defer heavy notification/FCM init with a delay to let the main Flutter
+  // engine and UI fully settle. Firebase's onBackgroundMessage registration
+  // spawns a SECOND FlutterEngine (FLTFireBGExecutor) which is very heavy.
+  // Doing this too early causes 600+ skipped frames and ANR kills.
+  Future.delayed(const Duration(seconds: 5), () async {
+    try {
+      await LocalNotificationService.initialize();
+      await FCMService.initialize(notificationRepository);
+    } catch (e) {
+      debugPrint('Deferred notification init failed: $e');
+    }
+  });
 
   runApp(
     MyApp(

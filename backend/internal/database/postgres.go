@@ -145,6 +145,9 @@ func RunMigrations(db *gorm.DB) {
 		&models.DeliveryEarning{},
 		&models.DeliveryPresenceLog{},
 
+		// Barber earnings (home service completion settlement)
+		&models.BarberEarning{},
+
 		// Notifications — FK → User
 		&models.Notification{},
 		&models.NotificationLog{},
