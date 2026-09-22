@@ -65,19 +65,21 @@ class _AdminVendorDetailScreenState extends State<AdminVendorDetailScreen> {
       child: Scaffold(
         backgroundColor: const Color(0xFF0F0F15),
         appBar: AppBar(
-          backgroundColor: const Color(0xFF0F0F15),
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.black,
+          iconTheme: const IconThemeData(color: Colors.black),
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(LucideIcons.arrowLeft, color: Colors.white),
+            icon: const Icon(LucideIcons.arrowLeft, color: Colors.black),
             onPressed: () => Navigator.pop(context),
           ),
           title: Text(
             v.businessName,
-            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+            style: GoogleFonts.outfit(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
           ),
           actions: [
             IconButton(
-              icon: Icon(v.isFeatured ? LucideIcons.star : LucideIcons.star, color: v.isFeatured ? Colors.amber : Colors.white54),
+              icon: Icon(v.isFeatured ? LucideIcons.star : LucideIcons.star, color: v.isFeatured ? Colors.orange.shade900 : Colors.black87),
               tooltip: v.isFeatured ? 'Unfeature' : 'Feature',
               onPressed: () => context.read<AdminVendorsBloc>().add(ToggleVendorFeatured(v.id, !v.isFeatured)),
             ),

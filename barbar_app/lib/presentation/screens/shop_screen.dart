@@ -498,9 +498,11 @@ class _ShopScreenState extends State<ShopScreen> {
               }
             }
             final savings = retailTotal - subTotal;
+            final double shipping = (subTotal >= 299 || isBarber) ? 0.0 : 49.0;
+            final double totalPayable = subTotal + shipping;
 
             return DraggableScrollableSheet(
-              initialChildSize: 0.6,
+              initialChildSize: 0.65,
               maxChildSize: 0.9,
               minChildSize: 0.4,
               builder: (_, scrollController) {
@@ -558,7 +560,7 @@ class _ShopScreenState extends State<ShopScreen> {
                                           ? 'Professional: ₹${p.getActivePrice(isBarber).toInt()} x $qty'
                                           : '₹${p.getActivePrice(isBarber).toInt()} x $qty'),
                                       if (isBarber && p.hasProfessionalPrice)
-                                        Text('Retail: ₹${p.basePrice.toInt()} each',
+                                        Text('Retail MRP: ₹${p.basePrice.toInt()} each',
                                             style: const TextStyle(fontSize: 11, color: AppColors.textMuted, decoration: TextDecoration.lineThrough)),
                                     ],
                                   ),
@@ -596,11 +598,11 @@ class _ShopScreenState extends State<ShopScreen> {
                       
                       // Bill Details
                       const Divider(color: AppColors.border),
-                      if (isBarber && savings > 0) ...[
+                      if (savings > 0) ...[
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Retail Total:', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                            const Text('Retail Total (MRP):', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
                             Text('₹${retailTotal.toInt()}', style: const TextStyle(color: AppColors.textMuted, fontSize: 13, decoration: TextDecoration.lineThrough)),
                           ],
                         ),
@@ -608,33 +610,16 @@ class _ShopScreenState extends State<ShopScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Professional Discount:', style: TextStyle(color: AppColors.success, fontSize: 13)),
+                            Text(isBarber ? 'Professional Discount:' : 'Discount Savings:', style: const TextStyle(color: AppColors.success, fontSize: 13, fontWeight: FontWeight.w600)),
                             Text('-₹${savings.toInt()}', style: const TextStyle(color: AppColors.success, fontSize: 13, fontWeight: FontWeight.bold)),
                           ],
-                        ),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: AppColors.success.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('You saved on this order',
-                                  style: TextStyle(fontSize: 12, color: AppColors.success, fontWeight: FontWeight.bold)),
-                              Text('₹${savings.toInt()}',
-                                  style: const TextStyle(fontSize: 12, color: AppColors.success, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
                         ),
                         const SizedBox(height: 4),
                       ],
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Subtotal:'),
+                          const Text('Discounted Subtotal:'),
                           Text('₹${subTotal.toInt()}', style: const TextStyle(fontWeight: FontWeight.bold)),
                         ],
                       ),
@@ -642,11 +627,50 @@ class _ShopScreenState extends State<ShopScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Shipping:'),
-                          const Text('₹50', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const Text('Delivery Charges:'),
+                          if (shipping == 0)
+                            Row(
+                              children: [
+                                const Text('₹50', style: TextStyle(color: AppColors.textMuted, fontSize: 12, decoration: TextDecoration.lineThrough)),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.success.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text('FREE', style: TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 11)),
+                                ),
+                              ],
+                            )
+                          else
+                            Text('₹${shipping.toInt()}', style: const TextStyle(fontWeight: FontWeight.bold)),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      if (savings > 0 || shipping == 0) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.success.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.success.withValues(alpha: 0.2)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(LucideIcons.checkCircle2, color: AppColors.success, size: 16),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '🎉 Total savings on this order: ₹${(savings + (shipping == 0 ? 50 : 0)).toInt()}',
+                                  style: const TextStyle(fontSize: 12, color: AppColors.success, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
                       
                       // Promo entry
                       TextField(
@@ -685,7 +709,7 @@ class _ShopScreenState extends State<ShopScreen> {
                         },
                         child: Text(hasMoqViolation
                             ? 'MINIMUM ORDER QUANTITY NOT MET'
-                            : 'PLACE ORDER (₹${(subTotal + 50).toInt()})'),
+                            : 'PLACE ORDER (₹${totalPayable.toInt()})'),
                       ),
                     ],
                   ),

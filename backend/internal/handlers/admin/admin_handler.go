@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/barbar-app/backend/internal/config"
@@ -368,6 +369,19 @@ func (h *AdminHandler) ListVendors(c *gin.Context) {
 	query.Count(&total)
 	query.Offset((page-1)*pageSize).Limit(pageSize).Order("created_at DESC").Find(&vendors)
 
+	for i := range vendors {
+		var prodCount int64
+		h.db.Model(&models.Product{}).Where("vendor_id = ?", vendors[i].ID).Count(&prodCount)
+		vendors[i].TotalProducts = int(prodCount)
+
+		var orderCount int64
+		var totalRev float64
+		h.db.Model(&models.Order{}).Where("vendor_id = ?", vendors[i].ID).Count(&orderCount)
+		h.db.Model(&models.Order{}).Where("vendor_id = ? AND payment_status = ?", vendors[i].ID, "paid").Select("COALESCE(SUM(final_amount), 0)").Scan(&totalRev)
+		vendors[i].TotalOrders = int(orderCount)
+		vendors[i].TotalRevenue = totalRev
+	}
+
 	utils.PaginatedResponse(c, vendors, page, pageSize, total)
 }
 
@@ -577,14 +591,24 @@ func (h *AdminHandler) UpdateDeliveryPartnerAvailability(c *gin.Context) {
 	}
 
 	var req struct {
-		Status string `json:"status" binding:"required,oneof=available busy offline"`
+		Status             string `json:"status"`
+		AvailabilityStatus string `json:"availability_status"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequestResponse(c, "Invalid JSON payload")
+		return
+	}
+
+	status := req.Status
+	if status == "" {
+		status = req.AvailabilityStatus
+	}
+	if status != "available" && status != "busy" && status != "offline" {
 		utils.BadRequestResponse(c, "Status is required. Valid values: available, busy, offline")
 		return
 	}
 
-	result := h.db.Model(&models.DeliveryPartner{}).Where("id = ?", id).Update("availability_status", req.Status)
+	result := h.db.Model(&models.DeliveryPartner{}).Where("id = ?", id).Update("availability_status", status)
 	if result.RowsAffected == 0 {
 		utils.NotFoundResponse(c, "Delivery partner not found")
 		return
@@ -592,17 +616,17 @@ func (h *AdminHandler) UpdateDeliveryPartnerAvailability(c *gin.Context) {
 
 	// Audit log
 	auditPayload, _ := json.Marshal(map[string]interface{}{
-		"availability_status": req.Status,
+		"availability_status": status,
 	})
 	h.db.Create(&models.AuditLog{
 		UserID:     c.MustGet("user").(uuid.UUID),
-		Action:     fmt.Sprintf("delivery_availability_%s", req.Status),
+		Action:     fmt.Sprintf("delivery_availability_%s", status),
 		EntityType: "delivery_partner",
 		EntityID:   id.String(),
 		NewValues:  models.JSONB(auditPayload),
 	})
 
-	utils.SuccessResponse(c, gin.H{"message": "Availability updated to " + req.Status})
+	utils.SuccessResponse(c, gin.H{"message": "Availability updated to " + status})
 }
 
 // ================ Product Moderation ================
@@ -618,6 +642,9 @@ func (h *AdminHandler) ListProducts(c *gin.Context) {
 	}
 	if active := c.Query("is_active"); active != "" {
 		query = query.Where("is_active = ?", active == "true")
+	}
+	if vendorID := c.Query("vendor_id"); vendorID != "" {
+		query = query.Where("vendor_id = ?", vendorID)
 	}
 	if search := c.Query("search"); search != "" {
 		query = query.Where("name ILIKE ?", "%"+search+"%")
@@ -1223,7 +1250,34 @@ func (h *AdminHandler) GetAuditLogs(c *gin.Context) {
 			})
 		}
 
+		// Query recent delivery partners
+		var recentDelivery []models.DeliveryPartner
+		h.db.Preload("User").Order("created_at DESC").Limit(5).Find(&recentDelivery)
+		for _, d := range recentDelivery {
+			name := "Delivery Partner"
+			if d.User.FullName != "" {
+				name = d.User.FullName
+			}
+			statusText := fmt.Sprintf("Registered (%s - %s)", d.VehicleType, d.Status)
+			sampleLogs = append(sampleLogs, map[string]interface{}{
+				"id":          d.ID.String(),
+				"action":      "DELIVERY_REGISTERED",
+				"entity_type": "Delivery",
+				"title":       name,
+				"description": statusText,
+				"created_at":  d.CreatedAt,
+			})
+		}
+
 		if len(sampleLogs) > 0 {
+			sort.Slice(sampleLogs, func(i, j int) bool {
+				t1, ok1 := sampleLogs[i]["created_at"].(time.Time)
+				t2, ok2 := sampleLogs[j]["created_at"].(time.Time)
+				if ok1 && ok2 {
+					return t1.After(t2)
+				}
+				return false
+			})
 			utils.PaginatedResponse(c, sampleLogs, page, pageSize, int64(len(sampleLogs)))
 			return
 		}

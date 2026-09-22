@@ -36,10 +36,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final double shipping = 50.0;
-    final double total = widget.subTotal + shipping;
     final authState = context.read<AuthBloc>().state;
     final isBarber = authState is AuthAuthenticated && authState.user.role == 'barber';
+    final double shipping = (widget.subTotal >= 299 || isBarber) ? 0.0 : 49.0;
+    final double total = widget.subTotal + shipping;
     String? businessName;
     String? gstNumber;
     if (isBarber) {
@@ -292,7 +292,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Subtotal', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+              const Text('Items Subtotal', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
               Text('₹${widget.subTotal.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
             ],
           ),
@@ -301,14 +301,30 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Delivery Charges', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-              Text('₹${shipping.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              if (shipping == 0)
+                Row(
+                  children: [
+                    const Text('₹50.00', style: TextStyle(color: AppColors.textMuted, fontSize: 12, decoration: TextDecoration.lineThrough)),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.success.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text('FREE', style: TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 11)),
+                    ),
+                  ],
+                )
+              else
+                Text('₹${shipping.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
             ],
           ),
           const Divider(color: AppColors.border, height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Total Amount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              const Text('Total Payable', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
               Text(
                 '₹${total.toStringAsFixed(2)}',
                 style: const TextStyle(

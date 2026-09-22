@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
@@ -335,7 +335,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Welcome, $name ðŸ‘‹',
+                  'Welcome, $name 👋',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -344,8 +344,8 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                 const SizedBox(height: 4),
                 Text(
                   _isOnline
-                      ? 'ðŸŸ¢ ONLINE â€¢ Ready for orders'
-                      : 'âšª OFFLINE â€¢ Toggle switch to start',
+                      ? '🟢 ONLINE • Ready for orders'
+                      : '⚪ OFFLINE • Toggle switch to start',
                   style: TextStyle(
                     color: _isOnline
                         ? Colors.greenAccent
@@ -721,7 +721,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                                   fontSize: 12)),
                           const SizedBox(height: 6),
                           Text(
-                            'â‚¹${todayEarnings.toInt()}',
+                            '₹${todayEarnings.toInt()}',
                             style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 20,
@@ -1017,7 +1017,7 @@ class _DeliveryDashboardScreenState extends State<DeliveryDashboardScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'â‚¹${o.finalAmount.toInt()}',
+                        '₹${o.finalAmount.toInt()}',
                         style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,

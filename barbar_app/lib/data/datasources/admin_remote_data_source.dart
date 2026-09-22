@@ -330,7 +330,10 @@ class AdminRemoteDataSource {
   }
 
   Future<void> updateDeliveryPartnerAvailability(String partnerId, String status) async {
-    await apiClient.dio.put('/admin/delivery/$partnerId/availability', data: {'availability_status': status});
+    await apiClient.dio.put('/admin/delivery/$partnerId/availability', data: {
+      'status': status,
+      'availability_status': status,
+    });
   }
 
   Future<List<dynamic>> getKycDocuments(String userId) async {

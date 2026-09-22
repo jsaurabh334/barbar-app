@@ -209,6 +209,9 @@ class _DashboardViewState extends State<_DashboardView> {
                                     } else if (entity.contains('order')) {
                                       icon = Icons.shopping_bag;
                                       color = Colors.orange;
+                                    } else if (entity.contains('delivery')) {
+                                      icon = Icons.two_wheeler;
+                                      color = Colors.amber;
                                     }
 
                                     return _buildActivityTile(title, desc, timeStr, icon, color);

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../domain/repositories/delivery_repository.dart';
 import 'delivery_event.dart';
@@ -23,8 +24,8 @@ class DeliveryBloc extends Bloc<DeliveryEvent, DeliveryState> {
     on<FetchOrderDetail>(_onFetchOrderDetail);
     on<VerifyOtp>(_onVerifyOtp);
     on<AcceptAssignment>(_onAcceptAssignment);
-    on<ClaimDeliveryOrder>(_onClaimDeliveryOrder);
     on<RejectAssignment>(_onRejectAssignment);
+    on<ClaimDeliveryOrder>(_onClaimDeliveryOrder);
     on<PickupOrder>(_onPickupOrder);
     on<OutForDelivery>(_onOutForDelivery);
     on<DeliverOrder>(_onDeliverOrder);
@@ -37,13 +38,17 @@ class DeliveryBloc extends Bloc<DeliveryEvent, DeliveryState> {
   Future<void> _onLoadProfile(LoadDeliveryProfile event, Emitter<DeliveryState> emit) async {
     emit(DeliveryLoading());
     try {
-      final profile = await _deliveryRepository.getProfile().timeout(const Duration(seconds: 5));
+      final profile = await _deliveryRepository.getProfile().timeout(const Duration(seconds: 15));
       emit(DeliveryProfileLoaded(profile));
     } catch (e) {
-      final msg = e.toString().toLowerCase();
-      if (msg.contains('404') || msg.contains('not found')) {
+      if (e is DioException && (e.response?.statusCode == 404 || e.response?.statusCode == 400)) {
         emit(DeliveryNoProfile());
-      } else if (msg.contains('timeout') || msg.contains('connection refused')) {
+        return;
+      }
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('404') || msg.contains('not found') || msg.contains('no profile')) {
+        emit(DeliveryNoProfile());
+      } else if (msg.contains('timeout') || msg.contains('connection refused') || msg.contains('connection error')) {
         emit(DeliveryFailure('Server not reachable. Ensure backend is running on localhost:8080'));
       } else {
         emit(DeliveryFailure(msg.replaceAll('exception: ', '')));

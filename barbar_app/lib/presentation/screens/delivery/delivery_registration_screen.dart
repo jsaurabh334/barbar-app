@@ -112,6 +112,20 @@ class _DeliveryRegistrationScreenState extends State<DeliveryRegistrationScreen>
     if (!_validateStep()) return;
 
     if (_step < 4) {
+      if (_step == 0) {
+        final authState = context.read<AuthBloc>().state;
+        if (authState is AuthAuthenticated) {
+          final u = authState.user;
+          final newName = _fullNameCtrl.text.trim();
+          final newEmail = _emailCtrl.text.trim();
+          if (newName != u.fullName || newEmail != (u.email ?? '')) {
+            context.read<AuthBloc>().add(UpdateProfileRequested({
+              'full_name': newName,
+              'email': newEmail,
+            }));
+          }
+        }
+      }
       setState(() => _step++);
       return;
     }
@@ -219,15 +233,26 @@ class _DeliveryRegistrationScreenState extends State<DeliveryRegistrationScreen>
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController ctrl, IconData icon, {TextInputType? kt, bool readOnly = false}) {
+  Widget _buildTextField(
+    String label,
+    TextEditingController ctrl,
+    IconData icon, {
+    TextInputType? kt,
+    bool readOnly = false,
+    String? hintText,
+    TextCapitalization textCapitalization = TextCapitalization.none,
+  }) {
     return TextFormField(
       controller: ctrl,
       keyboardType: kt,
       readOnly: readOnly,
+      textCapitalization: textCapitalization,
       onChanged: readOnly ? null : (_) => setState(() {}),
       style: TextStyle(color: readOnly ? AppColors.textSecondary : Colors.white),
       decoration: InputDecoration(
         labelText: label,
+        hintText: hintText,
+        hintStyle: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.5), fontSize: 13),
         labelStyle: const TextStyle(color: AppColors.textSecondary),
         prefixIcon: Icon(icon, color: AppColors.textSecondary),
         filled: true,
@@ -256,11 +281,11 @@ class _DeliveryRegistrationScreenState extends State<DeliveryRegistrationScreen>
         const SizedBox(height: 8),
         const Text('Enter your personal details', style: TextStyle(color: AppColors.textSecondary)),
         const SizedBox(height: 24),
-        _buildTextField('Full Name', _fullNameCtrl, LucideIcons.user, readOnly: true),
+        _buildTextField('Full Name', _fullNameCtrl, LucideIcons.user, hintText: 'e.g. Raju Mistri', textCapitalization: TextCapitalization.words),
         const SizedBox(height: 16),
         _buildTextField('Phone Number', _phoneCtrl, LucideIcons.phone, kt: TextInputType.phone, readOnly: true),
         const SizedBox(height: 16),
-        _buildTextField('Email Address', _emailCtrl, LucideIcons.mail, kt: TextInputType.emailAddress, readOnly: true),
+        _buildTextField('Email Address', _emailCtrl, LucideIcons.mail, kt: TextInputType.emailAddress, hintText: 'e.g. name@example.com'),
         const SizedBox(height: 24),
         _buildNextButton(),
       ],
@@ -292,9 +317,21 @@ class _DeliveryRegistrationScreenState extends State<DeliveryRegistrationScreen>
           onChanged: (v) => setState(() => _selectedVehicleType = v),
         ),
         const SizedBox(height: 16),
-        _buildTextField('Vehicle Number', _vehicleNumberCtrl, LucideIcons.hash),
+        _buildTextField(
+          'Vehicle Number',
+          _vehicleNumberCtrl,
+          LucideIcons.hash,
+          hintText: 'e.g. DL 01 AB 1234',
+          textCapitalization: TextCapitalization.characters,
+        ),
         const SizedBox(height: 16),
-        _buildTextField('License Number', _licenseNumberCtrl, LucideIcons.fileText),
+        _buildTextField(
+          'License Number',
+          _licenseNumberCtrl,
+          LucideIcons.fileText,
+          hintText: 'e.g. DL-1420110012345',
+          textCapitalization: TextCapitalization.characters,
+        ),
         const SizedBox(height: 24),
         _buildNextButton(),
       ],
@@ -309,13 +346,13 @@ class _DeliveryRegistrationScreenState extends State<DeliveryRegistrationScreen>
         const SizedBox(height: 8),
         const Text('For payout settlements', style: TextStyle(color: AppColors.textSecondary)),
         const SizedBox(height: 24),
-        _buildTextField('Account Holder Name', _accHolderCtrl, LucideIcons.user),
+        _buildTextField('Account Holder Name', _accHolderCtrl, LucideIcons.user, hintText: 'e.g. Raju Mistri', textCapitalization: TextCapitalization.words),
         const SizedBox(height: 16),
-        _buildTextField('Account Number', _accNumberCtrl, LucideIcons.hash, kt: TextInputType.number),
+        _buildTextField('Account Number', _accNumberCtrl, LucideIcons.hash, kt: TextInputType.number, hintText: 'e.g. 123456789012'),
         const SizedBox(height: 16),
-        _buildTextField('IFSC Code', _ifscCtrl, LucideIcons.fileText),
+        _buildTextField('IFSC Code', _ifscCtrl, LucideIcons.fileText, hintText: 'e.g. SBIN0001234', textCapitalization: TextCapitalization.characters),
         const SizedBox(height: 16),
-        _buildTextField('Bank Name', _bankNameCtrl, LucideIcons.building2),
+        _buildTextField('Bank Name', _bankNameCtrl, LucideIcons.building2, hintText: 'e.g. State Bank of India', textCapitalization: TextCapitalization.words),
         const SizedBox(height: 24),
         _buildNextButton(),
       ],

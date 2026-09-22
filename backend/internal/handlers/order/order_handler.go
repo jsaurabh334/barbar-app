@@ -335,7 +335,7 @@ func (h *OrderHandler) PlaceOrder(c *gin.Context) {
 			}
 		}
 
-		shippingCharge := getShippingCharge(orderTotal)
+		shippingCharge := getShippingCharge(orderTotal, role)
 		taxAmount := (orderTotal * 0.18) / 1.18 // GST is inclusive in product price
 		finalAmount := orderTotal + shippingCharge
 		vendorDiscount := discountAmount * (orderTotal / totalAmount)
@@ -793,8 +793,8 @@ func generateOrderNumber() string {
 	return "ORD-" + time.Now().Format("20060102") + "-" + uuid.New().String()[:8]
 }
 
-func getShippingCharge(amount float64) float64 {
-	if amount >= 499 {
+func getShippingCharge(amount float64, role string) float64 {
+	if role == string(models.RoleBarber) || amount >= 299 {
 		return 0
 	}
 	return 49
